@@ -110,6 +110,12 @@ window.__ModuleLoader__.load({
       'board.version': '能力版本',
       'board.noDescription': '未填写能力描述。',
       'board.close': '关闭',
+      'board.pinnedNotice': '已固定当前能力。',
+      'board.liveNotice': '已切换为实时能力。',
+      'board.search': '搜索能力描述',
+      'board.searchEmpty': '无匹配内容。',
+      'board.expand': '展开',
+      'board.collapse': '收起',
       'board.useLive': '使用实时',
       'board.noLocation': '该任务没有可定位的对话记录。',
       'board.notFound': '未找到对应的对话位置，可能尚未加载。',
@@ -196,6 +202,12 @@ window.__ModuleLoader__.load({
       'board.version': 'Capability version',
       'board.noDescription': 'No capability description provided.',
       'board.close': 'Close',
+      'board.pinnedNotice': 'Capability pinned.',
+      'board.liveNotice': 'Switched to live capability.',
+      'board.search': 'Search capability description',
+      'board.searchEmpty': 'No matching content.',
+      'board.expand': 'Expand',
+      'board.collapse': 'Collapse',
       'board.useLive': 'Use live',
       'board.noLocation': 'This task has no recorded conversation position.',
       'board.notFound': 'The conversation position is not loaded yet.',
@@ -877,6 +889,13 @@ window.__ModuleLoader__.load({
       '.dsh-collab-cap-desc{margin:0;padding:10px 12px;max-height:40vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--dsw-alias-bg-layer-2);border:0.5px solid var(--dsw-alias-border-l2);border-radius:8px;font:inherit;font-size:12px;line-height:18px}',
       '.dsh-collab-cap-head{display:flex;align-items:flex-start;gap:8px}',
       '.dsh-collab-cap-head .dsh-collab-base-title{flex:1;min-width:0}',
+      '.dsh-collab-cap-tools{display:flex;align-items:center;gap:8px}',
+      '.dsh-collab-cap-search{flex:1;min-width:0;height:30px;padding:0 10px;box-sizing:border-box;border:0.5px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;outline:none}',
+      '.dsh-collab-cap-search:focus{border-color:var(--dsw-alias-brand-primary)}',
+      '.dsh-collab-cap-count{flex:none;color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:14px}',
+      '.dsh-collab-cap-desc{max-height:40vh;overflow:auto}',
+      '.dsh-collab-cap-desc[data-collapsed="true"]{max-height:112px;overflow:hidden;mask-image:linear-gradient(to bottom,black 68%,transparent)}',
+      '.dsh-collab-cap-desc mark{background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);border-radius:2px}',
     ].join('')
 
     function setLinkExecutor(executor) {
@@ -933,10 +952,41 @@ window.__ModuleLoader__.load({
         document.addEventListener('keydown', onKey)
         return () => { document.removeEventListener('keydown', onKey) }
       }, [state.open, state.busy])
+      const [query, setQuery] = React.useState('')
+      const [expanded, setExpanded] = React.useState(false)
+      React.useEffect(() => {
+        if (!state.open) return
+        const description = state.relationship?.capability?.description ?? ''
+        setQuery('')
+        setExpanded(description.length <= 320)
+      }, [state.open, state.relationship?.worker])
       if (!state.open || state.relationship === null) return null
       const relationship = state.relationship
       const capability = relationship.capability
       const pinned = capability?.source === 'override'
+      const rawDescription = capability?.description ?? ''
+      const queryText = query.trim()
+      const lowerDescription = rawDescription.toLocaleLowerCase()
+      const lowerQuery = queryText.toLocaleLowerCase()
+      const segments = []
+      let matchCount = 0
+      if (lowerQuery.length > 0 && rawDescription.length > 0) {
+        let cursor = 0
+        while (matchCount < 500) {
+          const index = lowerDescription.indexOf(lowerQuery, cursor)
+          if (index < 0) break
+          if (index > cursor) segments.push(rawDescription.slice(cursor, index))
+          segments.push(h('mark', { key: `m-${String(matchCount)}` }, rawDescription.slice(index, index + queryText.length)))
+          matchCount += 1
+          cursor = index + queryText.length
+        }
+        if (cursor < rawDescription.length) segments.push(rawDescription.slice(cursor))
+      }
+      const canCollapse = rawDescription.length > 320 || rawDescription.split('\n').length > 6
+      const collapsed = canCollapse && !expanded && queryText.length === 0
+      const descriptionBody = queryText.length === 0
+        ? rawDescription
+        : (matchCount === 0 ? props.t('board.searchEmpty') : h(React.Fragment, null, ...segments))
       const detailField = (label, value) => h('div', { className: 'dsh-collab-cap-field' },
         h('span', { className: 'dsh-collab-cap-label' }, label),
         value)
@@ -948,7 +998,9 @@ window.__ModuleLoader__.load({
           if (result === undefined || result.ok !== true) throw new Error(result?.error?.message ?? 'command failed')
           if (result.value?.result?.kind === 'error') throw new Error(result.value.result.text)
           closeCapabilityDetail()
-          if (typeof window !== 'undefined') window.dispatchEvent(new Event('dsh-collab-board-refresh'))
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('dsh-collab-board-refresh', { detail: { action, worker: relationship.worker } }))
+          }
         } catch (error) {
           updateCapabilityDetail({ busy: false, error: error instanceof Error ? error.message : String(error) })
         }
@@ -978,9 +1030,29 @@ window.__ModuleLoader__.load({
             : null)),
         detailField(props.t('board.version'), h('code', { className: 'dsh-collab-cap-value' }, capability?.version ?? '-')),
         detailField(props.t('board.description'),
-          capability?.description !== undefined && capability.description.length > 0
-            ? h('pre', { className: 'dsh-collab-cap-desc' }, capability.description)
-            : h('p', { className: 'dsh-collab-cap-desc' }, props.t('board.noDescription'))),
+          h(React.Fragment, null,
+            rawDescription.length === 0
+              ? h('p', { className: 'dsh-collab-cap-desc' }, props.t('board.noDescription'))
+              : h(React.Fragment, null,
+                  h('div', { className: 'dsh-collab-cap-tools' },
+                    h('input', {
+                      className: 'dsh-collab-cap-search',
+                      type: 'search',
+                      value: query,
+                      placeholder: props.t('board.search'),
+                      onChange: (event) => setQuery(event.target.value),
+                    }),
+                    queryText.length === 0
+                      ? null
+                      : h('span', { className: 'dsh-collab-cap-count' }, `${String(matchCount)}`),
+                    canCollapse && queryText.length === 0
+                      ? h('button', {
+                          type: 'button',
+                          className: 'dsh-collab-base-button',
+                          onClick: () => setExpanded(value => !value),
+                        }, expanded ? props.t('board.collapse') : props.t('board.expand'))
+                      : null),
+                  h('pre', { className: 'dsh-collab-cap-desc', 'data-collapsed': collapsed ? 'true' : 'false' }, descriptionBody)))),
         state.error === null
           ? null
           : h('p', { className: 'dsh-collab-base-error', role: 'alert' }, state.error),
@@ -1223,6 +1295,7 @@ window.__ModuleLoader__.load({
       '.dsh-collab-board-form{display:flex;flex-direction:column;gap:6px}',
       '.dsh-collab-board-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}',
       '.dsh-collab-board-error{margin:0;color:var(--dsw-alias-state-error-primary);font-size:11px;line-height:16px}',
+      '.dsh-collab-board-notice{margin:0;padding:6px 8px;border:0.5px solid var(--dsw-alias-state-success-primary,var(--dsw-alias-border-l2));border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-success-primary,var(--dsw-alias-label-primary));font-size:11px;line-height:16px}',
     ].join('')
 
     function isSupervisorSessionSummary(summary) {
@@ -1255,7 +1328,9 @@ window.__ModuleLoader__.load({
       const [data, setData] = React.useState(null)
       const [loading, setLoading] = React.useState(true)
       const [error, setError] = React.useState(null)
+      const [notice, setNotice] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
+      const noticeTimerRef = React.useRef(null)
       const [projectFilter, setProjectFilter] = React.useState('all')
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
 
@@ -1279,7 +1354,16 @@ window.__ModuleLoader__.load({
       React.useEffect(() => { void load() }, [props.sessionId])
 
       React.useEffect(() => {
-        const reload = () => { void load() }
+        const reload = (event) => {
+          const action = event?.detail?.action
+          if (action === 'pin') setNotice(t('board.pinnedNotice'))
+          else if (action === 'live') setNotice(t('board.liveNotice'))
+          if (action !== undefined) {
+            if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
+            noticeTimerRef.current = window.setTimeout(() => setNotice(null), 2600)
+          }
+          void load()
+        }
         window.addEventListener('dsh-collab-board-refresh', reload)
         return () => { window.removeEventListener('dsh-collab-board-refresh', reload) }
       }, [props.sessionId])
@@ -1384,6 +1468,7 @@ window.__ModuleLoader__.load({
           h('h2', { className: 'dsh-collab-board-title' }, mode === 'tasks' ? t('board.tasksTitle') : t('board.workersTitle')),
           h('div', { className: 'dsh-collab-board-actions' }, ...headerActions)),
         error === null ? null : h('p', { className: 'dsh-collab-board-error', role: 'alert' }, error),
+        notice === null ? null : h('p', { className: 'dsh-collab-board-notice', role: 'status' }, notice),
         loading ? h('p', { className: 'dsh-collab-board-muted' }, t('board.loading')) : null,
         mode === 'tasks'
           ? h('div', { className: 'dsh-collab-board-actions' },
