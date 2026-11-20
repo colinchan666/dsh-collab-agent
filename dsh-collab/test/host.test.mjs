@@ -136,7 +136,7 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     assert.equal(b.session.currentCwd, workdirB)
     assert.equal(plain.session.currentCwd, workspace)
 
-    assert.equal(harness.tools.length, 18)
+    assert.equal(harness.tools.length, 23)
     for (const name of ['collab_info', 'collab_peers', 'collab_send', 'collab_inbox']) {
       const entry = harness.tools.find(tool => tool.definition.name === name)
       assert.equal(entry.options.when({ agent: a }), true, name)
@@ -273,6 +273,96 @@ test('a supervisor links a worker, assigns a task, and the worker completes it',
     assert.equal(detail.createdTurn, 4)
     assert.equal(detail.assignedTurn, 5)
     assert.equal(detail.result.summary, 'done')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('a request-enabled worker asks a supervisor and gets decomposed work', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-request-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    const link = harness.commands.find(entry => entry.name === 'collab-link')
+    const payload = Buffer.from(JSON.stringify({
+      capability: { name: 'test-worker', description: 'runs a test task' },
+      offer: true,
+      request: true,
+    }), 'utf8').toString('base64')
+    const linked = await link.handler({
+      agent: supervisor,
+      rawInput: `link ${B} ${payload}`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    assert.equal(linked.kind, 'success')
+    const requestOff = await link.handler({
+      agent: supervisor,
+      rawInput: `request ${B} off`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    assert.equal(requestOff.kind, 'success')
+    const requestOn = await link.handler({
+      agent: supervisor,
+      rawInput: `request ${B} on`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    assert.equal(requestOn.kind, 'success')
+    const submit = harness.tools.find(entry => entry.definition.name === 'collab_request_submit')
+    const requests = harness.tools.find(entry => entry.definition.name === 'collab_requests')
+    const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
+    const assign = harness.tools.find(entry => entry.definition.name === 'collab_task_assign')
+    const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
+    const reject = harness.tools.find(entry => entry.definition.name === 'collab_request_reject')
+    assert.ok(submit && requests && create && assign && accept && reject)
+    assert.equal(submit.options.when({ agent: worker }), true)
+    assert.equal(submit.options.when({ agent: supervisor }), false)
+    assert.equal(accept.options.when({ agent: supervisor }), true)
+    assert.equal(accept.options.when({ agent: worker }), false)
+    const submitted = JSON.parse(await submit.definition.execute(
+      { title: 'Need a report', requirement: 'Produce a short report' },
+      { agent: worker },
+    ))
+    const requestId = submitted.request.id
+    assert.equal(submitted.request.status, 'pending')
+    const pending = JSON.parse(requests.definition.execute({ status: 'pending' }, { agent: supervisor }))
+    assert.equal(pending.length, 1)
+    assert.equal(pending[0].id, requestId)
+    const created = JSON.parse(create.definition.execute(
+      { title: 'Report', instruction: 'Produce the report' },
+      { agent: supervisor },
+    ))
+    await assign.definition.execute(
+      { projectId: created.projectId, taskId: created.task.id, worker: B },
+      { agent: supervisor },
+    )
+    const accepted = JSON.parse(await accept.definition.execute(
+      { requestId, projectId: created.projectId, response: 'Accepted' },
+      { agent: supervisor },
+    ))
+    assert.equal(accepted.request.status, 'accepted')
+    assert.equal(accepted.request.projectId, created.projectId)
+    assert.equal(accepted.tasks.length, 1)
+    const own = JSON.parse(requests.definition.execute({}, { agent: worker }))
+    assert.equal(own[0].status, 'accepted')
+    const second = JSON.parse(await submit.definition.execute(
+      { title: 'Need another report', requirement: 'A second report' },
+      { agent: worker },
+    ))
+    const rejected = JSON.parse(await reject.definition.execute(
+      { requestId: second.request.id, reason: 'missing report-writing capability' },
+      { agent: supervisor },
+    ))
+    assert.equal(rejected.request.status, 'rejected')
+    assert.equal(rejected.request.reason, 'missing report-writing capability')
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

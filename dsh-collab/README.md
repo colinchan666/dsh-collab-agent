@@ -114,7 +114,7 @@ The Host command is also available:
 /collab-base set <base64-of-the-prompt>
 ```
 
-## Supervisor sessions (Phase 1)
+## Supervisor sessions
 
 The Collab button is a dropdown with **协作会话** and **超级会话**. A supervisor
 session is a coordination-only preset: no shell, files, office, web, or edit
@@ -147,9 +147,23 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   `deliverables/<projectId>/<workerId>/`; the worker can write its own subdir
   until `collab_project_close`, after which it is read-only. The supervisor can
   list names/sizes with `collab_delivery_list` but does not read content.
-- **Phase 1 only implements supervisor→worker assignments**. The `request`
-  relationship field and worker→supervisor request tools are reserved for
-  Phase 2.
+- **Request permission**: in the 注册 tab, open a worker's detail modal and use
+  **允许请求 / 禁止请求** to set the `request` relationship flag. The worker must
+  also have bilateral communication authorization.
+- **Worker requests**: a request-enabled worker calls `collab_request_submit`
+  with a title and requirement. The supervisor is notified and must evaluate
+  `collab_capabilities` before deciding.
+- **Supervisor accept**: create a project and tasks, assign at least one task to
+  the requesting worker, then call `collab_request_accept` with the `projectId`.
+  The request becomes `accepted`; the worker is notified.
+- **Supervisor reject**: call `collab_request_reject` with a concrete reason,
+  naming the missing capability. The request becomes `rejected`; the human can
+  then register another worker for the supervisor.
+- **Request tools**: `collab_request_submit`, `collab_request_cancel`,
+  `collab_requests`, `collab_request_accept`, `collab_request_reject`.
+  Requests are stored in `requests.json` next to the other collaboration state.
+- **The task tab** shows the supervisor's work requests above project groups,
+  including pending/accepted/rejected status and rejection reasons.
 
 ## Usage
 

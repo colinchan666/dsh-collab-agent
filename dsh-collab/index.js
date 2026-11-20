@@ -13,6 +13,7 @@ import path from 'node:path'
 
 import { AuthorizationStore, authorizationPathFor } from './lib/auth.js'
 import { RelationshipStore } from './lib/relationships.js'
+import { RequestStore } from './lib/requests.js'
 import { TaskStore } from './lib/tasks.js'
 import {
   SUBDIR, SessionRegistry, credentialPath, defaultRegistryPath, discoverSiblingWorkdirs,
@@ -172,6 +173,55 @@ const DELIVERY_LIST_PARAMETERS = {
   additionalProperties: false,
 }
 
+const REQUEST_SUBMIT_PARAMETERS = {
+  type: 'object',
+  properties: {
+    supervisor: { type: 'string', description: 'Target supervisor id. Required when more than one request-enabled supervisor is registered.' },
+    title: { type: 'string', description: 'Short request title.' },
+    requirement: { type: 'string', description: 'What the requester needs, with enough detail to evaluate and decompose.' },
+  },
+  required: ['title', 'requirement'],
+  additionalProperties: false,
+}
+
+const REQUEST_LIST_PARAMETERS = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', description: 'Optional status filter.' },
+  },
+  additionalProperties: false,
+}
+
+const REQUEST_ACCEPT_PARAMETERS = {
+  type: 'object',
+  properties: {
+    requestId: { type: 'string' },
+    projectId: { type: 'string', description: 'Project containing the tasks created for this request.' },
+    response: { type: 'string', description: 'Optional message for the requesting worker.' },
+  },
+  required: ['requestId', 'projectId'],
+  additionalProperties: false,
+}
+
+const REQUEST_REJECT_PARAMETERS = {
+  type: 'object',
+  properties: {
+    requestId: { type: 'string' },
+    reason: { type: 'string', description: 'Why the registered capabilities cannot satisfy this request; name the missing capability.' },
+  },
+  required: ['requestId', 'reason'],
+  additionalProperties: false,
+}
+
+const REQUEST_CANCEL_PARAMETERS = {
+  type: 'object',
+  properties: {
+    requestId: { type: 'string' },
+  },
+  required: ['requestId'],
+  additionalProperties: false,
+}
+
 function describeError(error) {
   return error instanceof Error ? error.message : String(error)
 }
@@ -210,7 +260,8 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       'You have no shell, file, office, web, or edit tools. Never try to perform a task yourself.',
       '',
       'Coordination tools:',
-      '- collab_inbox reads task-result notifications from workers. Call it at the start of every turn.',
+      '- collab_inbox reads task-result and work-request notifications from workers. Call it at the start of every turn.',
+      '- collab_requests lists work requests. For each pending request, evaluate registered capabilities before accepting or rejecting.',
       '- collab_capabilities lists the functional sessions registered to you, their capabilities, online/authorization state, and workload.',
       '- collab_task_create creates a task (optionally in a project).',
       '- collab_task_assign assigns a task to a worker with an offer relationship and wakes it.',
@@ -220,6 +271,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- collab_delivery_list lists the delivery directory (names/sizes only).',
       '',
       'How to work:',
+      '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a project and tasks, assign at least one task to the requesting worker, then call collab_request_accept with the projectId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
       '1. Read the requirement, list capabilities, and plan tasks with explicit acceptance criteria. Use one projectId per requirement: the first collab_task_create returns it; pass it to the remaining tasks.',
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
@@ -235,6 +287,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       'You are a FUNCTIONAL WORKER session in a supervisor-managed collaboration.',
       'You execute the tasks assigned to you by supervisors.',
       'You do not have collab_send or collab_peers. Do not message other workers or choose arbitrary targets.',
+      'If you need work from a supervisor that has enabled request permission, use collab_request_submit with a clear title and requirement. Use collab_requests to check its status.',
       '',
       'Task tools:',
       '- collab_inbox reads task assignments/results. Call it at the start of every turn.',
@@ -314,6 +367,11 @@ export function apply(ctx, config = {}) {
     typeof config.tasksPath === 'string' && config.tasksPath.length > 0
       ? config.tasksPath
       : path.join(path.dirname(registryPath), 'tasks.json'),
+  )
+  const requests = new RequestStore(
+    typeof config.requestsPath === 'string' && config.requestsPath.length > 0
+      ? config.requestsPath
+      : path.join(path.dirname(registryPath), 'requests.json'),
   )
   /** Human-facing authorization operations shared by the UI Remote and commands. */
   const collabAdmin = {
@@ -886,6 +944,91 @@ export function apply(ctx, config = {}) {
       },
     },
     {
+      name: 'collab_requests',
+      description: 'List work requests. A supervisor sees requests sent to it; a worker sees its own requests.',
+      parameters: REQUEST_LIST_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id) || isManagedWorker(agent.id),
+      isConcurrencySafe: () => true,
+      execute: (args, exec) => {
+        const self = requireSelf(exec)
+        const status = typeof args?.status === 'string' && args.status.trim().length > 0 ? args.status.trim() : undefined
+        const list = isSupervisorSession(self.sessionId)
+          ? requests.listForSupervisor(self.sessionId, status)
+          : requests.listForWorker(self.sessionId, status)
+        if (list.length === 0) return 'No requests.'
+        return JSON.stringify(list.map(RequestStore.summary))
+      },
+    },
+    {
+      name: 'collab_request_accept',
+      description: 'Accept a pending work request after the requested work has been decomposed into assigned tasks.',
+      parameters: REQUEST_ACCEPT_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: async (args, exec) => {
+        const self = requireSupervisor(exec)
+        const request = requests.get(String(args?.requestId ?? ''))
+        if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
+        if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
+        const projectId = String(args?.projectId ?? '')
+        const project = tasks.project(projectId)
+        if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project for this request')
+        if (project.status !== 'open') throw new Error('project is closed')
+        const assigned = tasks.listForSupervisor(self.sessionId).filter(task => (
+          task.projectId === projectId
+          && task.worker === request.worker
+          && task.status !== 'cancelled'
+        ))
+        if (assigned.length === 0) throw new Error('assign at least one task for the requesting worker before accepting')
+        if (!auth.isAuthorized(self.sessionId, request.worker)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        const accepted = requests.accept(request.id, {
+          projectId,
+          taskIds: assigned.map(task => task.id),
+          response: typeof args?.response === 'string' ? args.response : null,
+        })
+        const payload = {
+          type: 'collab-task/request-accepted',
+          version: 1,
+          requestId: accepted.id,
+          title: accepted.title,
+          projectId,
+          taskIds: assigned.map(task => task.id),
+          response: accepted.response,
+        }
+        const delivery = await sendTaskNotice(self, request.worker, payload)
+        return JSON.stringify({
+          request: RequestStore.summary(accepted),
+          tasks: assigned.map(task => TaskStore.summary(task)),
+          delivery,
+        })
+      },
+    },
+    {
+      name: 'collab_request_reject',
+      description: 'Reject a pending work request with the missing capability or another concrete reason.',
+      parameters: REQUEST_REJECT_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: async (args, exec) => {
+        const self = requireSupervisor(exec)
+        const request = requests.get(String(args?.requestId ?? ''))
+        if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
+        if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
+        if (!auth.isAuthorized(self.sessionId, request.worker)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        const rejected = requests.reject(request.id, String(args?.reason ?? ''))
+        const payload = {
+          type: 'collab-task/request-rejected',
+          version: 1,
+          requestId: rejected.id,
+          title: rejected.title,
+          reason: rejected.reason,
+        }
+        const delivery = await sendTaskNotice(self, request.worker, payload)
+        return JSON.stringify({ request: RequestStore.summary(rejected), delivery })
+      },
+    },
+    {
       name: 'collab_tasks',
       description: 'List tasks for this supervisor or, for a worker, the tasks assigned to it.',
       parameters: TASK_LIST_PARAMETERS,
@@ -1097,6 +1240,76 @@ export function apply(ctx, config = {}) {
         ].join('\n')
       },
     },
+    {
+      name: 'collab_request_submit',
+      description: 'Ask a request-enabled supervisor to evaluate and decompose work for you. The supervisor must already offer a capability and both sides must be authorized.',
+      parameters: REQUEST_SUBMIT_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isManagedWorker(agent.id),
+      execute: async (args, exec) => {
+        const self = requireWorker(exec)
+        const eligible = relationships.listForWorker(self.sessionId)
+          .filter(relationship => relationship.request === true && auth.isAuthorized(self.sessionId, relationship.supervisor))
+        if (eligible.length === 0) {
+          throw new Error('no request-enabled supervisor; ask the human to enable request in registration and authorize both sides')
+        }
+        const targetId = typeof args?.supervisor === 'string' && args.supervisor.trim().length > 0
+          ? args.supervisor.trim()
+          : undefined
+        let relationship
+        if (targetId !== undefined) {
+          relationship = eligible.find(candidate => candidate.supervisor === targetId)
+          if (relationship === undefined) throw new Error('target supervisor is not request-enabled for this worker')
+        } else if (eligible.length === 1) {
+          relationship = eligible[0]
+        } else {
+          throw new Error(`specify a supervisor: ${eligible.map(candidate => candidate.supervisor).join(', ')}`)
+        }
+        const request = requests.create({
+          worker: self.sessionId,
+          supervisor: relationship.supervisor,
+          title: String(args?.title ?? ''),
+          requirement: String(args?.requirement ?? ''),
+          createdTurn: turnForCall(exec),
+        })
+        try {
+          const delivery = await sendTaskNotice(self, relationship.supervisor, {
+            type: 'collab-task/request',
+            version: 1,
+            requestId: request.id,
+            worker: self.sessionId,
+            title: request.title,
+            requirement: request.requirement,
+          })
+          return JSON.stringify({ request: RequestStore.summary(request), delivery })
+        } catch (error) {
+          try { requests.cancel(request.id, self.sessionId) } catch { /* preserve the original failure */ }
+          throw error
+        }
+      },
+    },
+    {
+      name: 'collab_request_cancel',
+      description: 'Cancel one of your pending work requests.',
+      parameters: REQUEST_CANCEL_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isManagedWorker(agent.id),
+      execute: async (args, exec) => {
+        const self = requireWorker(exec)
+        const request = requests.get(String(args?.requestId ?? ''))
+        if (request === undefined || request.worker !== self.sessionId) throw new Error('unknown request')
+        const cancelled = requests.cancel(request.id, self.sessionId)
+        try {
+          await sendTaskNotice(self, request.supervisor, {
+            type: 'collab-task/request-cancelled',
+            version: 1,
+            requestId: cancelled.id,
+            title: cancelled.title,
+          })
+        } catch { /* cancellation remains effective even if the notice cannot be delivered */ }
+        return JSON.stringify({ request: RequestStore.summary(cancelled) })
+      },
+    },
   ]
 
   const tools = [
@@ -1255,7 +1468,7 @@ export function apply(ctx, config = {}) {
     handler: (invocation) => {
       const supervisor = invocation.agent?.id
       if (!isSupervisorSession(supervisor)) return { kind: 'error', text: 'not a supervisor session' }
-      const usage = 'usage: /collab-link [get | link <worker> <base64-json> | pin <worker> | live <worker> | unlink <worker>]'
+      const usage = 'usage: /collab-link [get | link <worker> <base64-json> | pin <worker> | live <worker> | request <worker> on|off | unlink <worker>]'
       const view = relationship => relationship === undefined
         ? undefined
         : { ...relationship, capability: effectiveCapability(relationship) }
@@ -1270,7 +1483,7 @@ export function apply(ctx, config = {}) {
           }),
         }
       }
-      if (action === 'link' || action === 'unlink' || action === 'pin' || action === 'live') {
+      if (action === 'link' || action === 'unlink' || action === 'pin' || action === 'live' || action === 'request') {
         const worker = parts[1]
         if (!isSessionId(worker) || worker === supervisor) return { kind: 'error', text: usage }
         const entry = registry.get(worker)
@@ -1281,8 +1494,24 @@ export function apply(ctx, config = {}) {
           return { kind: 'success', text: JSON.stringify({ removed: true, worker, communicationRevoked: true }) }
         }
         const existing = relationships.get(supervisor, worker)
-        if ((action === 'pin' || action === 'live') && existing === undefined) {
+        if ((action === 'pin' || action === 'live' || action === 'request') && existing === undefined) {
           return { kind: 'error', text: 'worker is not registered to this supervisor' }
+        }
+        if (action === 'request') {
+          const mode = parts[2]
+          if (mode !== 'on' && mode !== 'off') return { kind: 'error', text: usage }
+          try {
+            const relationship = relationships.upsert({
+              supervisor,
+              worker,
+              offer: existing.offer,
+              request: mode === 'on',
+              createdBy: 'human',
+            })
+            return { kind: 'success', text: JSON.stringify({ relationship: view(relationship) }) }
+          } catch (error) {
+            return { kind: 'error', text: describeError(error) }
+          }
         }
         if (action === 'pin' || action === 'live') {
           const live = liveCapability(worker)
@@ -1349,6 +1578,7 @@ export function apply(ctx, config = {}) {
           workers: workerCandidates(supervisor),
           tasks: tasks.listForSupervisor(supervisor).map(task => TaskStore.summary(task)),
           projects: tasks.listProjects(supervisor),
+          requests: requests.listForSupervisor(supervisor).map(request => RequestStore.summary(request)),
         }),
       }
     },
