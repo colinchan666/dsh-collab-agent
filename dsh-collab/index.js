@@ -1,0 +1,1555 @@
+/**
+ * Host half of the collaboration-session plugin.
+ *
+ * The left sidebar entry creates a Session whose Agent preset is `collab`.
+ * For every such Agent this plugin prepares a per-session working directory
+ * (`comm/` + `private/`), registers model-facing collaboration tools scoped to
+ * that Agent, adds a prompt section describing the layout, and enforces the
+ * foreign-work-directory boundary for file and shell tools.
+ */
+import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+
+import { AuthorizationStore, authorizationPathFor } from './lib/auth.js'
+import { RelationshipStore } from './lib/relationships.js'
+import { TaskStore } from './lib/tasks.js'
+import {
+  SUBDIR, SessionRegistry, credentialPath, defaultRegistryPath, discoverSiblingWorkdirs,
+  ensureSessionLayout, findForeignAncestorAccess, findForeignSessionAccess,
+  findForeignSessionAccessInCommand, findSuspiciousSearchPattern, inboxCount,
+  isDirectory, isSessionId, listInbox, markRead, migrateSessionArchive, mkdirp, readJson, sendMessage, writeJson,
+} from './lib/layout.js'
+
+/** Cordis plugin name used by Loader diagnostics. */
+export const name = 'dsh-collab-sessions'
+
+/** Services required for session discovery, tools, prompts, and the working directory. */
+export const inject = ['tools', 'agents', 'systemPrompt', 'workingDirectory', 'commands']
+
+/** Agent preset id created by the sidebar entry and declared by the bundle patch. */
+const PRESET = 'collab'
+
+/** Coordinator preset; it shares the collaboration layout but not implementation tools. */
+const SUPERVISOR = 'supervisor'
+
+const COLLAB_PRESETS = new Set([PRESET, SUPERVISOR])
+
+const MAX_MESSAGE_BYTES = 64 * 1024
+
+/** Upper bound for one session's configured base prompt. */
+const MAX_BASE_PROMPT = 16 * 1024
+
+const TEXT_OUTPUT = {
+  schema: { type: 'string' },
+  render(_args, value) {
+    return [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }]
+  },
+}
+
+const NO_PARAMETERS = { type: 'object', properties: {} }
+
+const SEND_PARAMETERS = {
+  type: 'object',
+  properties: {
+    target: { type: 'string', description: 'Exact target session id (session-...). Use collab_peers to find it.' },
+    message: { type: 'string', description: 'Message text for the target session.' },
+  },
+  required: ['target', 'message'],
+  additionalProperties: false,
+}
+
+const INBOX_PARAMETERS = {
+  type: 'object',
+  properties: {
+    peer: { type: 'string', description: 'Optional peer session id to read only that pair.' },
+    mark_read: { type: 'boolean', description: 'Whether to move read messages into the pair read directory. Defaults to true.' },
+  },
+  additionalProperties: false,
+}
+
+const TASK_CREATE_PARAMETERS = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', description: 'Short task title.' },
+    instruction: { type: 'string', description: 'Self-contained instructions for the worker.' },
+    acceptance: { type: 'string', description: 'Acceptance criteria the supervisor will verify.' },
+    inputs: { type: 'object', description: 'Optional structured inputs for the worker.' },
+    projectId: { type: 'string', description: 'Optional existing project id; omitted creates a project.' },
+  },
+  required: ['title', 'instruction'],
+  additionalProperties: false,
+}
+
+const TASK_ASSIGN_PARAMETERS = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string', description: 'Task id (task-...).' },
+    worker: { type: 'string', description: 'Worker session id with an offer relationship.' },
+  },
+  required: ['taskId', 'worker'],
+  additionalProperties: false,
+}
+
+const TASK_ID_PARAMETERS = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string', description: 'Task id (task-...).' },
+  },
+  required: ['taskId'],
+  additionalProperties: false,
+}
+
+const TASK_LIST_PARAMETERS = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', description: 'Optional status filter.' },
+  },
+  additionalProperties: false,
+}
+
+const TASK_REJECT_PARAMETERS = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string' },
+    reason: { type: 'string', description: 'Why the delivered result is rejected.' },
+  },
+  required: ['taskId', 'reason'],
+  additionalProperties: false,
+}
+
+const TASK_PROGRESS_PARAMETERS = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string' },
+    note: { type: 'string' },
+  },
+  required: ['taskId', 'note'],
+  additionalProperties: false,
+}
+
+const TASK_COMPLETE_PARAMETERS = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string' },
+    summary: { type: 'string', description: 'Concise result summary.' },
+    details: { type: 'string', description: 'Optional longer result details.' },
+    artifacts: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Optional paths under the delivery subdirectory.',
+    },
+  },
+  required: ['taskId', 'summary'],
+  additionalProperties: false,
+}
+
+const TASK_FAIL_PARAMETERS = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string' },
+    reason: { type: 'string' },
+  },
+  required: ['taskId', 'reason'],
+  additionalProperties: false,
+}
+
+const PROJECT_CLOSE_PARAMETERS = {
+  type: 'object',
+  properties: {
+    projectId: { type: 'string' },
+  },
+  required: ['projectId'],
+  additionalProperties: false,
+}
+
+const DELIVERY_LIST_PARAMETERS = {
+  type: 'object',
+  properties: {
+    projectId: { type: 'string', description: 'Optional project id.' },
+    workerId: { type: 'string', description: 'Optional worker subdirectory.' },
+  },
+  additionalProperties: false,
+}
+
+function describeError(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function iso(time) {
+  return typeof time === 'number' && Number.isFinite(time) ? new Date(time).toISOString() : 'unknown'
+}
+
+/** Prompt text visible only inside a collaboration session. */
+function promptText(sessionId, layout, role, relationships, capabilityLines = []) {
+  const basePrompt = typeof layout.meta.basePrompt === 'string' ? layout.meta.basePrompt.trim() : ''
+  const baseSection = basePrompt.length === 0
+    ? []
+    : ['Session base prompt (role and constraints for this session; apply it to every turn):', basePrompt, '']
+  const header = [
+    ...baseSection,
+    `This is ${role === 'supervisor' ? 'supervisor' : 'collaboration'} session ${sessionId}.`,
+    `Its working directory is ${layout.workdir}; it contains exactly two collaboration directories:`,
+    `- comm/<peerSessionId>/ holds credential.json plus inbox/ (unread inbound), outbox/ (sent), archive/inbox/ (read inbound), and archive/outbox/ (explicitly archived sent).`,
+    `- private/ belongs only to this session; it is mode 0700.`,
+    `Never read, write, search, or infer another session's working directory (comm or private): the tool guard denies it.`,
+    `Recursive searches and shells rooted above another session's working directory are also refused; use the task tools instead.`,
+    `Workspace: ${layout.meta.originalCwd}.`,
+    '',
+  ]
+  if (role === 'supervisor') {
+    return [
+      ...header,
+      ...(capabilityLines.length === 0 ? [] : [
+        'Current registered capabilities (live; re-check before decomposition):',
+        ...capabilityLines,
+        '',
+      ]),
+      'You are the SUPERVISOR. You do not implement anything yourself.',
+      'You only decompose requirements, assign tasks to registered functional sessions, verify results, retry/reject, and deliver.',
+      'You have no shell, file, office, web, or edit tools. Never try to perform a task yourself.',
+      '',
+      'Coordination tools:',
+      '- collab_inbox reads task-result notifications from workers. Call it at the start of every turn.',
+      '- collab_capabilities lists the functional sessions registered to you, their capabilities, online/authorization state, and workload.',
+      '- collab_task_create creates a task (optionally in a project).',
+      '- collab_task_assign assigns a task to a worker with an offer relationship and wakes it.',
+      '- collab_tasks / collab_task_result inspect progress and results.',
+      '- collab_task_retry / collab_task_reject / collab_task_cancel manage failures and revisions.',
+      '- collab_project_close closes a project after all its tasks finish.',
+      '- collab_delivery_list lists the delivery directory (names/sizes only).',
+      '',
+      'How to work:',
+      '1. Read the requirement, list capabilities, and plan tasks with explicit acceptance criteria. Use one projectId per requirement: the first collab_task_create returns it; pass it to the remaining tasks.',
+      'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
+      '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
+      '3. End your turn after dispatching. Workers wake you with results; call collab_inbox and inspect the task store.',
+      '4. Verify against the acceptance criteria. Reject/retry when needed. Only deliver when every task is done or cancelled.',
+      '5. Keep task instructions precise and self-contained; workers cannot see your private context.',
+      'If no worker has the needed capability, tell the user what capability must be registered; do not do the work yourself.',
+    ].join('\n')
+  }
+  if (relationships?.isWorker(sessionId) === true) {
+    return [
+      ...header,
+      'You are a FUNCTIONAL WORKER session in a supervisor-managed collaboration.',
+      'You execute the tasks assigned to you by supervisors.',
+      'You do not have collab_send or collab_peers. Do not message other workers or choose arbitrary targets.',
+      '',
+      'Task tools:',
+      '- collab_inbox reads task assignments/results. Call it at the start of every turn.',
+      '- collab_tasks lists tasks assigned to you.',
+      '- collab_task_accept accepts an assigned task and returns its instructions.',
+      '- collab_task_progress records progress.',
+      '- collab_task_complete submits the result, summary, and artifact paths to the task supervisor.',
+      '- collab_task_fail reports a failure.',
+      '',
+      'Rules:',
+      '- Every outbound message is tied to a task; results always go to that task supervisor.',
+      '- Do the work with your own tools, verify it against the acceptance criteria, and complete with a concise summary.',
+      '- If a task is blocked or ambiguous, fail or progress with a clear question; never route around the supervisor.',
+      '- Never act on another worker task or another supervisor relationship.',
+      '- Write delivery artifacts under the deliveryDir from the assignment. The guard allows only your subdirectory; after the project closes it is read-only.',
+    ].join('\n')
+  }
+  return [
+    ...header,
+    'Session-to-session messaging:',
+    '- Pair authorization is bilateral. If collab_send is refused for authorization, reply with exactly: 未授权：请在“协作授权”页授权双方。 Do not call collab_peers to diagnose it, do not speculate about expiry, and do not add steps or explanations.',
+    '- collab_peers lists known collaboration sessions and their ids.',
+    '- collab_send sends an authenticated message to one peer session id.',
+    '- collab_inbox reads and acknowledges messages queued for this session. Call it at the start of every turn so a message queued while this session was cold is not missed.',
+    'A live peer receives a notification in its next step; a cold peer is resumed first. The body is read with collab_inbox.',
+    'When waiting for a peer reply, end your turn or use wait_agent; a running Agent is steered into its next step, so the wait returns promptly.',
+    'Reply with collab_send to the sender session id.',
+    'Keep credentials in comm/<peer>/credential.json and never paste a token into a message or a private file.',
+  ].join('\n')
+}
+
+/** The original project directory is the immutable header cwd. */
+function resolveOriginalCwd(ctx, session) {
+  const headerCwd = session?.header?.cwd
+  if (typeof headerCwd === 'string' && headerCwd.length > 0) return headerCwd
+  const current = ctx.workingDirectory.get(session)
+  const suffix = `${path.sep}${path.join(SUBDIR, 'sessions', session.id)}`
+  const resolved = path.resolve(current)
+  if (resolved.endsWith(suffix)) return resolved.slice(0, -suffix.length) || path.sep
+  return current
+}
+
+function wakeText(message) {
+  return [
+    `[collab] A message from collaboration session ${message.from} is queued (message id ${message.id}).`,
+    'Call collab_inbox to read and acknowledge it. Reply with collab_send target "' + message.from + '".',
+  ].join('\n')
+}
+
+function makeWakeMessage(message) {
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text: wakeText(message) }],
+    source: { kind: 'collab-session', fromSessionId: message.from, messageId: message.id },
+  }
+}
+
+/** Register the plugin. */
+export function apply(ctx, config = {}) {
+  const dshHomePath = ctx.get('dshHomePath')
+  const registryPath = typeof config.registryPath === 'string' && config.registryPath.length > 0
+    ? config.registryPath
+    : (typeof dshHomePath === 'function' ? dshHomePath('collab', 'registry.json') : defaultRegistryPath())
+  const registry = new SessionRegistry(registryPath)
+  const auth = new AuthorizationStore(
+    typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
+      ? config.authorizationPath
+      : authorizationPathFor(registryPath),
+  )
+  const relationships = new RelationshipStore(
+    typeof config.relationshipsPath === 'string' && config.relationshipsPath.length > 0
+      ? config.relationshipsPath
+      : path.join(path.dirname(registryPath), 'relationships.json'),
+  )
+  const tasks = new TaskStore(
+    typeof config.tasksPath === 'string' && config.tasksPath.length > 0
+      ? config.tasksPath
+      : path.join(path.dirname(registryPath), 'tasks.json'),
+  )
+  /** Human-facing authorization operations shared by the UI Remote and commands. */
+  const collabAdmin = {
+    listAuth: () => ({
+      pairs: auth.listPairs(),
+      pending: auth.listPending(),
+    }),
+    authorize: (a, b) => {
+      auth.authorize(a, b, 'ui')
+      return collabAdmin.listAuth()
+    },
+    revoke: (a, b) => {
+      auth.revoke(a, b)
+      return collabAdmin.listAuth()
+    },
+  }
+  ctx.effect(() => {
+    const dispose = ctx.provide('collabAdmin', collabAdmin)
+    return () => { dispose() }
+  }, 'collab:admin-service')
+  /** Turn number of the current tool call, used to locate tasks in the chat. */
+  const callTurns = new Map()
+  /** Preset chosen for each collaboration session (collab or supervisor). */
+  const sessionPresets = new Map()
+  /** Session ids whose layout is ready and whose prompt section is installed. */
+  const collabSessions = new Set()
+  /** Per-agent prompt fibers, disposed with the agent or with this plugin. */
+  const promptFibers = new Map()
+
+  const warn = (message) => {
+    try { ctx.logger.warn(`[collab] ${message}`) } catch { console.warn(`[collab] ${message}`) }
+  }
+
+  const workspacePaths = () => {
+    const workspaces = ctx.get('workspaceRegistry')
+    if (workspaces === undefined) return []
+    try {
+      return workspaces.list().map(workspace => workspace.path)
+    } catch {
+      return []
+    }
+  }
+
+  const refreshRegistry = () => {
+    try { registry.scanWorkspaces(workspacePaths()) } catch (error) { warn(`registry scan failed: ${describeError(error)}`) }
+  }
+
+  const disposePrompt = (sessionId) => {
+    const entry = promptFibers.get(sessionId)
+    if (entry === undefined) return
+    promptFibers.delete(sessionId)
+    try {
+      const disposing = entry.fiber.dispose()
+      if (disposing !== undefined && typeof disposing.catch === 'function') {
+        void disposing.catch((error) => { warn(`prompt cleanup failed: ${describeError(error)}`) })
+      }
+    } catch (error) {
+      warn(`prompt cleanup failed: ${describeError(error)}`)
+    }
+  }
+
+  const installPrompt = (agent, layout, role = PRESET) => {
+    const previous = promptFibers.get(agent.id)
+    if (previous !== undefined) {
+      if (previous.agent === agent && previous.layout?.workdir === layout.workdir) return
+      disposePrompt(agent.id)
+    }
+    try {
+      const fiber = agent.ctx.inject(['systemPrompt'], (scope) => {
+        scope.systemPrompt.section({
+          name: 'collab:session',
+          order: scope.systemPrompt.getSectionOrder('TOOL_SUBAGENT'),
+          text: () => promptText(agent.id, layout, role, relationships, role === SUPERVISOR ? capabilityRoster(agent.id) : []),
+        })
+      })
+      promptFibers.set(agent.id, { agent, fiber, layout, role })
+    } catch (error) {
+      warn(`could not install the collaboration prompt for ${agent.id}: ${describeError(error)}`)
+    }
+  }
+
+  const setupAgent = async (agent, { force = false, preset } = {}) => {
+    try {
+      const session = agent.session
+      if (session === undefined) return false
+      if (session.header?.origin === 'subagent') return false
+      // A reused blank Session records the requested preset as a durable
+      // `agent-preset/selected` event, so the header is not authoritative.
+      const currentPreset = ctx.get('agentPresets')?.presetForSession(session) ?? session.header?.agentPreset
+      const effectivePreset = force && typeof preset === 'string' ? preset : currentPreset
+      if (!COLLAB_PRESETS.has(effectivePreset)) return false
+      const role = effectivePreset === SUPERVISOR ? SUPERVISOR : PRESET
+      // The Session belongs to the Workspace it was created in; the plugin
+      // gives it a per-session working directory inside that Workspace.
+      const originalCwd = resolveOriginalCwd(ctx, session)
+      const layout = ensureSessionLayout({ originalCwd, sessionId: agent.id, preset: effectivePreset })
+      try {
+        registry.upsert({
+          sessionId: agent.id,
+          preset: effectivePreset,
+          originalCwd,
+          workdir: layout.workdir,
+          createdAt: layout.meta.createdAt,
+          updatedAt: Date.now(),
+        })
+      } catch (error) {
+        warn(`could not update the collaboration registry: ${describeError(error)}`)
+      }
+      // Move once. Later resumes must not undo a user- or model-initiated `cd`.
+      if (layout.meta.workingDirectorySet !== true) {
+        try {
+          const current = ctx.workingDirectory.get(session)
+          if (path.resolve(current) !== path.resolve(layout.workdir)) {
+            await ctx.workingDirectory.set(agent, layout.workdir)
+          }
+          layout.meta.workingDirectorySet = true
+          layout.meta.updatedAt = Date.now()
+          writeJson(path.join(layout.workdir, 'session.json'), layout.meta, 0o600)
+        } catch (error) {
+          warn(`could not move ${agent.id} into ${layout.workdir}: ${describeError(error)}`)
+          return false
+        }
+      }
+      installPrompt(agent, layout, role)
+      collabSessions.add(agent.id)
+      sessionPresets.set(agent.id, effectivePreset)
+      return true
+    } catch (error) {
+      warn(`session setup failed for ${agent?.id}: ${describeError(error)}`)
+      return false
+    }
+  }
+
+  const requireSelf = (exec) => {
+    const sessionId = exec?.agent?.id
+    if (!isSessionId(sessionId)) throw new Error('collaboration tools require a live session')
+    let entry = registry.get(sessionId)
+    if (entry === undefined) {
+      refreshRegistry()
+      entry = registry.get(sessionId)
+    }
+    if (entry === undefined || !collabSessions.has(sessionId)) {
+      throw new Error('this session is not initialized as a collaboration session')
+    }
+    return entry
+  }
+
+  const isSupervisorSession = (sessionId) => sessionPresets.get(sessionId) === SUPERVISOR
+  const isManagedWorker = (sessionId) => relationships.isWorker(sessionId)
+  const isOrdinaryCollab = (sessionId) => collabSessions.has(sessionId)
+    && !isSupervisorSession(sessionId)
+    && !isManagedWorker(sessionId)
+
+  /** Inbox routing: supervisors hear from related workers; workers from related supervisors. */
+  const inboxPeerAllowed = (selfId, peerId) => {
+    if (isSupervisorSession(selfId)) return relationships.get(selfId, peerId) !== undefined
+    if (isManagedWorker(selfId)) return relationships.get(peerId, selfId) !== undefined
+    return true
+  }
+
+  /** Send a task protocol message through the authenticated pair transport. */
+  const sendTaskNotice = async (self, targetId, payload) => {
+    if (!auth.isAuthorized(self.sessionId, targetId)) {
+      throw new Error('未授权：请在“协作授权”页授权双方。')
+    }
+    const peer = registry.get(targetId)
+    if (peer === undefined) throw new Error(`unknown collaboration session: ${targetId}`)
+    if (typeof peer.workdir !== 'string' || !isDirectory(peer.workdir)) {
+      throw new Error(`target working directory is missing: ${String(peer.workdir)}`)
+    }
+    const message = sendMessage({
+      selfId: self.sessionId,
+      selfWorkdir: self.workdir,
+      peerId: peer.sessionId,
+      peerWorkdir: peer.workdir,
+      text: JSON.stringify(payload),
+    })
+    return wakePeer(peer.sessionId, message)
+  }
+
+  const deliveryRoot = (supervisorLayout, projectId, workerId) => path.join(
+    supervisorLayout.workdir,
+    'deliverables',
+    projectId ?? 'default',
+    workerId,
+  )
+
+  const peersText = (self) => {
+    const entries = registry.list().filter(entry => entry.sessionId !== self.sessionId && isOrdinaryCollab(entry.sessionId))
+    if (entries.length === 0) {
+      return 'No other collaboration sessions are registered yet. Create another one from the left sidebar entry.'
+    }
+    const lines = [`This session: ${self.sessionId}`, '']
+    for (const entry of entries) {
+      const online = ctx.agents.get(entry.sessionId) !== undefined
+      const credential = readJson(credentialPath(self.workdir, entry.sessionId)) !== undefined
+      const unread = inboxCount(self.workdir, entry.sessionId)
+      const title = typeof entry.title === 'string' && entry.title.length > 0 ? `  title=${JSON.stringify(entry.title)}` : ''
+      lines.push(
+        `- ${entry.sessionId}  ${online ? 'online' : 'offline'}  unread=${unread}  credential=${credential ? 'yes' : 'no'}${title}`,
+      )
+    }
+    return lines.join('\n')
+  }
+
+  const infoText = (self) => {
+    const peers = registry.list().filter(entry => entry.sessionId !== self.sessionId)
+    const lines = [
+      `session id: ${self.sessionId}`,
+      `preset: ${self.preset}`,
+      `working directory: ${self.workdir} (other sessions are denied direct tool access)`,
+      `communication directory: ${path.join(self.workdir, 'comm')} (pair-shared files; direct tool access from other sessions is denied)`,
+      `private directory: ${path.join(self.workdir, 'private')} (session-only; mode 0700)`,
+      `original workspace: ${self.originalCwd}`,
+      '',
+      `known peers: ${peers.length}`,
+    ]
+    for (const peer of peers) {
+      const unread = inboxCount(self.workdir, peer.sessionId)
+      const online = ctx.agents.get(peer.sessionId) !== undefined
+      lines.push(`- ${peer.sessionId}  ${online ? 'online' : 'offline'}  unread=${unread}`)
+    }
+    return lines.join('\n')
+  }
+
+  const wakePeer = async (targetId, message) => {
+    // Receiver gate: authorization can be revoked after the sender wrote the
+    // file, so delivery re-checks the current pair.
+    if (!auth.isAuthorized(message.from, targetId)) {
+      return 'blocked（未授权：请在“协作授权”页授权双方）'
+    }
+    let target = ctx.agents.get(targetId)
+    let resumed = false
+    if (target === undefined) {
+      try {
+        const handle = await ctx.agents.resume({ resumeSessionId: targetId })
+        target = handle.agent
+        resumed = true
+      } catch (error) {
+        // A concurrent wake may have resumed it between the lookup and here.
+        target = ctx.agents.get(targetId)
+        if (target === undefined) {
+          return `queued (target is not live and resume failed: ${describeError(error)})`
+        }
+      }
+    }
+    try {
+      const wake = makeWakeMessage(message)
+      // A running Agent (for example one inside wait_agent) must receive the
+      // notification in its NEXT STEP; followup would queue it for the next
+      // turn and leave wait_agent blocked until its timeout.
+      if (target.status === 'running' && typeof target.steer === 'function') {
+        target.steer(wake)
+        return 'delivered live (steered into the target\'s next step; the message stays queued until collab_inbox runs)'
+      }
+      if (typeof target.followup === 'function') {
+        target.followup(wake)
+        return resumed
+          ? 'delivered live (target resumed and woken; the message stays queued until collab_inbox runs)'
+          : 'delivered live (target woken; the message stays queued until collab_inbox runs)'
+      }
+      if (typeof target.inject === 'function') {
+        target.inject(wake)
+        return 'delivered to the live target inbox (the message stays queued until collab_inbox runs)'
+      }
+      return 'queued (target agent does not accept inbox messages)'
+    } catch (error) {
+      return `queued (live delivery failed: ${describeError(error)})`
+    }
+  }
+
+  const inboxText = (self, peer, markReadEnabled) => {
+    const result = listInbox({ selfId: self.sessionId, selfWorkdir: self.workdir })
+    const selected = peer === undefined ? result.messages : result.messages.filter(item => item.peerId === peer)
+    const allowed = selected.filter(item => inboxPeerAllowed(self.sessionId, item.peerId))
+    const authorized = allowed.filter(item => auth.isAuthorized(self.sessionId, item.peerId))
+    const blocked = selected.length - authorized.length
+    if (markReadEnabled) {
+      for (const item of authorized) {
+        try { markRead(item.file, self.workdir) } catch (error) { warn(`could not mark ${item.message.id} read: ${describeError(error)}`) }
+      }
+    }
+    const lines = []
+    if (authorized.length === 0) lines.push('No unread messages.')
+    for (const item of authorized) {
+      lines.push(
+        `from: ${item.message.from}`,
+        `message id: ${item.message.id}`,
+        `sent: ${iso(item.message.createdAt)}`,
+        '---',
+        item.message.text,
+        '',
+      )
+    }
+    if (blocked > 0) lines.push(`${blocked} message(s) blocked by authorization.`)
+    if (result.rejected > 0) lines.push(`Quarantined ${result.rejected} invalid or oversized message file(s).`)
+    if (result.truncated > 0) lines.push(`${result.truncated} more message file(s) were not read in this call.`)
+    if (peer !== undefined && selected.length === 0 && result.messages.length > 0) {
+      lines.push(`Other peers still have ${result.messages.length} queued message(s); omit peer to read them.`)
+    }
+    return lines.join('\n').trimEnd()
+  }
+
+  const requireSupervisor = (exec) => {
+    const sessionId = exec?.agent?.id
+    if (!isSupervisorSession(sessionId)) throw new Error('this tool is available only to a supervisor session')
+    return requireSelf(exec)
+  }
+
+  const requireWorker = (exec) => {
+    const sessionId = exec?.agent?.id
+    if (!isManagedWorker(sessionId)) throw new Error('this tool is available only to a registered worker session')
+    return requireSelf(exec)
+  }
+
+  /** Stable short digest of one capability description. */
+  const capabilityVersionOf = (name, description) => crypto
+    .createHash('sha256')
+    .update(`${name}\n${description}`)
+    .digest('hex')
+    .slice(0, 16)
+
+  /** Current worker-owned capability, derived from title and base prompt. */
+  const liveCapability = (worker) => {
+    const entry = registry.get(worker)
+    if (entry === undefined) return null
+    let description = ''
+    let updatedAt = entry.updatedAt
+    try {
+      const meta = readJson(path.join(entry.workdir, 'session.json'))
+      if (typeof meta?.basePrompt === 'string') description = meta.basePrompt
+      if (typeof meta?.updatedAt === 'number') updatedAt = meta.updatedAt
+    } catch { /* the worker may not have a readable session yet */ }
+    const name = typeof entry.title === 'string' && entry.title.trim().length > 0 ? entry.title.trim() : worker
+    return {
+      name,
+      description,
+      version: capabilityVersionOf(name, description),
+      updatedAt,
+      source: 'live',
+    }
+  }
+
+  /** Effective capability: a human override if present, otherwise the live one. */
+  const effectiveCapability = (relationship) => {
+    if (relationship === null || relationship === undefined) return null
+    const live = liveCapability(relationship.worker)
+    const override = relationship.capabilityOverride
+    if (override !== null && override !== undefined) {
+      return {
+        ...override,
+        source: 'override',
+        version: capabilityVersionOf(override.name, override.description ?? ''),
+        live,
+        changed: live !== null && relationship.capabilityVersion !== undefined
+          ? live.version !== relationship.capabilityVersion
+          : false,
+      }
+    }
+    if (live === null) return null
+    return {
+      ...live,
+      changed: relationship.capabilityVersion !== undefined
+        ? live.version !== relationship.capabilityVersion
+        : false,
+    }
+  }
+
+  /** Compact live capability lines injected into the supervisor prompt each turn. */
+  const capabilityRoster = (supervisor) => relationships.listForSupervisor(supervisor).map(relationship => {
+    const capability = effectiveCapability(relationship)
+    const name = capability?.name ?? '(request-only)'
+    const description = capability?.description ?? ''
+    const source = capability?.source ?? 'none'
+    const version = capability?.version ?? '-'
+    return `- ${relationship.worker} capability=${JSON.stringify(name)} source=${source} version=${version}${capability?.changed === true ? ' changed=yes' : ''}${description.length === 0 ? '' : ` description=${JSON.stringify(description.slice(0, 500))}`}`
+  })
+
+  const workerCandidates = (supervisor) => registry.list()
+    .filter(entry => entry.sessionId !== supervisor && entry.preset !== SUPERVISOR)
+    .map(entry => {
+      const capability = liveCapability(entry.sessionId)
+      return {
+        sessionId: entry.sessionId,
+        title: entry.title ?? null,
+        online: ctx.agents.get(entry.sessionId) !== undefined,
+        authorized: auth.isAuthorized(supervisor, entry.sessionId),
+        basePrompt: capability?.description ?? '',
+        capability,
+        relationship: relationships.get(supervisor, entry.sessionId) ?? null,
+      }
+    })
+
+  const taskLine = (task) => (
+    `- ${task.id} [${task.status}] worker=${task.worker ?? 'unassigned'} project=${task.projectId ?? '-'} title=${JSON.stringify(task.title)}`
+  )
+
+  /** Turn number for one executing tool call, when the session event is known. */
+  const turnForCall = (exec) => {
+    const found = callTurns.get(String(exec?.callId))
+    if (found === undefined) return undefined
+    if (typeof exec?.agent?.id === 'string' && found.sessionId !== exec.agent.id) return undefined
+    return found.turn
+  }
+
+  const taskDetail = (task) => ({
+    id: task.id,
+    projectId: task.projectId,
+    supervisor: task.supervisor,
+    worker: task.worker,
+    title: task.title,
+    instruction: task.instruction,
+    inputs: task.inputs,
+    acceptance: task.acceptance,
+    status: task.status,
+    attempts: task.attempts,
+    createdTurn: task.createdTurn,
+    assignedTurn: task.assignedTurn,
+    capabilityVersion: task.capabilityVersion,
+    result: task.result,
+    failure: task.failure,
+    history: task.history,
+  })
+
+  const deliveryDirFor = (task) => {
+    const layout = promptFibers.get(task.supervisor)?.layout
+    if (layout === undefined) return undefined
+    return deliveryRoot(layout, task.projectId, task.worker)
+  }
+
+  const listDeliveryFiles = (root, base = root, out = []) => {
+    if (out.length >= 200) return out
+    let entries
+    try { entries = fs.readdirSync(root, { withFileTypes: true }) } catch { return out }
+    for (const entry of entries) {
+      if (out.length >= 200) break
+      const full = path.join(root, entry.name)
+      if (entry.isDirectory()) {
+        listDeliveryFiles(full, base, out)
+        continue
+      }
+      if (!entry.isFile()) continue
+      let stat
+      try { stat = fs.statSync(full) } catch { continue }
+      out.push({
+        path: path.relative(base, full),
+        size: stat.size,
+        modifiedAt: stat.mtimeMs,
+      })
+    }
+    return out
+  }
+
+  const taskTools = [
+    {
+      name: 'collab_capabilities',
+      description: 'List functional sessions registered to this supervisor, their capabilities, authorization, online state, and active task count.',
+      parameters: NO_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      isConcurrencySafe: () => true,
+      execute: (_args, exec) => {
+        const self = requireSupervisor(exec)
+        const relationshipsForSelf = relationships.listForSupervisor(self.sessionId)
+        if (relationshipsForSelf.length === 0) return 'No functional sessions are registered to this supervisor yet.'
+        const lines = [`supervisor: ${self.sessionId}`, '']
+        for (const relationship of relationshipsForSelf) {
+          const worker = registry.get(relationship.worker)
+          const online = ctx.agents.get(relationship.worker) !== undefined
+          const authorized = auth.isAuthorized(self.sessionId, relationship.worker)
+          const active = tasks.activeCount(relationship.worker)
+          const capability = effectiveCapability(relationship)
+          const name = capability?.name ?? '(request-only)'
+          const description = capability?.description ?? ''
+          const source = capability?.source ?? 'none'
+          const version = capability?.version ?? '-'
+          const changed = capability?.changed === true ? 'yes' : 'no'
+          lines.push(
+            `- ${relationship.worker}  capability=${JSON.stringify(name)}  source=${source}  version=${version}  changed=${changed}  offer=${relationship.offer ? 'yes' : 'no'}  request=${relationship.request ? 'yes' : 'no'}  authorized=${authorized ? 'yes' : 'no'}  ${online ? 'online' : 'offline'}  active=${String(active)}${description.length === 0 ? '' : `  description=${JSON.stringify(description)}`}${worker?.title === undefined ? '' : `  title=${JSON.stringify(worker.title)}`}`,
+          )
+        }
+        return lines.join('\n')
+      },
+    },
+    {
+      name: 'collab_task_create',
+      description: 'Create a task for a functional worker. Omit projectId to create a new project for this requirement.',
+      parameters: TASK_CREATE_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const title = String(args?.title ?? '').trim()
+        const instruction = String(args?.instruction ?? '')
+        if (title.length === 0) throw new Error('task title must not be empty')
+        if (instruction.trim().length === 0) throw new Error('task instruction must not be empty')
+        let projectId = typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined
+        if (projectId === undefined) {
+          const project = tasks.createProject({ supervisor: self.sessionId, title })
+          projectId = project.id
+        } else {
+          const project = tasks.project(projectId)
+          if (project === undefined || project.supervisor !== self.sessionId) throw new Error(`unknown project: ${projectId}`)
+          if (project.status !== 'open') throw new Error('project is closed')
+        }
+        const task = tasks.createTask({
+          supervisor: self.sessionId,
+          worker: null,
+          projectId,
+          title,
+          instruction,
+          inputs: args?.inputs,
+          acceptance: args?.acceptance,
+          createdTurn: turnForCall(exec),
+        })
+        return JSON.stringify({ task: taskDetail(task), projectId })
+      },
+    },
+    {
+      name: 'collab_task_assign',
+      description: 'Assign a task to a worker with an offer relationship. The worker is woken with the assignment.',
+      parameters: TASK_ASSIGN_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: async (args, exec) => {
+        const self = requireSupervisor(exec)
+        const taskId = String(args?.taskId ?? '')
+        const worker = String(args?.worker ?? '')
+        const task = tasks.get(taskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error(`unknown task: ${taskId}`)
+        const relationship = relationships.get(self.sessionId, worker)
+        if (relationship === undefined || relationship.offer !== true) {
+          throw new Error('worker is not registered to this supervisor with an offer capability')
+        }
+        if (!auth.isAuthorized(self.sessionId, worker)) {
+          throw new Error('未授权：请在“协作授权”页授权双方。')
+        }
+        const project = task.projectId === null ? undefined : tasks.project(task.projectId)
+        if (project !== undefined && project.status !== 'open') throw new Error('project is closed')
+        const otherActive = tasks.listForWorker(worker)
+          .filter(entry => entry.id !== taskId && !['done', 'failed', 'cancelled'].includes(entry.status))
+          .length
+        if (otherActive >= 1) throw new Error('worker already has an active task; capacity is 1')
+        const layout = promptFibers.get(self.sessionId)?.layout
+        if (layout === undefined) throw new Error('supervisor layout is not ready')
+        const deliveryDir = deliveryRoot(layout, task.projectId, worker)
+        mkdirp(deliveryDir, 0o700)
+        const assigned = tasks.assign(taskId, worker, Date.now(), turnForCall(exec), effectiveCapability(relationship)?.version ?? null)
+        const payload = {
+          type: 'collab-task/assign',
+          version: 1,
+          taskId: assigned.id,
+          projectId: assigned.projectId,
+          supervisor: self.sessionId,
+          title: assigned.title,
+          instruction: assigned.instruction,
+          inputs: assigned.inputs,
+          acceptance: assigned.acceptance,
+          deliveryDir,
+          attempt: assigned.attempts,
+        }
+        const delivery = await sendTaskNotice(self, worker, payload)
+        return [
+          `assigned: ${assigned.id}`,
+          `worker: ${worker}`,
+          `status: ${assigned.status}`,
+          `delivery: ${delivery}`,
+          `deliveryDir: ${deliveryDir}`,
+        ].join('\n')
+      },
+    },
+    {
+      name: 'collab_tasks',
+      description: 'List tasks for this supervisor or, for a worker, the tasks assigned to it.',
+      parameters: TASK_LIST_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id) || isManagedWorker(agent.id),
+      isConcurrencySafe: () => true,
+      execute: (args, exec) => {
+        const self = requireSelf(exec)
+        const status = typeof args?.status === 'string' && args.status.trim().length > 0 ? args.status.trim() : undefined
+        const list = isSupervisorSession(self.sessionId)
+          ? tasks.listForSupervisor(self.sessionId, status)
+          : tasks.listForWorker(self.sessionId)
+        if (list.length === 0) return 'No tasks.'
+        return [taskLine(task)].concat(list.slice(1).map(taskLine)).join('\n')
+      },
+    },
+    {
+      name: 'collab_task_result',
+      description: 'Read one task detail and result. Only tasks owned by this supervisor are returned.',
+      parameters: TASK_ID_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      isConcurrencySafe: () => true,
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const task = tasks.get(String(args?.taskId ?? ''))
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
+        return JSON.stringify(taskDetail(task))
+      },
+    },
+    {
+      name: 'collab_task_retry',
+      description: 'Reset a failed/cancelled/completed task to created so it can be assigned again.',
+      parameters: TASK_ID_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const taskId = String(args?.taskId ?? '')
+        const task = tasks.get(taskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
+        const retried = tasks.retry(taskId)
+        return `retried: ${retried.id}\nstatus: ${retried.status}`
+      },
+    },
+    {
+      name: 'collab_task_reject',
+      description: 'Reject a completed task, returning it to the worker with a revision instruction.',
+      parameters: TASK_REJECT_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: async (args, exec) => {
+        const self = requireSupervisor(exec)
+        const taskId = String(args?.taskId ?? '')
+        const task = tasks.get(taskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
+        if (task.worker === null) throw new Error('task has no worker')
+        const rejected = tasks.reject(taskId, String(args?.reason ?? ''))
+        const payload = {
+          type: 'collab-task/assign',
+          version: 1,
+          taskId: rejected.id,
+          projectId: rejected.projectId,
+          supervisor: self.sessionId,
+          title: rejected.title,
+          instruction: rejected.instruction,
+          inputs: rejected.inputs,
+          acceptance: rejected.acceptance,
+          deliveryDir: deliveryDirFor(rejected),
+          attempt: rejected.attempts,
+          revision: String(args?.reason ?? ''),
+        }
+        await sendTaskNotice(self, rejected.worker, payload)
+        return `rejected: ${rejected.id}\nstatus: ${rejected.status}`
+      },
+    },
+    {
+      name: 'collab_task_cancel',
+      description: 'Cancel a task that has not completed.',
+      parameters: TASK_ID_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const task = tasks.get(String(args?.taskId ?? ''))
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
+        const cancelled = tasks.cancel(task.id)
+        return `cancelled: ${cancelled.id}`
+      },
+    },
+    {
+      name: 'collab_project_close',
+      description: 'Close a project after all its tasks are done or cancelled.',
+      parameters: PROJECT_CLOSE_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const projectId = String(args?.projectId ?? '')
+        const project = tasks.project(projectId)
+        if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
+        const closed = tasks.closeProject(projectId)
+        return `closed: ${closed.id}\nstatus: ${closed.status}`
+      },
+    },
+    {
+      name: 'collab_delivery_list',
+      description: 'List delivery files under this supervisor project/worker subdirectories. Names, sizes, and times only; content is not read.',
+      parameters: DELIVERY_LIST_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      isConcurrencySafe: () => true,
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const layout = promptFibers.get(self.sessionId)?.layout
+        if (layout === undefined) throw new Error('supervisor layout is not ready')
+        const projectId = typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined
+        const workerId = typeof args?.workerId === 'string' && args.workerId.trim().length > 0 ? args.workerId.trim() : undefined
+        const root = path.join(layout.workdir, 'deliverables', projectId ?? '')
+        const files = listDeliveryFiles(root)
+        const filtered = workerId === undefined
+          ? files
+          : files.filter(file => (
+            projectId === undefined
+              ? file.path.split(path.sep)[1] === workerId
+              : file.path.startsWith(`${workerId}${path.sep}`)
+          ))
+        if (filtered.length === 0) return 'No delivery files.'
+        return filtered.map(file => `${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`).join('\n')
+      },
+    },
+    {
+      name: 'collab_task_accept',
+      description: 'Accept an assigned task and return its instructions, acceptance criteria, and delivery directory.',
+      parameters: TASK_ID_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isManagedWorker(agent.id),
+      execute: (args, exec) => {
+        const self = requireWorker(exec)
+        const task = tasks.get(String(args?.taskId ?? ''))
+        if (task === undefined || task.worker !== self.sessionId) throw new Error('unknown task for this worker')
+        const accepted = tasks.accept(task.id, self.sessionId)
+        return JSON.stringify({ ...taskDetail(accepted), deliveryDir: deliveryDirFor(accepted) })
+      },
+    },
+    {
+      name: 'collab_task_progress',
+      description: 'Record progress on an accepted task.',
+      parameters: TASK_PROGRESS_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isManagedWorker(agent.id),
+      execute: (args, exec) => {
+        const self = requireWorker(exec)
+        const task = tasks.get(String(args?.taskId ?? ''))
+        if (task === undefined || task.worker !== self.sessionId) throw new Error('unknown task for this worker')
+        const progressed = tasks.progress(task.id, self.sessionId, String(args?.note ?? ''))
+        return `progress: ${progressed.id}\nstatus: ${progressed.status}`
+      },
+    },
+    {
+      name: 'collab_task_complete',
+      description: 'Complete a task and notify its supervisor with the result summary.',
+      parameters: TASK_COMPLETE_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isManagedWorker(agent.id),
+      execute: async (args, exec) => {
+        const self = requireWorker(exec)
+        const task = tasks.get(String(args?.taskId ?? ''))
+        if (task === undefined || task.worker !== self.sessionId) throw new Error('unknown task for this worker')
+        const completed = tasks.complete(task.id, self.sessionId, {
+          summary: args?.summary,
+          details: args?.details,
+          artifacts: args?.artifacts,
+        })
+        const delivery = await sendTaskNotice(self, completed.supervisor, {
+          type: 'collab-task/result',
+          version: 1,
+          taskId: completed.id,
+          status: 'done',
+        })
+        return [
+          `completed: ${completed.id}`,
+          `status: ${completed.status}`,
+          `delivery: ${delivery}`,
+        ].join('\n')
+      },
+    },
+    {
+      name: 'collab_task_fail',
+      description: 'Report a task failure to its supervisor.',
+      parameters: TASK_FAIL_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isManagedWorker(agent.id),
+      execute: async (args, exec) => {
+        const self = requireWorker(exec)
+        const task = tasks.get(String(args?.taskId ?? ''))
+        if (task === undefined || task.worker !== self.sessionId) throw new Error('unknown task for this worker')
+        const failed = tasks.fail(task.id, self.sessionId, String(args?.reason ?? ''))
+        const delivery = await sendTaskNotice(self, failed.supervisor, {
+          type: 'collab-task/result',
+          version: 1,
+          taskId: failed.id,
+          status: 'failed',
+        })
+        return [
+          `failed: ${failed.id}`,
+          `status: ${failed.status}`,
+          `delivery: ${delivery}`,
+        ].join('\n')
+      },
+    },
+  ]
+
+  const tools = [
+    {
+      name: 'collab_info',
+      description: 'Describe this collaboration session: its unique session id, communication and private directories, and known peers.',
+      parameters: NO_PARAMETERS,
+      output: TEXT_OUTPUT,
+      isConcurrencySafe: () => true,
+      execute: (_args, exec) => infoText(requireSelf(exec)),
+    },
+    {
+      name: 'collab_peers',
+      description: 'List other ordinary collaboration sessions with their exact session ids and online state.',
+      when: ({ agent }) => isOrdinaryCollab(agent.id),
+      parameters: NO_PARAMETERS,
+      output: TEXT_OUTPUT,
+      isConcurrencySafe: () => true,
+      execute: (_args, exec) => {
+        const self = requireSelf(exec)
+        refreshRegistry()
+        return peersText(self)
+      },
+    },
+    {
+      name: 'collab_send',
+      description: 'Send an authenticated message to another collaboration session. The pair must be explicitly authorized; the message is written under comm/<target>/outbox and the target inbox; a live target is woken with a notification and reads it through collab_inbox.',
+      when: ({ agent }) => isOrdinaryCollab(agent.id),
+      parameters: SEND_PARAMETERS,
+      output: TEXT_OUTPUT,
+      execute: async (args, exec) => {
+        const self = requireSelf(exec)
+        const targetId = String(args?.target ?? '').trim()
+        const text = String(args?.message ?? '')
+        if (!isSessionId(targetId)) throw new Error('target must be an exact session id such as session-<uuid>')
+        if (targetId === self.sessionId) throw new Error('a collaboration session cannot send a message to itself')
+        if (!isOrdinaryCollab(targetId)) {
+          throw new Error('this target is managed by a supervisor; use the task tools instead of collab_send')
+        }
+        if (!auth.isAuthorized(self.sessionId, targetId)) {
+          throw new Error('未授权：请在“协作授权”页授权双方。')
+        }
+        if (text.trim().length === 0) throw new Error('message must not be empty')
+        if (Buffer.byteLength(text) > MAX_MESSAGE_BYTES) throw new Error('message is larger than 64 KiB')
+        refreshRegistry()
+        const peer = registry.get(targetId)
+        if (peer === undefined) throw new Error(`unknown collaboration session: ${targetId}`)
+        const peerWorkdir = peer.workdir
+        if (typeof peerWorkdir !== 'string' || !isDirectory(peerWorkdir)) {
+          throw new Error(`target working directory is missing: ${String(peerWorkdir)}`)
+        }
+        const message = sendMessage({
+          selfId: self.sessionId,
+          selfWorkdir: self.workdir,
+          peerId: peer.sessionId,
+          peerWorkdir,
+          text,
+        })
+        const delivery = await wakePeer(peer.sessionId, message)
+        return [
+          `sent: ${message.id}`,
+          `from: ${self.sessionId}`,
+          `to: ${peer.sessionId}`,
+          `delivery: ${delivery}`,
+          `credential: ${credentialPath(self.workdir, peer.sessionId)}`,
+        ].join('\n')
+      },
+    },
+    {
+      name: 'collab_inbox',
+      description: 'Read messages queued for this collaboration session. Only explicitly authorized pairs are returned; messages are authenticated with the pair credential, and reading acknowledges them by default.',
+      parameters: INBOX_PARAMETERS,
+      output: TEXT_OUTPUT,
+      execute: (args, exec) => {
+        const self = requireSelf(exec)
+        const peer = typeof args?.peer === 'string' && args.peer.trim().length > 0 ? args.peer.trim() : undefined
+        if (peer !== undefined && !isSessionId(peer)) throw new Error('peer must be an exact session id such as session-<uuid>')
+        return inboxText(self, peer, args?.mark_read !== false)
+      },
+    },
+    ...taskTools,
+  ]
+
+  ctx.commands.register({
+    name: 'collab-auth',
+    description: 'List, authorize, or revoke collaboration session communication pairs.',
+    recordInput: false,
+    handler: (invocation) => {
+      const usage = 'usage: /collab-auth [list | authorize <sessionA> <sessionB> | grant <from> <to> | revoke <sessionA> <sessionB>]'
+      const parts = invocation.rawInput.trim().split(/\s+/u).filter(Boolean)
+      const action = parts[0] ?? 'list'
+      const statePayload = () => JSON.stringify({ pairs: auth.listPairs(), pending: auth.listPending() })
+      if (action === 'list') {
+        return { kind: 'success', text: statePayload() }
+      }
+      if (action === 'authorize' || action === 'grant' || action === 'revoke') {
+        const a = parts[1]
+        const b = parts[2]
+        if (!isSessionId(a) || !isSessionId(b) || a === b) return { kind: 'error', text: usage }
+        if (action === 'authorize') auth.authorize(a, b, invocation.agent.id)
+        else if (action === 'grant') auth.grant(a, b, invocation.agent.id)
+        else auth.revoke(a, b)
+        return { kind: 'success', text: statePayload() }
+      }
+      return { kind: 'error', text: usage }
+    },
+  })
+
+  ctx.commands.register({
+    name: 'collab-base',
+    description: 'Read or set the current collaboration session base prompt.',
+    recordInput: false,
+    handler: (invocation) => {
+      const usage = 'usage: /collab-base [get | set <base64>]'
+      const parts = invocation.rawInput.trim().split(/\s+/u).filter(Boolean)
+      const action = parts[0] ?? 'get'
+      const sessionId = invocation.agent?.id
+      if (!collabSessions.has(sessionId)) {
+        return { kind: 'error', text: 'not a collaboration session' }
+      }
+      const entry = promptFibers.get(sessionId)
+      if (entry === undefined) {
+        return { kind: 'error', text: 'collaboration session is not initialized' }
+      }
+      const current = typeof entry.layout.meta.basePrompt === 'string' ? entry.layout.meta.basePrompt : ''
+      if (action === 'get') {
+        return { kind: 'success', text: JSON.stringify({ basePrompt: current }) }
+      }
+      if (action === 'set') {
+        let text
+        try {
+          text = Buffer.from(parts[1] ?? '', 'base64').toString('utf8')
+        } catch {
+          return { kind: 'error', text: usage }
+        }
+        if (text.length > MAX_BASE_PROMPT) {
+          return { kind: 'error', text: `base prompt exceeds ${String(MAX_BASE_PROMPT)} characters` }
+        }
+        entry.layout.meta.basePrompt = text
+        entry.layout.meta.updatedAt = Date.now()
+        try {
+          writeJson(path.join(entry.layout.workdir, 'session.json'), entry.layout.meta, 0o600)
+        } catch (error) {
+          return { kind: 'error', text: `could not save base prompt: ${describeError(error)}` }
+        }
+        return { kind: 'success', text: JSON.stringify({ basePrompt: text }) }
+      }
+      return { kind: 'error', text: usage }
+    },
+  })
+
+  ctx.commands.register({
+    name: 'collab-link',
+    description: 'Manage supervisor-worker authorization and live/pinned capability.',
+    recordInput: false,
+    handler: (invocation) => {
+      const supervisor = invocation.agent?.id
+      if (!isSupervisorSession(supervisor)) return { kind: 'error', text: 'not a supervisor session' }
+      const usage = 'usage: /collab-link [get | link <worker> <base64-json> | pin <worker> | live <worker> | unlink <worker>]'
+      const view = relationship => relationship === undefined
+        ? undefined
+        : { ...relationship, capability: effectiveCapability(relationship) }
+      const parts = invocation.rawInput.trim().split(/\s+/u).filter(Boolean)
+      const action = parts[0] ?? 'get'
+      if (action === 'get') {
+        return {
+          kind: 'success',
+          text: JSON.stringify({
+            relationships: relationships.listForSupervisor(supervisor).map(view),
+            workers: workerCandidates(supervisor),
+          }),
+        }
+      }
+      if (action === 'link' || action === 'unlink' || action === 'pin' || action === 'live') {
+        const worker = parts[1]
+        if (!isSessionId(worker) || worker === supervisor) return { kind: 'error', text: usage }
+        const entry = registry.get(worker)
+        if (entry === undefined || entry.preset === SUPERVISOR) return { kind: 'error', text: 'worker must be a collaboration session' }
+        if (action === 'unlink') {
+          relationships.remove(supervisor, worker)
+          auth.revoke(supervisor, worker)
+          return { kind: 'success', text: JSON.stringify({ removed: true, worker, communicationRevoked: true }) }
+        }
+        const existing = relationships.get(supervisor, worker)
+        if ((action === 'pin' || action === 'live') && existing === undefined) {
+          return { kind: 'error', text: 'worker is not registered to this supervisor' }
+        }
+        if (action === 'pin' || action === 'live') {
+          const live = liveCapability(worker)
+          if (live === null) return { kind: 'error', text: 'worker session is unavailable' }
+          try {
+            const relationship = relationships.upsert({
+              supervisor,
+              worker,
+              capabilityOverride: action === 'pin' ? live : null,
+              capabilityVersion: live.version,
+              offer: existing.offer,
+              request: existing.request,
+              createdBy: 'human',
+            })
+            return { kind: 'success', text: JSON.stringify({ relationship: view(relationship) }) }
+          } catch (error) {
+            return { kind: 'error', text: describeError(error) }
+          }
+        }
+        let payload
+        try {
+          payload = JSON.parse(Buffer.from(parts[2] ?? '', 'base64').toString('utf8'))
+        } catch {
+          return { kind: 'error', text: 'link payload must be base64-encoded JSON' }
+        }
+        const live = liveCapability(worker)
+        const override = payload?.override === true ? (payload?.capability ?? null) : undefined
+        const offer = payload?.offer !== false
+        const request = payload?.request === true
+        try {
+          const relationship = relationships.upsert({
+            supervisor,
+            worker,
+            capabilityOverride: override,
+            capabilityVersion: live?.version,
+            offer,
+            request,
+            createdBy: 'human',
+          })
+          auth.authorize(supervisor, worker, 'relationship')
+          return { kind: 'success', text: JSON.stringify({ relationship: view(relationship), authorized: true }) }
+        } catch (error) {
+          return { kind: 'error', text: describeError(error) }
+        }
+      }
+      return { kind: 'error', text: usage }
+    },
+  })
+
+  ctx.commands.register({
+    name: 'collab-board',
+    description: 'Read the supervisor dashboard: relationships, tasks, projects, and worker candidates.',
+    recordInput: false,
+    handler: (invocation) => {
+      const supervisor = invocation.agent?.id
+      if (!isSupervisorSession(supervisor)) return { kind: 'error', text: 'not a supervisor session' }
+      return {
+        kind: 'success',
+        text: JSON.stringify({
+          relationships: relationships.listForSupervisor(supervisor).map(relationship => ({
+            ...relationship,
+            capability: effectiveCapability(relationship),
+          })),
+          workers: workerCandidates(supervisor),
+          tasks: tasks.listForSupervisor(supervisor).map(task => TaskStore.summary(task)),
+          projects: tasks.listProjects(supervisor),
+        }),
+      }
+    },
+  })
+
+  for (const definition of tools) {
+    const { when, ...tool } = definition
+    ctx.tools.register(tool, {
+      when: when ?? (({ agent }) => collabSessions.has(agent.id)),
+    })
+  }
+
+  ctx.tools.guard((exec) => {
+    if (exec?.agent === undefined || !isSessionId(exec.agent.id)) return undefined
+    const sessionId = exec.agent.id
+    const self = registry.get(sessionId)
+    // Relative paths resolve against the session's current directory, which may
+    // differ from the collaboration layout after an explicit `cd`.
+    const currentCwd = exec.agent.session === undefined ? undefined : ctx.workingDirectory.get(exec.agent.session)
+    const selfWorkdir = currentCwd ?? self?.workdir
+    if (typeof selfWorkdir !== 'string') return undefined
+    const pathInside = (candidate, root) => {
+      const resolvedCandidate = path.resolve(candidate)
+      const resolvedRoot = path.resolve(root)
+      return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
+    }
+    const deliveryAccessFor = (candidate, write) => {
+      if (typeof candidate !== 'string' || candidate.length === 0) return false
+      const resolved = path.resolve(selfWorkdir, candidate)
+      for (const entry of registry.list()) {
+        if (entry.preset !== SUPERVISOR) continue
+        const root = path.join(entry.workdir, 'deliverables')
+        if (!pathInside(resolved, root)) continue
+        const relative = path.relative(root, resolved).split(path.sep).filter(Boolean)
+        if (relative.length < 2) continue
+        const [projectId, workerId] = relative
+        if (workerId !== sessionId) continue
+        const project = tasks.project(projectId)
+        if (project === undefined || project.supervisor !== entry.sessionId) continue
+        if (!tasks.listForSupervisor(entry.sessionId).some(task => task.projectId === projectId && task.worker === sessionId)) continue
+        if (write && project.status !== 'open') continue
+        return true
+      }
+      return false
+    }
+    const allowedDeliveryPaths = (candidates, write) => candidates.filter(candidate => !deliveryAccessFor(candidate, write))
+
+    const byId = new Map()
+    for (const entry of registry.list()) {
+      if (typeof entry.workdir === 'string') byId.set(entry.sessionId, { sessionId: entry.sessionId, workdir: entry.workdir })
+    }
+    if (typeof self?.workdir === 'string') {
+      for (const sibling of discoverSiblingWorkdirs(self.workdir)) {
+        if (self?.workdir !== undefined && path.resolve(sibling.workdir) === path.resolve(self.workdir)) continue
+        if (!byId.has(sibling.sessionId)) byId.set(sibling.sessionId, sibling)
+      }
+    }
+    const roots = [...byId.values()]
+    const options = { selfId: sessionId, selfWorkdir, selfLayoutWorkdir: self?.workdir, roots }
+    const isCollabCaller = collabSessions.has(sessionId)
+    const args = exec.arguments
+    let hit
+    switch (exec.name) {
+      case 'bash': {
+        const bashWorkdir = typeof args?.workdir === 'string' && args.workdir.length > 0
+          ? path.resolve(selfWorkdir, args.workdir)
+          : selfWorkdir
+        // A collaboration shell whose cwd contains another session's work
+        // directory could read it recursively; refuse that cwd. Normal project
+        // sessions keep their full shell so the plugin does not break them.
+        const bashCwdAllowed = deliveryAccessFor(bashWorkdir, true)
+        hit = (isCollabCaller && !bashCwdAllowed ? findForeignAncestorAccess([bashWorkdir], options) : undefined)
+          ?? findForeignSessionAccessInCommand(String(args?.command ?? ''), {
+            ...options,
+            selfWorkdir: bashWorkdir,
+            checkAncestors: isCollabCaller && !bashCwdAllowed,
+          })
+        if (hit === undefined && typeof args?.workdir === 'string') {
+          hit = findForeignSessionAccess(allowedDeliveryPaths([args.workdir], true), options)
+        }
+        break
+      }
+      case 'working_directory':
+        hit = findForeignSessionAccess(
+          allowedDeliveryPaths([args?.cd].filter(value => typeof value === 'string'), true),
+          options,
+        )
+        break
+      case 'apply_patch':
+        hit = findForeignSessionAccessInCommand(String(args?.input ?? args?.patch ?? ''), options)
+        break
+      case 'office_render':
+      case 'office_convert':
+      case 'office_recalculate':
+        hit = findForeignSessionAccess(
+          allowedDeliveryPaths([args?.input].filter(value => typeof value === 'string'), true),
+          options,
+        )
+        break
+      case 'present':
+        hit = findForeignSessionAccess(
+          allowedDeliveryPaths(Array.isArray(args?.files) ? args.files.map(file => file?.path).filter(value => typeof value === 'string') : [], false),
+          options,
+        )
+        break
+      case 'read':
+      case 'read_image':
+        hit = findForeignSessionAccess(
+          allowedDeliveryPaths([args?.path, args?.file_path, args?.filePath].filter(value => typeof value === 'string'), false),
+          options,
+        )
+        break
+      case 'write':
+      case 'edit':
+        hit = findForeignSessionAccess(
+          allowedDeliveryPaths([args?.path, args?.file_path, args?.filePath].filter(value => typeof value === 'string'), true),
+          options,
+        )
+        break
+      case 'glob': {
+        const globPath = typeof args?.path === 'string' ? args.path : selfWorkdir
+        const pathAllowed = deliveryAccessFor(globPath, false)
+        hit = (pathAllowed ? undefined : findSuspiciousSearchPattern(String(args?.pattern ?? ''), options))
+          ?? (isCollabCaller && !pathAllowed
+            ? findForeignAncestorAccess([globPath].filter(value => typeof value === 'string'), options)
+            : undefined)
+          ?? findForeignSessionAccess(
+            allowedDeliveryPaths([args?.path, args?.pattern].filter(value => typeof value === 'string'), false),
+            options,
+          )
+        break
+      }
+      case 'grep': {
+        const grepPath = typeof args?.path === 'string' ? args.path : selfWorkdir
+        const pathAllowed = deliveryAccessFor(grepPath, false)
+        hit = (isCollabCaller && !pathAllowed
+          ? findForeignAncestorAccess([grepPath].filter(value => typeof value === 'string'), options)
+          : undefined)
+          ?? findForeignSessionAccess(
+            allowedDeliveryPaths([args?.path].filter(value => typeof value === 'string'), false),
+            options,
+          )
+        break
+      }
+      default:
+        return undefined
+    }
+    if (hit === undefined) return undefined
+    return {
+      reason: `collab: session ${sessionId} may not access the work directory of session ${hit.sessionId}`,
+      info: { name: 'CollabWorkdirScope', code: 'COLLAB_WORKDIR_SCOPE' },
+    }
+  })
+
+  refreshRegistry()
+  for (const entry of registry.list()) {
+    try { migrateSessionArchive(entry.workdir) } catch (error) { warn(`archive migration failed for ${entry.sessionId}: ${describeError(error)}`) }
+  }
+  for (const agent of ctx.agents.list()) void setupAgent(agent)
+  ctx.on('agent/created', async ({ agent }) => { await setupAgent(agent) })
+  ctx.on('agent/disposed', ({ agent }) => {
+    collabSessions.delete(agent.id)
+    sessionPresets.delete(agent.id)
+    disposePrompt(agent.id)
+  })
+  ctx.on('agent-preset/selected', async (sessionId, selected) => {
+    if (COLLAB_PRESETS.has(selected)) {
+      const agent = ctx.agents.get(sessionId)
+      if (agent !== undefined) await setupAgent(agent, { force: true, preset: selected })
+      return
+    }
+    collabSessions.delete(sessionId)
+    sessionPresets.delete(sessionId)
+    disposePrompt(sessionId)
+  })
+  ctx.on('session/event', (session, event) => {
+    if (event.type !== 'tool/call') return
+    const callId = event.data?.callId
+    const turn = event.data?.turn
+    if (typeof callId !== 'string' || typeof turn !== 'number') return
+    callTurns.set(callId, { sessionId: session.id, turn })
+    if (callTurns.size > 2000) {
+      const oldest = callTurns.keys().next().value
+      if (oldest !== undefined) callTurns.delete(oldest)
+    }
+  })
+
+  ctx.on('session/event', (session, event) => {
+    if (event.type !== 'session/title') return
+    const entry = registry.get(session.id)
+    if (entry === undefined) return
+    const title = event.data?.title
+    if (typeof title === 'string' && title.length > 0) {
+      registry.upsert({ ...entry, title, updatedAt: Date.now() })
+    }
+  })
+
+  ctx.effect(() => () => {
+    for (const sessionId of [...promptFibers.keys()]) disposePrompt(sessionId)
+    collabSessions.clear()
+  }, 'collab:agent-registrations')
+}
+
+export { SUBDIR, SessionRegistry }

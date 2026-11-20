@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Collab sessions",
+    "description": "Adds a Collab control to the left sidebar's New-session row, a Collab access panel with bilateral session-pair authorization, and a per-session base prompt editor. The base prompt is injected at the top of the collaboration prompt on every turn for role/constraint instructions; configure it from the new-session 设置提示词 button, the session right-click menu, or the session header's More menu. Only collab sessions can message each other, and authorization requires both sides. Messages are HMAC-authenticated; a cold target is resumed, a live target is woken, and the browser activates the target's page when it starts running. Another session's whole work directory is denied by a DSH tool guard. This is a session-level guard, not an OS sandbox. Disabling the bundle removes the control, panel, preset, tools, guard, and prompt sections; session data, authorization, and base prompts stay on disk."
+  }
+}

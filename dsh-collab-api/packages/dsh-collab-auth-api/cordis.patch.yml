@@ -1,0 +1,4 @@
+- insert:
+    - id: collab-auth-api
+      name: '@local/dsh-collab-auth-api'
+      config: {}
