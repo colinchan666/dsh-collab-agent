@@ -273,6 +273,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '',
       'How to work:',
       '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a project and tasks, assign at least one task to an offered worker, then call collab_request_accept with the projectId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
+      'Never send project IDs, task IDs, worker IDs, task decomposition, or internal scheduling to the requester. The requester receives only acceptance/rejection status and the sanitized delivery manifest.',
       '1. Read the requirement, list capabilities, and plan tasks with explicit acceptance criteria. Use one projectId per requirement: the first collab_task_create returns it; pass it to the remaining tasks.',
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
@@ -958,10 +959,10 @@ export function apply(ctx, config = {}) {
         const self = requireSelf(exec)
         const status = typeof args?.status === 'string' && args.status.trim().length > 0 ? args.status.trim() : undefined
         const list = isSupervisorSession(self.sessionId)
-          ? requests.listForSupervisor(self.sessionId, status)
-          : requests.listForRequester(self.sessionId, status)
+          ? requests.listForSupervisor(self.sessionId, status).map(RequestStore.summary)
+          : requests.listForRequester(self.sessionId, status).map(RequestStore.requesterSummary)
         if (list.length === 0) return 'No requests.'
-        return JSON.stringify(list.map(RequestStore.summary))
+        return JSON.stringify(list)
       },
     },
     {
@@ -997,9 +998,7 @@ export function apply(ctx, config = {}) {
           version: 1,
           requestId: accepted.id,
           title: accepted.title,
-          projectId,
-          taskIds: assigned.map(task => task.id),
-          response: accepted.response,
+          status: accepted.status,
         }
         const delivery = await sendTaskNotice(self, request.requester, payload)
         return JSON.stringify({
@@ -1286,7 +1285,7 @@ export function apply(ctx, config = {}) {
             title: request.title,
             requirement: request.requirement,
           })
-          return JSON.stringify({ request: RequestStore.summary(request), delivery })
+          return JSON.stringify({ request: RequestStore.requesterSummary(request), delivery })
         } catch (error) {
           try { requests.cancel(request.id, self.sessionId) } catch { /* preserve the original failure */ }
           throw error
@@ -1312,7 +1311,7 @@ export function apply(ctx, config = {}) {
             title: cancelled.title,
           })
         } catch { /* cancellation remains effective even if the notice cannot be delivered */ }
-        return JSON.stringify({ request: RequestStore.summary(cancelled) })
+        return JSON.stringify({ request: RequestStore.requesterSummary(cancelled) })
       },
     },
   ]

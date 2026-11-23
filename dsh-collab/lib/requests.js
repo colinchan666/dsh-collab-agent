@@ -32,6 +32,22 @@ function requestSummary(request) {
   }
 }
 
+/** Requester-facing view: status only, with no internal project/task scheduling. */
+function requesterSummary(request) {
+  return {
+    id: request.id,
+    requester: request.requester,
+    supervisor: request.supervisor,
+    title: request.title,
+    requirement: request.requirement,
+    status: request.status,
+    ...(request.reason === null ? {} : { reason: request.reason }),
+    createdAt: request.createdAt,
+    updatedAt: request.updatedAt,
+    ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
+  }
+}
+
 /** Durable worker requests, keyed by request id. */
 export class RequestStore {
   constructor(file) {
@@ -154,4 +170,5 @@ export class RequestStore {
 
   static statuses = REQUEST_STATUSES
   static summary = requestSummary
+  static requesterSummary = requesterSummary
 }

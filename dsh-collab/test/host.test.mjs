@@ -389,6 +389,7 @@ test('an ordinary authorized peer can submit a request without an offer', async 
       signal: new AbortController().signal,
     })
     const submit = harness.tools.find(entry => entry.definition.name === 'collab_request_submit')
+    const requests = harness.tools.find(entry => entry.definition.name === 'collab_requests')
     assert.equal(submit.options.when({ agent: requester }), true)
     const submitted = JSON.parse(await submit.definition.execute(
       { title: 'Ordinary request', requirement: 'Do the work' },
@@ -409,6 +410,13 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     ))
     assert.equal(accepted.request.status, 'accepted')
     assert.equal(accepted.request.requester, E)
+    const requesterView = JSON.parse(requests.definition.execute({}, { agent: requester }))
+    assert.equal(requesterView[0].status, 'accepted')
+    assert.equal(requesterView[0].projectId, undefined)
+    assert.equal(requesterView[0].taskIds, undefined)
+    const requesterInbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox').definition.execute({}, { agent: requester })
+    assert.match(requesterInbox, /kind: request/u)
+    assert.doesNotMatch(requesterInbox, /projectId|taskId/u)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
