@@ -133,7 +133,7 @@ test('the client starts a collab session through the current-workspace navigatio
     ['conversation.session.header.views.actions', 'collab-base-prompt'],
     ['conversation.hero.options', 'collab-base-prompt'],
     ['conversation.session.header.utilities', 'collab-active-session-probe'],
-    ['conversation.session.header.utilities', 'collab-supervisor-tabs'],
+    ['conversation.session.header.utilities', 'collab-supervisor-board'],
   ]) {
     assert.ok(harness.registrations.some(entry => entry.options.name === name && entry.options.id === id), `${name}:${id}`)
   }
@@ -169,7 +169,7 @@ test('the auth-refusal turn projection records a collab_send refusal', () => {
   assert.equal(location.value.message, '未授权：请在“协作授权”页授权双方。')
 })
 
-test('the client activates a collab session when it starts running', async () => {
+test('the client does not auto-open a collab session when it starts running', async () => {
   const plugin = pluginFor()
   const harness = fakeClientHarness()
   plugin.apply(harness.ctx)
@@ -182,22 +182,23 @@ test('the client activates a collab session when it starts running', async () =>
   notify()
   harness.sessions.byId['session-collab'] = { ...harness.sessions.byId['session-collab'], running: true }
   notify()
-  assert.deepEqual(harness.calls.opened, ['session-collab'])
+  assert.deepEqual(harness.calls.opened, [])
 })
 
-test('a synchronous list refresh during activation does not activate again', async () => {
+test('the supervisor header exposes an on-demand board action', async () => {
   const plugin = pluginFor()
   const harness = fakeClientHarness()
   plugin.apply(harness.ctx)
-  const notify = () => { for (const listener of harness.listeners) listener() }
-  harness.sessions.ids = ['session-collab']
-  harness.sessions.byId = {
-    'session-collab': { id: 'session-collab', running: false, projectionValues: { agentPreset: 'collab' } },
-  }
-  harness.sessions.projectionsBySession = { 'session-collab': { values: { agentPreset: 'collab' } } }
-  harness.calls.onOpen = notify
-  notify()
-  harness.sessions.byId['session-collab'] = { ...harness.sessions.byId['session-collab'], running: true }
-  notify()
-  assert.deepEqual(harness.calls.opened, ['session-collab'])
+  const registration = harness.registrations.find(entry => (
+    entry.options.name === 'conversation.session.header.utilities'
+    && entry.options.id === 'collab-supervisor-board'
+  ))
+  assert.ok(registration)
+  const face = registration.options.inject()
+  face.openBoard('session-supervisor')
+  assert.deepEqual(harness.calls.tabs, [{
+    kind: 'collabSupervisorTasks',
+    options: { params: { sessionId: 'session-supervisor' }, revealIfOpened: true },
+  }])
 })
+

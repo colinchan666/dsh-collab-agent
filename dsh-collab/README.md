@@ -190,6 +190,13 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **The task tab** shows the supervisor's work requests above project groups,
   including pending/accepted/rejected status and rejection reasons.
 
+## Supervisor panel
+
+Supervisor sessions expose their task/capability tabs through the header **任务 /
+Tasks** action. Opening a supervisor no longer expands the right sidebar or
+steals the active tab, and a running session is not auto-opened unless the user
+chooses it.
+
 ## Copy session name
 
 Every named session row has a copy action in its hover strip, and the session

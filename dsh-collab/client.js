@@ -129,6 +129,8 @@ window.__ModuleLoader__.load({
       'board.emptyWorkers': '还没有登记功能会话。',
       'board.emptyTasks': '还没有任务。',
       'board.loading': '加载中…',
+      'board.open': '任务',
+      'board.openTitle': '打开 supervisor 任务面板',
       'board.error': '操作失败',
       'board.registerHint': '登记会同时完成双向通信授权；Phase 1 只开放被指派（offer）。',
       'board.confirmUnlink': '注销该功能会话并撤销通信授权？',
@@ -225,6 +227,8 @@ window.__ModuleLoader__.load({
       'board.emptyWorkers': 'No functional sessions registered yet.',
       'board.emptyTasks': 'No tasks yet.',
       'board.loading': 'Loading…',
+      'board.open': 'Tasks',
+      'board.openTitle': 'Open the supervisor task panel',
       'board.error': 'Operation failed',
       'board.registerHint': 'Registration also authorizes the communication pair; Phase 1 exposes offer only.',
       'board.confirmUnlink': 'Unregister this worker and revoke its communication authorization?',
@@ -240,9 +244,12 @@ window.__ModuleLoader__.load({
       if (summary === undefined) return false
       const values = summary.projectionValues ?? state?.projectionsBySession?.[summary.id]?.values
       const preset = values?.agentPreset
-      const workdir = values?.workingDirectory
+      const workdir = typeof values?.workingDirectory === 'string'
+        ? values.workingDirectory.replace(/\\/gu, '/')
+        : ''
       return preset === 'collab'
-        || (typeof workdir === 'string' && workdir.includes('.dsh-collab/sessions/'))
+        || preset === 'supervisor'
+        || workdir.includes('.dsh-collab/sessions/')
     }
 
     const CSS = [
@@ -1377,6 +1384,8 @@ window.__ModuleLoader__.load({
       '.dsh-collab-board-textarea{min-height:48px;resize:vertical}',
       '.dsh-collab-board-form{display:flex;flex-direction:column;gap:6px}',
       '.dsh-collab-board-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}',
+      '.dsh-collab-board-open{appearance:none;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:20px;padding:2px 6px;cursor:pointer}',
+      '.dsh-collab-board-open:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary)}',
       '.dsh-collab-board-error{margin:0;color:var(--dsw-alias-state-error-primary);font-size:11px;line-height:16px}',
       '.dsh-collab-board-notice{margin:0;padding:6px 8px;border:0.5px solid var(--dsw-alias-state-success-primary,var(--dsw-alias-border-l2));border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-success-primary,var(--dsw-alias-label-primary));font-size:11px;line-height:16px}',
     ].join('')
@@ -1661,6 +1670,20 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
+    function CollabOpenBoardButton(props) {
+      const t = typeof props.t === 'function' ? props.t : fallbackT
+      const sessions = props.useSessions(selectSnapshot)
+      const summary = sessions.byId[props.sessionId]
+      if (!isSupervisorSessionSummary(summary)) return null
+      return h('button', {
+        type: 'button',
+        className: 'dsh-collab-board-open',
+        title: t('board.openTitle'),
+        'aria-label': t('board.openTitle'),
+        onClick: () => props.openBoard(props.sessionId),
+      }, t('board.open'))
+    }
+
     function CollabSupervisorTabsSeeder(props) {
       const sessions = props.useSessions(selectSnapshot)
       const summary = sessions.byId[props.sessionId]
@@ -1822,30 +1845,16 @@ window.__ModuleLoader__.load({
 
         ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
           name: 'conversation.session.header.utilities',
-          id: 'collab-supervisor-tabs',
+          id: 'collab-supervisor-board',
           order: 11,
-          inject: (sessionId) => ({
-            seed: (target) => {
-              ctx.sidebarRight.openTab(BOARD_TAB_KIND, { params: { sessionId: target }, revealIfOpened: false })
-              ctx.sidebarRight.openTab(WORKERS_TAB_KIND, { params: { sessionId: target }, revealIfOpened: false })
-              // Keep DSH's default start/guide tab selected when the panel opens.
-              ctx.sidebarRight.openTab('guide', { revealIfOpened: true })
-            },
-            ensure: (target) => {
-              const right = ctx.sidebarRight
-              if (typeof right.tabsIn !== 'function') return
-              const tabs = right.tabsIn(target)
-              if (!Array.isArray(tabs)) return
-              const missing = [BOARD_TAB_KIND, WORKERS_TAB_KIND].filter(kind => !tabs.some(tab => tab.kind === kind))
-              if (missing.length === 0) return
-              const previous = typeof right.active === 'function' ? right.active() : undefined
-              for (const kind of missing) {
-                right.openTab(kind, { params: { sessionId: target }, revealIfOpened: false })
-              }
-              if (previous !== undefined && typeof right.focus === 'function') right.focus(previous.id)
-            },
+          locale: NS,
+          inject: () => ({
+            openBoard: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, {
+              params: { sessionId },
+              revealIfOpened: true,
+            }),
           }),
-        }, CollabSupervisorTabsSeeder))
+        }, CollabOpenBoardButton))
 
         ctx.effect(
           () => ctx.uiConversation.events.register(collabAuthRefusedDefinition),
@@ -1907,56 +1916,6 @@ window.__ModuleLoader__.load({
           locale: NS,
         }, CollabBasePromptHeroButton))
 
-        // Activate a collab Session when a peer message wakes it. The Host
-        // emits a normal session running transition, which the client list
-        // already receives; no custom transport is needed.
-        ctx.effect(() => {
-          const previous = new Map()
-          const lastOpened = new Map()
-          let seeded = false
-          let dispatching = false
-          const sync = () => {
-            // openSession retains/releases the main reference and can notify
-            // the session list synchronously; ignore that re-entrant pass.
-            if (dispatching) return
-            const state = ctx.sessions.list.getSnapshot()
-            const next = new Map()
-            for (const id of state.ids) {
-              if (!isCollabSummary(state.byId[id], state)) continue
-              next.set(id, state.byId[id].running === true)
-            }
-            const toOpen = []
-            if (seeded) {
-              const now = Date.now()
-              for (const [id, running] of next) {
-                if (!running || previous.get(id) !== false) continue
-                if (now - (lastOpened.get(id) ?? 0) < 3000) continue
-                toOpen.push(id)
-              }
-            }
-            // Commit the observed state BEFORE navigating, so a re-entrant
-            // list notification cannot see the old idle state and open again.
-            previous.clear()
-            for (const [id, running] of next) previous.set(id, running)
-            seeded = true
-            if (toOpen.length === 0) return
-            dispatching = true
-            try {
-              for (const id of toOpen) {
-                lastOpened.set(id, Date.now())
-                try {
-                  ctx.uiWorkspace.openSession(id)
-                } catch (error) {
-                  console.warn('[collab-sessions] could not activate the waking session:', error)
-                }
-              }
-            } finally {
-              dispatching = false
-            }
-          }
-          sync()
-          return ctx.sessions.list.subscribe(sync)
-        }, 'collab-sessions: auto-open')
       },
     }
   },
