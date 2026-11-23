@@ -382,6 +382,9 @@ export function apply(ctx, config = {}) {
   const sharedRoot = typeof config.sharedRoot === 'string' && config.sharedRoot.length > 0
     ? path.resolve(config.sharedRoot)
     : path.join(path.dirname(registryPath), 'shared')
+  const requestTimeoutMs = Number.isFinite(Number(config.requestTimeoutMs))
+    ? Math.max(100, Number(config.requestTimeoutMs))
+    : 10 * 60 * 1000
   const registry = new SessionRegistry(registryPath)
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -403,6 +406,7 @@ export function apply(ctx, config = {}) {
       ? config.requestsPath
       : path.join(path.dirname(registryPath), 'requests.json'),
   )
+  const requestTimers = new Map()
   /** Human-facing authorization operations shared by the UI Remote and commands. */
   const collabAdmin = {
     listAuth: () => ({
@@ -616,6 +620,81 @@ export function apply(ctx, config = {}) {
       lines.push(`- ${peer.sessionId}  ${online ? 'online' : 'offline'}  unread=${unread}`)
     }
     return lines.join('\n')
+  }
+
+  const clearRequestTimer = (requestId) => {
+    const timer = requestTimers.get(requestId)
+    if (timer !== undefined) clearTimeout(timer)
+    requestTimers.delete(requestId)
+  }
+
+  const sendRequestExpiredNotice = async (request) => {
+    const supervisor = registry.get(request.supervisor)
+    if (supervisor === undefined) return
+    try {
+      await sendTaskNotice(
+        { sessionId: supervisor.sessionId, workdir: supervisor.workdir },
+        request.requester,
+        {
+          type: 'collab-task/request-expired',
+          version: 1,
+          requestId: request.id,
+          title: request.title,
+          reason: request.reason,
+        },
+      )
+    } catch (error) {
+      warn(`request expiry notice failed for ${request.id}: ${describeError(error)}`)
+    }
+  }
+
+  const expireRequest = async (requestId) => {
+    const request = requests.get(requestId)
+    if (request === undefined || request.status !== 'pending') {
+      clearRequestTimer(requestId)
+      return
+    }
+    clearRequestTimer(requestId)
+    const expired = requests.expire(requestId)
+    await sendRequestExpiredNotice(expired)
+  }
+
+  const scheduleRequestTimeout = (request) => {
+    clearRequestTimer(request.id)
+    if (request.status !== 'pending' || !Number.isFinite(request.expiresAt)) return
+    const delay = Math.max(0, request.expiresAt - Date.now())
+    const timer = setTimeout(() => {
+      requestTimers.delete(request.id)
+      void expireRequest(request.id).catch(error => {
+        warn(`request timeout failed for ${request.id}: ${describeError(error)}`)
+      })
+    }, delay)
+    timer.unref?.()
+    requestTimers.set(request.id, timer)
+  }
+
+  const sweepRequestTimeouts = () => {
+    const now = Date.now()
+    for (const request of requests.list()) {
+      if (request.status !== 'pending') {
+        clearRequestTimer(request.id)
+        continue
+      }
+      if (!Number.isFinite(request.expiresAt)) {
+        const updated = requests.update(request.id, (entry) => {
+          entry.expiresAt = entry.createdAt + requestTimeoutMs
+        }, now)
+        scheduleRequestTimeout(updated)
+        continue
+      }
+      if (request.expiresAt <= now) {
+        void expireRequest(request.id).catch(error => {
+          warn(`request expiry failed for ${request.id}: ${describeError(error)}`)
+        })
+      } else {
+        scheduleRequestTimeout(request)
+      }
+    }
   }
 
   const wakePeer = async (targetId, message) => {
@@ -1043,6 +1122,7 @@ export function apply(ctx, config = {}) {
           taskIds: assigned.map(task => task.id),
           response: typeof args?.response === 'string' ? args.response : null,
         })
+        clearRequestTimer(request.id)
         const payload = {
           type: 'collab-task/request-accepted',
           version: 1,
@@ -1071,6 +1151,7 @@ export function apply(ctx, config = {}) {
         if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
         if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
         const rejected = requests.reject(request.id, String(args?.reason ?? ''))
+        clearRequestTimer(request.id)
         const payload = {
           type: 'collab-task/request-rejected',
           version: 1,
@@ -1373,13 +1454,15 @@ export function apply(ctx, config = {}) {
         } else {
           throw new Error(`specify a supervisor: ${eligible.map(candidate => candidate.sessionId).join(', ')}`)
         }
+        const now = Date.now()
         const request = requests.create({
           requester: self.sessionId,
           supervisor: supervisor.sessionId,
           title: String(args?.title ?? ''),
           requirement: String(args?.requirement ?? ''),
           createdTurn: turnForCall(exec),
-        })
+          expiresAt: now + requestTimeoutMs,
+        }, now)
         try {
           const delivery = await sendTaskNotice(self, supervisor.sessionId, {
             type: 'collab-task/request',
@@ -1389,6 +1472,7 @@ export function apply(ctx, config = {}) {
             title: request.title,
             requirement: request.requirement,
           })
+          scheduleRequestTimeout(request)
           return JSON.stringify({ request: RequestStore.requesterSummary(request), delivery })
         } catch (error) {
           try { requests.cancel(request.id, self.sessionId) } catch { /* preserve the original failure */ }
@@ -1407,6 +1491,7 @@ export function apply(ctx, config = {}) {
         const request = requests.get(String(args?.requestId ?? ''))
         if (request === undefined || request.requester !== self.sessionId) throw new Error('unknown request')
         const cancelled = requests.cancel(request.id, self.sessionId)
+        clearRequestTimer(request.id)
         try {
           await sendTaskNotice(self, request.supervisor, {
             type: 'collab-task/request-cancelled',
@@ -1893,7 +1978,13 @@ export function apply(ctx, config = {}) {
     }
   })
 
+  ctx.effect(() => () => {
+    for (const timer of requestTimers.values()) clearTimeout(timer)
+    requestTimers.clear()
+  }, 'collab:request-timeouts')
+
   refreshRegistry()
+  sweepRequestTimeouts()
   for (const entry of registry.list()) {
     try { migrateSessionArchive(entry.workdir) } catch (error) { warn(`archive migration failed for ${entry.sessionId}: ${describeError(error)}`) }
   }

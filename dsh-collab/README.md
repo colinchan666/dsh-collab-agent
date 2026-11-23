@@ -165,6 +165,11 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   the requester is notified.
 - **Supervisor reject**: call `collab_request_reject` with a concrete reason,
   naming the missing capability. The request becomes `rejected`.
+- **Request acknowledgement timeout**: a pending request expires after
+  `requestTimeoutMs` (default 10 minutes). The requester receives a
+  `request-expired` notice; an expired request cannot be accepted or rejected
+  and the requester may submit a new one. The timeout covers supervisor
+  acknowledgement only, not task execution.
 - **Request tools**: `collab_request_submit`, `collab_request_cancel`,
   `collab_requests`, `collab_request_accept`, `collab_request_reject`.
   Requests are stored in `requests.json` next to the other collaboration state.

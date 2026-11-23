@@ -433,6 +433,48 @@ test('an ordinary authorized peer can submit a request without an offer', async 
   }
 })
 
+test('a pending request expires and notifies the requester', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-request-timeout-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json'), requestTimeoutMs: 150 })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const requester = harness.makeAgent(E, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: requester, source: 'startup' })
+    const auth = harness.commands.find(entry => entry.name === 'collab-auth')
+    await auth.handler({
+      agent: requester,
+      rawInput: `authorize ${A} ${E}`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    const submit = harness.tools.find(entry => entry.definition.name === 'collab_request_submit')
+    const submitted = JSON.parse(await submit.definition.execute(
+      { title: 'Timeout request', requirement: 'Do it later' },
+      { agent: requester },
+    ))
+    assert.ok(submitted.request.expiresAt > Date.now() - 1000)
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const requests = harness.tools.find(entry => entry.definition.name === 'collab_requests')
+    const view = JSON.parse(requests.definition.execute({}, { agent: requester }))
+    assert.equal(view[0].status, 'expired')
+    assert.match(view[0].reason, /did not respond/u)
+    const inbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox')
+      .definition.execute({}, { agent: requester })
+    assert.match(inbox, /request-expired/u)
+    const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
+    await assert.rejects(
+      accept.definition.execute({ requestId: submitted.request.id, projectId: 'project-timeout' }, { agent: supervisor }),
+      /expired/u,
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('communication is role-agnostic after bilateral authorization', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-communication-'))
   const workspace = path.join(root, 'workspace')

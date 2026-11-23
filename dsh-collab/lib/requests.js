@@ -8,7 +8,7 @@ import crypto from 'node:crypto'
 
 import { isSessionId, readJson, writeJson } from './layout.js'
 
-const REQUEST_STATUSES = new Set(['pending', 'accepted', 'rejected', 'cancelled'])
+const REQUEST_STATUSES = new Set(['pending', 'accepted', 'rejected', 'cancelled', 'expired'])
 
 function normalizeText(value, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback
@@ -28,6 +28,7 @@ function requestSummary(request) {
     ...(request.response === null ? {} : { response: request.response }),
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
+    ...(request.expiresAt === null ? {} : { expiresAt: request.expiresAt }),
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
     ...(request.delivery === null ? {} : { delivery: request.delivery }),
   }
@@ -45,6 +46,7 @@ function requesterSummary(request) {
     ...(request.reason === null ? {} : { reason: request.reason }),
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
+    ...(request.expiresAt === null ? {} : { expiresAt: request.expiresAt }),
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
     ...(request.delivery === null ? {} : { delivery: request.delivery }),
   }
@@ -69,6 +71,11 @@ export class RequestStore {
       const normalized = { ...entry, requester }
       delete normalized.worker
       if (normalized.delivery === undefined) normalized.delivery = null
+      if (normalized.expiresAt === undefined) normalized.expiresAt = null
+      if (!Array.isArray(normalized.taskIds)) normalized.taskIds = []
+      if (normalized.response === undefined) normalized.response = null
+      if (normalized.reason === undefined) normalized.reason = null
+      if (normalized.projectId === undefined) normalized.projectId = null
       requests[id] = normalized
     }
     this.state = { version: 1, requests }
@@ -84,6 +91,10 @@ export class RequestStore {
     return this.read().requests[id]
   }
 
+  list() {
+    return Object.values(this.read().requests)
+  }
+
   listForRequester(requester, status) {
     return Object.values(this.read().requests)
       .filter(request => request.requester === requester && (status === undefined || request.status === status))
@@ -96,7 +107,7 @@ export class RequestStore {
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 
-  create({ requester, supervisor, title, requirement, createdTurn = null }, now = Date.now()) {
+  create({ requester, supervisor, title, requirement, createdTurn = null, expiresAt = null }, now = Date.now()) {
     if (!isSessionId(requester) || !isSessionId(supervisor) || requester === supervisor) {
       throw new Error('request requires two different session ids')
     }
@@ -121,6 +132,7 @@ export class RequestStore {
       updatedAt: now,
       resolvedAt: null,
       delivery: null,
+      expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
     }
     const state = this.read()
     state.requests[id] = request
@@ -143,6 +155,7 @@ export class RequestStore {
     if (normalizedProjectId.length === 0) throw new Error('accept requires a project id')
     return this.update(id, (request) => {
       if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
+      if (Number.isFinite(request.expiresAt) && request.expiresAt <= now) throw new Error('request has expired')
       request.status = 'accepted'
       request.projectId = normalizedProjectId
       request.taskIds = Array.isArray(taskIds) ? taskIds.filter(value => typeof value === 'string') : []
@@ -157,8 +170,18 @@ export class RequestStore {
     if (normalizedReason.length === 0) throw new Error('reject requires a reason')
     return this.update(id, (request) => {
       if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
+      if (Number.isFinite(request.expiresAt) && request.expiresAt <= now) throw new Error('request has expired')
       request.status = 'rejected'
       request.reason = normalizedReason
+      request.resolvedAt = now
+    }, now)
+  }
+
+  expire(id, now = Date.now()) {
+    return this.update(id, (request) => {
+      if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
+      request.status = 'expired'
+      request.reason = 'supervisor did not respond before the deadline'
       request.resolvedAt = now
     }, now)
   }
