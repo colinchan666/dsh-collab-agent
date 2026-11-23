@@ -165,6 +165,12 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **The task tab** shows the supervisor's work requests above project groups,
   including pending/accepted/rejected status and rejection reasons.
 
+## Copy session name
+
+Every named session row has a copy action in its hover strip, and the session
+right-click menu has **复制会话名 / Copy session name**. The action copies the
+display name to the clipboard and briefly marks the button as copied.
+
 ## Usage
 
 1. Open the Workspace you want the collab session in.

@@ -24,15 +24,18 @@ window.__ModuleLoader__.load({
     let MenuItemButton
     let IconEditOutlineRegular
     let Button
+    let IconCopyOutlineRegular
     try {
       const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
       MenuItemButton = primitives.MenuItemButton
       IconEditOutlineRegular = primitives.IconEditOutlineRegular
       Button = primitives.Button
+      IconCopyOutlineRegular = primitives.IconCopyOutlineRegular
     } catch {
       MenuItemButton = undefined
       IconEditOutlineRegular = undefined
       Button = undefined
+      IconCopyOutlineRegular = undefined
     }
 
     const ZH = {
@@ -68,6 +71,9 @@ window.__ModuleLoader__.load({
       'panel.running': '运行中',
       'auth.open': '打开协作授权',
       'base.menu': '设置基准提示词',
+      'copy.title': '复制会话名',
+      'copy.done': '会话名已复制',
+      'copy.failed': '复制失败，请重试',
       'base.title': '协作基准提示词',
       'base.session': '会话',
       'base.description': '这条基准提示词会注入当前协作会话后续的每一轮，可用于设定角色和约束。',
@@ -161,6 +167,9 @@ window.__ModuleLoader__.load({
       'panel.running': 'Running',
       'auth.open': 'Open Collab access',
       'base.menu': 'Set base prompt',
+      'copy.title': 'Copy session name',
+      'copy.done': 'Session name copied',
+      'copy.failed': 'Copy failed; try again',
       'base.title': 'Collab base prompt',
       'base.session': 'Session',
       'base.description': 'This base prompt is injected into every subsequent turn of the current collaboration session; use it for a role and constraints.',
@@ -794,6 +803,77 @@ window.__ModuleLoader__.load({
             className: 'dsh-collab-refused-button',
             onClick: () => { props.openAuth() },
           }, props.t('auth.open'))))
+    }
+
+    const COPY_SESSION_CSS = [
+      '.dsh-collab-copy-session{appearance:none;display:flex;flex:none;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;font-size:12px;line-height:1}',
+      '.dsh-collab-copy-session:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary)}',
+      '.dsh-collab-copy-session[data-copied="true"]{color:var(--dsw-alias-state-success-primary,var(--dsw-alias-brand-primary))}',
+    ].join('')
+
+    async function copySessionName(text) {
+      const value = typeof text === 'string' ? text : ''
+      try {
+        await navigator.clipboard.writeText(value)
+        return true
+      } catch { /* fall through to the legacy copy path */ }
+      try {
+        const area = document.createElement('textarea')
+        area.value = value
+        area.setAttribute('readonly', '')
+        area.style.position = 'fixed'
+        area.style.opacity = '0'
+        document.body.appendChild(area)
+        area.select()
+        const copied = document.execCommand('copy')
+        area.remove()
+        return copied
+      } catch {
+        return false
+      }
+    }
+
+    function CollabCopySessionAction(props) {
+      const t = typeof props.t === 'function' ? props.t : fallbackT
+      const [state, setState] = React.useState('idle')
+      const title = typeof props.displayTitle === 'string' ? props.displayTitle : ''
+      const onClick = async (event) => {
+        event.stopPropagation()
+        const copied = await copySessionName(title)
+        setState(copied ? 'done' : 'failed')
+        window.setTimeout(() => setState('idle'), 1400)
+      }
+      return h('button', {
+        type: 'button',
+        className: 'dsh-collab-copy-session',
+        'data-copied': state === 'done' ? 'true' : 'false',
+        title: state === 'done' ? t('copy.done') : (state === 'failed' ? t('copy.failed') : t('copy.title')),
+        'aria-label': t('copy.title'),
+        onClick,
+        onPointerDown: (event) => event.stopPropagation(),
+      },
+      IconCopyOutlineRegular === undefined ? '⧉' : h(IconCopyOutlineRegular, { size: 14 }))
+    }
+
+    function CollabCopySessionMenuItem(props) {
+      const t = typeof props.t === 'function' ? props.t : fallbackT
+      const [, setMenuOpen] = props.useMenuOpenState()
+      const copy = () => {
+        setMenuOpen(false)
+        void copySessionName(typeof props.displayTitle === 'string' ? props.displayTitle : '')
+      }
+      return typeof MenuItemButton === 'function'
+        ? h(MenuItemButton, { onSelect: copy }, h('span', null, t('copy.title')))
+        : h('button', {
+            type: 'button',
+            role: 'menuitem',
+            className: 'dsh-collab-menu-item',
+            onClick: copy,
+          }, t('copy.title'))
+    }
+
+    function CollabCopySessionStyles() {
+      return h('style', null, COPY_SESSION_CSS)
     }
 
     const BASE_MAX = 16 * 1024
@@ -1655,6 +1735,25 @@ window.__ModuleLoader__.load({
             start,
           }),
         }, CollabNewSessionControls))
+
+        ctx.slots.inject('sidebar.workspaces.session.row.action', () => ctx.slots.register({
+          name: 'sidebar.workspaces.session.row.action',
+          id: 'collab-copy-title',
+          order: 50,
+          locale: NS,
+        }, CollabCopySessionAction))
+
+        ctx.slots.inject('sidebar.workspaces.session.menu.item', () => ctx.slots.register({
+          name: 'sidebar.workspaces.session.menu.item',
+          id: 'collab-copy-title',
+          order: 500,
+          locale: NS,
+        }, CollabCopySessionMenuItem))
+
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay',
+          id: 'collab-copy-session-styles',
+        }, CollabCopySessionStyles))
 
         ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
           name: 'sidebar.panellist',
