@@ -69,6 +69,10 @@ function fakeClientHarness() {
           calls.auth.push(['revoke', a, b])
           return { ok: true, value: { pairs: [], pending: [] } }
         },
+        async panel(sessionId, operation, argsJson) {
+          calls.auth.push(['panel', sessionId, operation, argsJson])
+          return { ok: true, value: '{}' }
+        },
       },
     },
     sessions: {
@@ -141,6 +145,14 @@ test('the client starts a collab session through the current-workspace navigatio
   assert.ok(harness.calls.tabTypes.some(entry => entry.kind === 'collabSupervisorWorkers'))
   assert.ok(harness.registrations.some(entry => entry.options.name === 'sidebar.right.pane.tab' && entry.options.key === '@local/dsh-collab-sessions/supervisor-tasks'))
   assert.ok(harness.registrations.some(entry => entry.options.name === 'sidebar.right.pane.tab' && entry.options.key === '@local/dsh-collab-sessions/supervisor-workers'))
+  const board = harness.registrations.find(entry => (
+    entry.options.name === 'sidebar.right.pane.tab'
+    && entry.options.key === '@local/dsh-collab-sessions/supervisor-tasks'
+  ))
+  const boardFace = board.options.inject()
+  const boardResult = await boardFace.panel('session-supervisor', 'board', {})
+  assert.equal(boardResult.ok, true)
+  assert.deepEqual(harness.calls.auth.at(-1), ['panel', 'session-supervisor', 'board', '{}'])
 })
 
 test('the auth-refusal turn projection records a collab_send refusal', () => {

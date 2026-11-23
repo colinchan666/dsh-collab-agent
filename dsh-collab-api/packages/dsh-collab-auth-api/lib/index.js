@@ -54,15 +54,18 @@ let CollabAuthService = (() => {
     let _list_decorators;
     let _authorize_decorators;
     let _revoke_decorators;
+    let _panel_decorators;
     return class CollabAuthService extends _classSuper {
         static {
             const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
             _list_decorators = [Remote('list')];
             _authorize_decorators = [Remote('authorize')];
             _revoke_decorators = [Remote('revoke')];
+            _panel_decorators = [Remote('panel')];
             __esDecorate(this, null, _list_decorators, { kind: "method", name: "list", static: false, private: false, access: { has: obj => "list" in obj, get: obj => obj.list }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _authorize_decorators, { kind: "method", name: "authorize", static: false, private: false, access: { has: obj => "authorize" in obj, get: obj => obj.authorize }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _revoke_decorators, { kind: "method", name: "revoke", static: false, private: false, access: { has: obj => "revoke" in obj, get: obj => obj.revoke }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _panel_decorators, { kind: "method", name: "panel", static: false, private: false, access: { has: obj => "panel" in obj, get: obj => obj.panel }, metadata: _metadata }, null, _instanceExtraInitializers);
             if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         }
         /** Required Host services: the collaborator admin face and Typert registration. */
@@ -110,6 +113,24 @@ let CollabAuthService = (() => {
          */
         revoke(a, b) {
             return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'));
+        }
+        /**
+         * Read or mutate the supervisor board/base-prompt surface without writing a
+         * slash-command lifecycle into the conversation.
+         * @param sessionId - collaboration Session id.
+         * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.
+         * @param args - operation-specific payload.
+         * @returns the operation result.
+         */
+        panel(sessionId, operation, argsJson) {
+            let args = {};
+            if (argsJson.trim().length > 0) {
+                const parsed = JSON.parse(argsJson);
+                if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+                    throw new Error('panel args must be a JSON object');
+                args = parsed;
+            }
+            return JSON.stringify(this.admin().panel(sessionId, operation, args));
         }
     };
 })();

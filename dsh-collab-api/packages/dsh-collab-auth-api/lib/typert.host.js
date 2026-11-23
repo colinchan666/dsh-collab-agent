@@ -37,6 +37,14 @@ const _local_dsh_collab_auth_api_collabAuth_list_result$schema = () => (_local_d
   'updatedAt': z.number().readonly().describe('Last update time in epoch milliseconds.'),
 })).readonly().describe('Directional grants waiting for the other side.'),
 }))
+let _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value
+const _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value ??= z.string())
+let _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value
+const _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value ??= z.string())
+let _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value
+const _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value ??= z.string())
+let _local_dsh_collab_auth_api_collabAuth_panel_result$schema$value
+const _local_dsh_collab_auth_api_collabAuth_panel_result$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_result$schema$value ??= z.string())
 let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value
 const _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value ??= z.string())
 let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema$value
@@ -60,6 +68,12 @@ let _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$va
 const _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$value ??= z.string())
 let _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value
 const _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value ??= z.string())
+let _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value
+const _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value ??= z.string())
+let _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value
+const _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value ??= z.string())
+let _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value
+const _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value ??= z.string())
 let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value
 const _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value ??= z.string())
 let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value
@@ -131,6 +145,71 @@ const $remote = createTypertRemoteInfo({
         jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."}},"required":["pairs","pending"],"additionalProperties":true},
       },
       sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":53,"column":3},
+    },
+    'collabAuth/panel': {
+      service: 'collabAuth',
+      description: 'Read or mutate the supervisor board/base-prompt surface without writing a slash-command lifecycle into the conversation.',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          description: 'collaboration Session id.',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:sessionId',
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:sessionId',
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'operation',
+          description: 'board, baseGet, baseSet, link, unlink, pin, or live.',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:operation',
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:operation',
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'argsJson',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:argsJson',
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:argsJson',
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:result',
+        create: _local_dsh_collab_auth_api_collabAuth_panel_result$schema,
+        description: 'the operation result.',
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":88,"column":3},
     },
     'collabAuth/revoke': {
       service: 'collabAuth',
@@ -220,6 +299,13 @@ export const TYPERT = {
             "signature": "revoke(a: string, b: string): AuthSnapshot",
             "summary": "Revoke both directions of one pair.",
             "jsDoc": "/** Revoke both directions of one pair. */"
+          },
+          {
+            "kind": "method",
+            "name": "panel",
+            "signature": "panel(sessionId: string, operation: string, args?: Record<string, unknown>): Record<string, unknown>",
+            "summary": "Read or mutate a collaboration management surface without a command record.",
+            "jsDoc": "/** Read or mutate a collaboration management surface without a command record. */"
           }
         ],
         "types": [
@@ -265,6 +351,13 @@ export const TYPERT = {
             "signature": "@Remote('revoke') revoke(a: string, b: string): AuthSnapshot",
             "summary": "Revoke both directions of a pair.",
             "jsDoc": "/**\n * Revoke both directions of a pair.\n * @param a - first Session id.\n * @param b - second Session id.\n * @returns the resulting authorization snapshot.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "panel",
+            "signature": "@Remote('panel') panel(sessionId: string, operation: string, argsJson: string): string",
+            "summary": "Read or mutate the supervisor board/base-prompt surface without writing a slash-command lifecycle into the conversation.",
+            "jsDoc": "/**\n * Read or mutate the supervisor board/base-prompt surface without writing a\n * slash-command lifecycle into the conversation.\n * @param sessionId - collaboration Session id.\n * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.\n * @param args - operation-specific payload.\n * @returns the operation result.\n */"
           }
         ],
         "types": [

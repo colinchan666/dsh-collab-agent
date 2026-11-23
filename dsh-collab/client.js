@@ -1430,12 +1430,9 @@ window.__ModuleLoader__.load({
         setLoading(true)
         setError(null)
         try {
-          const result = await props.execute(props.sessionId, '/collab-board')
+          const result = await props.panel(props.sessionId, 'board', {})
           if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-          const execution = result.value
-          if (execution === undefined) throw new Error('command unavailable')
-          if (execution.result.kind === 'error') throw new Error(execution.result.text)
-          setData(JSON.parse(execution.result.text))
+          setData(JSON.parse(result.value))
         } catch (failure) {
           setError(`${t('board.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
         } finally {
@@ -1464,11 +1461,8 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError(null)
         try {
-          const payload = { offer: true }
-          const encoded = encodeBasePrompt(JSON.stringify(payload))
-          const result = await props.execute(props.sessionId, `/collab-link link ${entry.sessionId} ${encoded}`)
+          const result = await props.panel(props.sessionId, 'link', { worker: entry.sessionId, payload: { offer: true } })
           if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-          if (result.value?.result?.kind === 'error') throw new Error(result.value.result.text)
           if (typeof window !== 'undefined') window.dispatchEvent(new Event('dsh-collab-auth-changed'))
           await load()
         } catch (failure) {
@@ -1483,9 +1477,8 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError(null)
         try {
-          const result = await props.execute(props.sessionId, `/collab-link unlink ${workerId}`)
+          const result = await props.panel(props.sessionId, 'unlink', { worker: workerId })
           if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-          if (result.value?.result?.kind === 'error') throw new Error(result.value.result.text)
           if (typeof window !== 'undefined') window.dispatchEvent(new Event('dsh-collab-auth-changed'))
           await load()
         } catch (failure) {
@@ -1689,6 +1682,22 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
 
+        const panelCommand = async (sessionId, operation, args) => {
+          try {
+            const result = await ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {}))
+            if (result === undefined || result.ok !== true) return result
+            return {
+              ok: true,
+              value: { result: { kind: 'success', text: result.value } },
+            }
+          } catch (error) {
+            return {
+              ok: false,
+              error: { code: 'collab-panel', message: error instanceof Error ? error.message : String(error) },
+            }
+          }
+        }
+
         const start = (preset = 'collab') => {
           try {
             // The navigation service targets the current Session's Workspace,
@@ -1771,7 +1780,7 @@ window.__ModuleLoader__.load({
           locale: NS,
           inject: () => ({
             mode: 'tasks',
-            execute: (sessionId, line) => ctx.remote.commands.execute(sessionId, line, []),
+            panel: (sessionId, operation, args) => ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {})),
             openSession: (sessionId) => ctx.uiWorkspace.openSession(sessionId),
             openWorkers: (sessionId) => ctx.sidebarRight.openTab(WORKERS_TAB_KIND, { params: { sessionId } }),
           }),
@@ -1783,7 +1792,7 @@ window.__ModuleLoader__.load({
           locale: NS,
           inject: () => ({
             mode: 'workers',
-            execute: (sessionId, line) => ctx.remote.commands.execute(sessionId, line, []),
+            panel: (sessionId, operation, args) => ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {})),
             openSession: (sessionId) => ctx.uiWorkspace.openSession(sessionId),
           }),
         }, SupervisorBoardTab))
@@ -1824,7 +1833,18 @@ window.__ModuleLoader__.load({
           }),
         }, CollabAuthRefusedTail))
 
-        setBasePromptExecutor((sessionId, line) => ctx.remote.commands.execute(sessionId, line, []))
+        setBasePromptExecutor((sessionId, line) => {
+          if (line === '/collab-base get') return panelCommand(sessionId, 'baseGet')
+          const match = /^\/collab-base set (\S+)$/u.exec(line)
+          if (match === null) return Promise.resolve({ ok: false, error: { code: 'invalid-base', message: 'invalid base prompt command' } })
+          try {
+            const binary = atob(match[1])
+            const value = new TextDecoder().decode(Uint8Array.from(binary, character => character.charCodeAt(0)))
+            return panelCommand(sessionId, 'baseSet', { value })
+          } catch (error) {
+            return Promise.resolve({ ok: false, error: { code: 'invalid-base', message: error instanceof Error ? error.message : String(error) } })
+          }
+        })
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',
@@ -1832,7 +1852,11 @@ window.__ModuleLoader__.load({
           locale: NS,
         }, CollabBasePromptEditor))
 
-        setLinkExecutor((sessionId, line) => ctx.remote.commands.execute(sessionId, line, []))
+        setLinkExecutor((sessionId, line) => {
+          const match = /^\/collab-link (pin|live|unlink) ([^\s]+)$/u.exec(line)
+          if (match === null) return Promise.resolve({ ok: false, error: { code: 'invalid-link', message: 'invalid worker action' } })
+          return panelCommand(sessionId, match[1], { worker: match[2] })
+        })
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',

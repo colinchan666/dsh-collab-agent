@@ -16,6 +16,15 @@ export function apply(ctx: any): void {
     list: () => admin().listAuth(),
     authorize: (a: string, b: string) => admin().authorize(a, b),
     revoke: (a: string, b: string) => admin().revoke(a, b),
+    panel: (sessionId: string, operation: string, argsJson: string) => {
+      let args: Record<string, unknown> = {}
+      if (argsJson.trim().length > 0) {
+        const parsed: unknown = JSON.parse(argsJson)
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('panel args must be a JSON object')
+        args = parsed as Record<string, unknown>
+      }
+      return JSON.stringify(admin().panel(sessionId, operation, args))
+    },
   }
   service.typertRemote = { service, serviceKey: 'collabAuth', namespace: 'collabAuth' }
   ctx.provide('collabAuth', service)

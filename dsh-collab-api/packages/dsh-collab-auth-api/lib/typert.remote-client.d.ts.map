@@ -1,1 +1,1 @@
-{"version":3,"file":"typert.remote-client.d.ts","names":["authorize","list","revoke"],"sources":["../src/index.ts"],"sourcesContent":[null],"mappings":";;;;;;;;;;IA+DEA,S;IAXAC,I;IAsBAC,M;;;IAXAF,sB;IAXAC,iB;IAsBAC,mB","ignoreList":[]}
+{"version":3,"file":"typert.remote-client.d.ts","names":["authorize","list","panel","revoke"],"sources":["../src/index.ts"],"sourcesContent":[null],"mappings":";;;;;;;;;;IA+DEA,S;IAXAC,I;IAmCAC,K;IAbAC,M;;;IAXAH,sB;IAXAC,iB;IAmCAC,kB;IAbAC,mB","ignoreList":[]}

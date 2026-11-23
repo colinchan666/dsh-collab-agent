@@ -75,6 +75,25 @@ export class CollabAuthService extends TypertRemoteService {
   revoke(a: string, b: string): AuthSnapshot {
     return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'))
   }
+
+  /**
+   * Read or mutate the supervisor board/base-prompt surface without writing a
+   * slash-command lifecycle into the conversation.
+   * @param sessionId - collaboration Session id.
+   * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.
+   * @param args - operation-specific payload.
+   * @returns the operation result.
+   */
+  @Remote('panel')
+  panel(sessionId: string, operation: string, argsJson: string): string {
+    let args: Record<string, unknown> = {}
+    if (argsJson.trim().length > 0) {
+      const parsed: unknown = JSON.parse(argsJson)
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('panel args must be a JSON object')
+      args = parsed as Record<string, unknown>
+    }
+    return JSON.stringify(this.admin().panel(sessionId, operation, args))
+  }
 }
 
 /**

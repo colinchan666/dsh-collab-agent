@@ -195,7 +195,9 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 Supervisor sessions expose their task/capability tabs through the header **任务 /
 Tasks** action. Opening a supervisor no longer expands the right sidebar or
 steals the active tab, and a running session is not auto-opened unless the user
-chooses it.
+chooses it. Board, base-prompt, and link actions use the authorization Remote
+(`collabAuth.panel`) rather than slash-command execution, so reading the board
+does not add command rows to the conversation.
 
 ## Copy session name
 

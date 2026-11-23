@@ -10,11 +10,13 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$636f6c6c616241757468 {
     authorize: (a: string, b: string) => Promise<RemoteResult<AuthSnapshot>>
     list: () => Promise<RemoteResult<AuthSnapshot>>
+    panel: (sessionId: string, operation: string, argsJson: string) => Promise<RemoteResult<string>>
     revoke: (a: string, b: string) => Promise<RemoteResult<AuthSnapshot>>
   }
   interface TypertRemoteMap {
     'collabAuth/authorize': (a: string, b: string) => Promise<RemoteResult<AuthSnapshot>>
     'collabAuth/list': () => Promise<RemoteResult<AuthSnapshot>>
+    'collabAuth/panel': (sessionId: string, operation: string, argsJson: string) => Promise<RemoteResult<string>>
     'collabAuth/revoke': (a: string, b: string) => Promise<RemoteResult<AuthSnapshot>>
   }
   interface TypertRemoteNamespaceMap {
@@ -25,6 +27,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'collabAuth/authorize': TypertRemoteMethod<{ readonly 'a': string; readonly 'b': string }, AuthSnapshot>
   readonly 'collabAuth/list': TypertRemoteMethod<{  }, AuthSnapshot>
+  readonly 'collabAuth/panel': TypertRemoteMethod<{ readonly 'sessionId': string; readonly 'operation': string; readonly 'argsJson': string }, string>
   readonly 'collabAuth/revoke': TypertRemoteMethod<{ readonly 'a': string; readonly 'b': string }, AuthSnapshot>
 }>
 export default TYPERT_REMOTE

@@ -1959,6 +1959,90 @@ export function apply(ctx, config = {}) {
     },
   })
 
+  /** Management operations used by the UI Remote instead of slash commands. */
+  const panel = (sessionId, operation, args) => {
+    if (!isSessionId(sessionId) || !collabSessions.has(sessionId)) {
+      throw new Error('not an initialized collaboration session')
+    }
+    const op = String(operation ?? '')
+    const supervisor = isSupervisorSession(sessionId)
+    if (op === 'board') {
+      if (!supervisor) throw new Error('not a supervisor session')
+      return {
+        relationships: relationships.listForSupervisor(sessionId).map(relationship => ({
+          ...relationship,
+          capability: effectiveCapability(relationship),
+        })),
+        workers: workerCandidates(sessionId),
+        tasks: tasks.listForSupervisor(sessionId).map(task => TaskStore.summary(task)),
+        projects: tasks.listProjects(sessionId),
+        requests: requests.listForSupervisor(sessionId).map(request => RequestStore.summary(request)),
+      }
+    }
+    if (op === 'baseGet' || op === 'baseSet') {
+      const entry = promptFibers.get(sessionId)
+      if (entry === undefined) throw new Error('collaboration session is not initialized')
+      if (op === 'baseGet') {
+        return { basePrompt: typeof entry.layout.meta.basePrompt === 'string' ? entry.layout.meta.basePrompt : '' }
+      }
+      const value = typeof args?.value === 'string' ? args.value : ''
+      if (value.length > MAX_BASE_PROMPT) throw new Error(`base prompt exceeds ${String(MAX_BASE_PROMPT)} characters`)
+      entry.layout.meta.basePrompt = value
+      entry.layout.meta.updatedAt = Date.now()
+      writeJson(path.join(entry.layout.workdir, 'session.json'), entry.layout.meta, 0o600)
+      return { basePrompt: value }
+    }
+    if (op !== 'link' && op !== 'unlink' && op !== 'pin' && op !== 'live') {
+      throw new Error(`unknown panel operation: ${op}`)
+    }
+    if (!supervisor) throw new Error('not a supervisor session')
+    const worker = typeof args?.worker === 'string' ? args.worker : ''
+    if (!isSessionId(worker) || worker === sessionId) throw new Error('invalid worker id')
+    const entry = registry.get(worker)
+    if (entry === undefined || entry.preset === SUPERVISOR) throw new Error('worker must be a collaboration session')
+    const view = relationship => relationship === undefined
+      ? undefined
+      : { ...relationship, capability: effectiveCapability(relationship) }
+    if (op === 'unlink') {
+      relationships.remove(sessionId, worker)
+      auth.revoke(sessionId, worker)
+      return { removed: true, worker, communicationRevoked: true }
+    }
+    const existing = relationships.get(sessionId, worker)
+    if ((op === 'pin' || op === 'live') && existing === undefined) {
+      throw new Error('worker is not registered to this supervisor')
+    }
+    if (op === 'pin' || op === 'live') {
+      const live = liveCapability(worker)
+      if (live === null) throw new Error('worker session is unavailable')
+      const relationship = relationships.upsert({
+        supervisor: sessionId,
+        worker,
+        capabilityOverride: op === 'pin' ? live : null,
+        capabilityVersion: live.version,
+        offer: existing.offer,
+        request: existing.request,
+        createdBy: 'human',
+      })
+      return { relationship: view(relationship) }
+    }
+    const payload = args?.payload !== null && typeof args?.payload === 'object' ? args.payload : {}
+    const live = liveCapability(worker)
+    const override = payload?.override === true ? (payload?.capability ?? null) : undefined
+    const offer = payload?.offer !== false
+    const relationship = relationships.upsert({
+      supervisor: sessionId,
+      worker,
+      capabilityOverride: override,
+      capabilityVersion: live?.version,
+      offer,
+      createdBy: 'human',
+    })
+    auth.authorize(sessionId, worker, 'relationship')
+    return { relationship: view(relationship), authorized: true }
+  }
+  collabAdmin.panel = panel
+
   for (const definition of tools) {
     const { when, ...tool } = definition
     ctx.tools.register(tool, {

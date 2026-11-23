@@ -58,5 +58,5 @@
     "zod": "4.6.6"
   },
   "types": "./lib/host.d.ts",
-  "module": "./lib/host.js"
+  "module": "lib/host.js"
 }

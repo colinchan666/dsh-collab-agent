@@ -41,6 +41,15 @@ export declare class CollabAuthService extends TypertRemoteService {
      * @returns the resulting authorization snapshot.
      */
     revoke(a: string, b: string): AuthSnapshot;
+    /**
+     * Read or mutate the supervisor board/base-prompt surface without writing a
+     * slash-command lifecycle into the conversation.
+     * @param sessionId - collaboration Session id.
+     * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.
+     * @param args - operation-specific payload.
+     * @returns the operation result.
+     */
+    panel(sessionId: string, operation: string, argsJson: string): string;
 }
 /**
  * Mount the generated Host service.

@@ -19924,6 +19924,14 @@ var _local_dsh_collab_auth_api_collabAuth_list_result$schema = () => _local_dsh_
     "updatedAt": external_exports.number().readonly().describe("Last update time in epoch milliseconds.")
   })).readonly().describe("Directional grants waiting for the other side.")
 });
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value;
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema = () => _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value ??= external_exports.string();
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value;
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema = () => _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value ??= external_exports.string();
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value;
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema = () => _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value ??= external_exports.string();
+var _local_dsh_collab_auth_api_collabAuth_panel_result$schema$value;
+var _local_dsh_collab_auth_api_collabAuth_panel_result$schema = () => _local_dsh_collab_auth_api_collabAuth_panel_result$schema$value ??= external_exports.string();
 var _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value;
 var _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema = () => _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value ??= external_exports.string();
 var _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema$value;
@@ -19947,6 +19955,12 @@ var _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$va
 var _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema = () => _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$value ??= external_exports.string();
 var _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value;
 var _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema = () => _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value ??= external_exports.string();
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value;
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema = () => _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value ??= external_exports.string();
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value;
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema = () => _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value ??= external_exports.string();
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value;
+var _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema = () => _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value ??= external_exports.string();
 var _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value;
 var _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema = () => _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value ??= external_exports.string();
 var _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value;
@@ -20016,6 +20030,71 @@ var TYPERT_REMOTE = createTypertRemoteInfo({
         jsonSchema: { "type": "object", "properties": { "pairs": { "type": "array", "items": { "type": "object", "properties": { "a": { "type": "string", "description": "First Session id in the pair." }, "b": { "type": "string", "description": "Second Session id in the pair." }, "createdAt": { "type": "number", "description": "Creation time in epoch milliseconds." }, "updatedAt": { "type": "number", "description": "Last update time in epoch milliseconds." } }, "required": ["a", "b", "createdAt", "updatedAt"], "additionalProperties": true }, "description": "Fully authorized pairs." }, "pending": { "type": "array", "items": { "type": "object", "properties": { "from": { "type": "string", "description": "Granting Session id." }, "to": { "type": "string", "description": "Receiving Session id." }, "createdAt": { "type": "number", "description": "Creation time in epoch milliseconds." }, "updatedAt": { "type": "number", "description": "Last update time in epoch milliseconds." } }, "required": ["from", "to", "createdAt", "updatedAt"], "additionalProperties": true }, "description": "Directional grants waiting for the other side." } }, "required": ["pairs", "pending"], "additionalProperties": true }
       },
       sourceLocation: { "file": "packages/dsh-collab-auth-api/src/index.ts", "line": 53, "column": 3 }
+    },
+    "collabAuth/panel": {
+      service: "collabAuth",
+      description: "Read or mutate the supervisor board/base-prompt surface without writing a slash-command lifecycle into the conversation.",
+      invocation: { kind: "direct" },
+      parameters: [
+        {
+          name: "sessionId",
+          description: "collaboration Session id.",
+          source: "json",
+          codec: {
+            mode: "strict",
+            typeSymbol: "@local/dsh-collab-auth-api#collabAuth/panel:sessionId",
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema,
+            jsonSchema: { "type": "string" }
+          },
+          strictCodec: {
+            mode: "strict",
+            typeSymbol: "@local/dsh-collab-auth-api#collabAuth/panel:sessionId",
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema,
+            jsonSchema: { "type": "string" }
+          }
+        },
+        {
+          name: "operation",
+          description: "board, baseGet, baseSet, link, unlink, pin, or live.",
+          source: "json",
+          codec: {
+            mode: "strict",
+            typeSymbol: "@local/dsh-collab-auth-api#collabAuth/panel:operation",
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema,
+            jsonSchema: { "type": "string" }
+          },
+          strictCodec: {
+            mode: "strict",
+            typeSymbol: "@local/dsh-collab-auth-api#collabAuth/panel:operation",
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema,
+            jsonSchema: { "type": "string" }
+          }
+        },
+        {
+          name: "argsJson",
+          source: "json",
+          codec: {
+            mode: "strict",
+            typeSymbol: "@local/dsh-collab-auth-api#collabAuth/panel:argsJson",
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema,
+            jsonSchema: { "type": "string" }
+          },
+          strictCodec: {
+            mode: "strict",
+            typeSymbol: "@local/dsh-collab-auth-api#collabAuth/panel:argsJson",
+            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema,
+            jsonSchema: { "type": "string" }
+          }
+        }
+      ],
+      result: {
+        mode: "strict",
+        typeSymbol: "@local/dsh-collab-auth-api#collabAuth/panel:result",
+        create: _local_dsh_collab_auth_api_collabAuth_panel_result$schema,
+        description: "the operation result.",
+        jsonSchema: { "type": "string" }
+      },
+      sourceLocation: { "file": "packages/dsh-collab-auth-api/src/index.ts", "line": 88, "column": 3 }
     },
     "collabAuth/revoke": {
       service: "collabAuth",

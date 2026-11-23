@@ -40,4 +40,6 @@ export interface CollabAdminFace {
   authorize(a: string, b: string): AuthSnapshot
   /** Revoke both directions of one pair. */
   revoke(a: string, b: string): AuthSnapshot
+  /** Read or mutate a collaboration management surface without a command record. */
+  panel(sessionId: string, operation: string, args?: Record<string, unknown>): Record<string, unknown>
 }
