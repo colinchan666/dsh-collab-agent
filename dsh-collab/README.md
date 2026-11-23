@@ -162,8 +162,11 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   authorization does not lose a committed acceptance, assignment, or result
   wake-up.
 - **Cross-process state locks**: registry, authorization, relationship, task,
-  and request mutations use a short-lived lock and re-read the state document
-  under that lock; JSON writes are fsynced and atomically renamed.
+  request, and notice mutations use a short-lived lock and re-read the state
+  document under that lock; JSON writes are fsynced and atomically renamed.
+  Parsed state caches invalidate on file identity changes, and a malformed
+  state document is moved to a `.corrupt-<timestamp>` backup instead of being
+  silently replaced by an empty store.
 - **Managed-worker write scope**: `write`, `edit`, `apply_patch`, and ordinary
   shell write targets are limited to the assigned deliveryDir, `private/`, and
   `comm/`. Shell target extraction is conservative; it is not an OS sandbox.

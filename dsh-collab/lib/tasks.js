@@ -5,7 +5,7 @@
  */
 import crypto from 'node:crypto'
 
-import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
+import { fileStamp, isSessionId, readStateJson, withFileLock, writeJson } from './layout.js'
 
 const ACTIVE_STATUSES = new Set(['created', 'assigned', 'accepted', 'running'])
 const TASK_STATUSES = new Set(['created', 'assigned', 'accepted', 'running', 'done', 'failed', 'cancelled'])
@@ -41,20 +41,23 @@ export class TaskStore {
   }
 
   read() {
-    if (this.state !== undefined) return this.state
-    const raw = readJson(this.file)
+    const stamp = fileStamp(this.file)
+    if (this.state !== undefined && this.stamp === stamp) return this.state
+    const raw = readStateJson(this.file)
     const projects = raw?.projects !== null && typeof raw?.projects === 'object' ? raw.projects : {}
     for (const project of Object.values(projects)) {
       if (project !== null && typeof project === 'object' && project.requestId === undefined) project.requestId = null
     }
     const tasks = raw?.tasks !== null && typeof raw?.tasks === 'object' ? raw.tasks : {}
     this.state = { version: 1, projects, tasks }
+    this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
     writeJson(this.file, { version: 1, projects: state.projects, tasks: state.tasks })
+    this.stamp = fileStamp(this.file)
   }
 
   get(taskId) {

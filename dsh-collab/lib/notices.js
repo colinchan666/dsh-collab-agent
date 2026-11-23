@@ -7,7 +7,7 @@
  */
 import crypto from 'node:crypto'
 
-import { isSessionId, readJson, writeJson } from './layout.js'
+import { fileStamp, isSessionId, readStateJson, withFileLock, writeJson } from './layout.js'
 
 const MAX_NOTICES = 500
 
@@ -36,8 +36,9 @@ export class NoticeStore {
   }
 
   read() {
-    if (this.state !== undefined) return this.state
-    const raw = readJson(this.file)
+    const stamp = fileStamp(this.file)
+    if (this.state !== undefined && this.stamp === stamp) return this.state
+    const raw = readStateJson(this.file)
     const source = raw?.notices !== null && typeof raw?.notices === 'object' ? raw.notices : {}
     const notices = {}
     for (const entry of Object.values(source)) {
@@ -45,12 +46,14 @@ export class NoticeStore {
       if (normalized !== undefined) notices[normalized.id] = normalized
     }
     this.state = { version: 1, notices }
+    this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
     writeJson(this.file, { version: 1, notices: state.notices }, 0o600)
+    this.stamp = fileStamp(this.file)
   }
 
   enqueue({ from, to, payload }, now = Date.now()) {
@@ -58,6 +61,8 @@ export class NoticeStore {
       throw new Error('notice requires two different session ids')
     }
     if (payload === null || typeof payload !== 'object') throw new Error('notice payload must be an object')
+    return withFileLock(this.file, () => {
+    this.state = undefined
     const state = this.read()
     const id = `notice-${crypto.randomUUID()}`
     const notice = {
@@ -79,25 +84,32 @@ export class NoticeStore {
     }
     this.write(state)
     return notice
+    })
   }
 
   remove(id) {
-    const state = this.read()
-    if (state.notices[id] === undefined) return false
-    delete state.notices[id]
-    this.write(state)
-    return true
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      if (state.notices[id] === undefined) return false
+      delete state.notices[id]
+      this.write(state)
+      return true
+    })
   }
 
   fail(id, error, now = Date.now()) {
-    const state = this.read()
-    const notice = state.notices[id]
-    if (notice === undefined) return undefined
-    notice.attempts += 1
-    notice.lastError = String(error instanceof Error ? error.message : error)
-    notice.updatedAt = now
-    this.write(state)
-    return notice
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      const notice = state.notices[id]
+      if (notice === undefined) return undefined
+      notice.attempts += 1
+      notice.lastError = String(error instanceof Error ? error.message : error)
+      notice.updatedAt = now
+      this.write(state)
+      return notice
+    })
   }
 
   list() {

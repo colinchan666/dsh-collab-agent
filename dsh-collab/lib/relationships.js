@@ -3,7 +3,7 @@
  * human-pinned capability override. The worker's live capability is derived
  * by the Host, so a base-prompt update never silently keeps a stale snapshot.
  */
-import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
+import { fileStamp, isSessionId, readStateJson, withFileLock, writeJson } from './layout.js'
 
 function normalizeCapability(input) {
   if (input === null || typeof input !== 'object') return null
@@ -28,8 +28,9 @@ export class RelationshipStore {
   }
 
   read() {
-    if (this.state !== undefined) return this.state
-    const raw = readJson(this.file)
+    const stamp = fileStamp(this.file)
+    if (this.state !== undefined && this.stamp === stamp) return this.state
+    const raw = readStateJson(this.file)
     const relationships = Array.isArray(raw?.relationships)
       ? raw.relationships.filter(entry => (
         isSessionId(entry?.supervisor)
@@ -55,12 +56,14 @@ export class RelationshipStore {
       })
       : []
     this.state = { version: 1, relationships }
+    this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
     writeJson(this.file, { version: 1, relationships: state.relationships })
+    this.stamp = fileStamp(this.file)
   }
 
   list() {

@@ -8,7 +8,7 @@
  */
 import path from 'node:path'
 
-import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
+import { fileStamp, isSessionId, readStateJson, withFileLock, writeJson } from './layout.js'
 
 /** Stable key for a directed grant. */
 export function grantKey(from, to) {
@@ -60,14 +60,17 @@ export class AuthorizationStore {
   }
 
   read() {
-    if (this.state !== undefined) return this.state
-    this.state = { version: 2, grants: normalizeGrants(readJson(this.file)) }
+    const stamp = fileStamp(this.file)
+    if (this.state !== undefined && this.stamp === stamp) return this.state
+    this.state = { version: 2, grants: normalizeGrants(readStateJson(this.file)) }
+    this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
     writeJson(this.file, { version: 2, grants: state.grants })
+    this.stamp = fileStamp(this.file)
   }
 
   /** Every directional grant, for the management page and audit. */

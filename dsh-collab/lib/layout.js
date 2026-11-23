@@ -60,6 +60,34 @@ export function mkdirp(directory, mode = 0o700) {
   try { fs.chmodSync(directory, mode) } catch { /* platform without POSIX modes */ }
 }
 
+/** Cheap identity of one state file, used to invalidate parsed caches. */
+export function fileStamp(file) {
+  try {
+    const stat = fs.statSync(file)
+    return `${stat.ino}:${String(stat.size)}:${String(stat.mtimeMs)}`
+  } catch {
+    return 'missing'
+  }
+}
+
+/**
+ * Read a durable state document. A malformed document is moved aside so a
+ * later write cannot silently replace evidence of corruption with an empty store.
+ */
+export function readStateJson(file) {
+  if (!fs.existsSync(file)) return undefined
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch (error) {
+    const backup = `${file}.corrupt-${Date.now()}`
+    try { fs.renameSync(file, backup) } catch { /* preserve the original path if the backup fails */ }
+    const failure = new Error(`collaboration state is corrupted: ${file}; backup: ${backup}`)
+    failure.code = 'STATE_CORRUPT'
+    failure.cause = error
+    throw failure
+  }
+}
+
 /** Whether a path is an existing directory. */
 export function isDirectory(target) {
   try { return fs.statSync(target).isDirectory() } catch { return false }
@@ -208,18 +236,21 @@ export class SessionRegistry {
   }
 
   read() {
-    if (this.state !== undefined) return this.state
-    const raw = readJson(this.file)
+    const stamp = fileStamp(this.file)
+    if (this.state !== undefined && this.stamp === stamp) return this.state
+    const raw = readStateJson(this.file)
     const sessions = raw !== null && typeof raw === 'object' && raw.sessions !== null && typeof raw.sessions === 'object'
       ? raw.sessions
       : {}
     this.state = { version: 1, sessions }
+    this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
     writeJson(this.file, { version: 1, sessions: state.sessions })
+    this.stamp = fileStamp(this.file)
   }
 
   get(sessionId) {

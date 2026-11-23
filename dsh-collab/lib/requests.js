@@ -6,7 +6,7 @@
  */
 import crypto from 'node:crypto'
 
-import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
+import { fileStamp, isSessionId, readStateJson, withFileLock, writeJson } from './layout.js'
 
 const REQUEST_STATUSES = new Set(['pending', 'accepted', 'delivered', 'rejected', 'cancelled', 'expired'])
 
@@ -64,8 +64,9 @@ export class RequestStore {
   }
 
   read() {
-    if (this.state !== undefined) return this.state
-    const raw = readJson(this.file)
+    const stamp = fileStamp(this.file)
+    if (this.state !== undefined && this.stamp === stamp) return this.state
+    const raw = readStateJson(this.file)
     const source = raw?.requests !== null && typeof raw?.requests === 'object' ? raw.requests : {}
     const requests = {}
     for (const [id, entry] of Object.entries(source)) {
@@ -86,12 +87,14 @@ export class RequestStore {
       requests[id] = normalized
     }
     this.state = { version: 1, requests }
+    this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
     writeJson(this.file, { version: 1, requests: state.requests })
+    this.stamp = fileStamp(this.file)
   }
 
   get(id) {

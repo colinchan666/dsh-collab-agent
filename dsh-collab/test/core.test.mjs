@@ -337,6 +337,34 @@ test('two RequestStore instances preserve independent request writes', () => {
   }
 })
 
+test('a malformed state file is backed up instead of silently overwritten', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-corrupt-'))
+  try {
+    const file = path.join(root, 'tasks.json')
+    fs.writeFileSync(file, '{not json')
+    const store = new TaskStore(file)
+    assert.throws(() => store.read(), /corrupted/u)
+    assert.equal(fs.existsSync(file), false)
+    assert.ok(fs.readdirSync(root).some(name => name.startsWith('tasks.json.corrupt-')))
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('a cached store observes an external state write', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-cache-'))
+  try {
+    const file = path.join(root, 'tasks.json')
+    const reader = new TaskStore(file)
+    assert.equal(reader.listProjects(SELF).length, 0)
+    const writer = new TaskStore(file)
+    writer.createProject({ supervisor: SELF, title: 'external' })
+    assert.equal(reader.listProjects(SELF).length, 1)
+  } finally {
+    cleanup(root)
+  }
+})
+
 test('the notice outbox persists and removes queued wake-ups', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-notices-'))
   try {
