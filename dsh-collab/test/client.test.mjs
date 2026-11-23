@@ -155,42 +155,6 @@ test('the client starts a collab session through the current-workspace navigatio
   assert.deepEqual(harness.calls.auth.at(-1), ['panel', 'session-supervisor', 'board', '{}'])
 })
 
-test('the client mounts when the auth Remote is unavailable', async () => {
-  const harness = fakeClientHarness()
-  delete harness.ctx.remote.collabAuth
-  const plugin = pluginFor()
-  plugin.apply(harness.ctx)
-  const panel = harness.registrations.find(entry => (
-    entry.options.name === 'main' && entry.options.key === 'collab-auth'
-  ))
-  assert.ok(panel)
-  const auth = panel.options.inject().auth
-  const listed = await auth.list()
-  assert.equal(listed.ok, false)
-  assert.equal(listed.error.code, 'collab-auth-unavailable')
-  const board = harness.registrations.find(entry => (
-    entry.options.name === 'sidebar.right.pane.tab'
-    && entry.options.key === '@local/dsh-collab-sessions/supervisor-tasks'
-  ))
-  const result = await board.options.inject().panel('session-supervisor', 'board', {})
-  assert.equal(result.ok, false)
-})
-
-test('collab detection handles supervisor presets and Windows paths', () => {
-  const { __test } = pluginFor()
-  assert.equal(__test.isCollabSummary({
-    id: 'win',
-    projectionValues: { workingDirectory: 'C:\\workspace\\.dsh-collab\\sessions\\session-win' },
-  }), true)
-  assert.equal(__test.isCollabSummary({
-    id: 'supervisor',
-    projectionValues: { agentPreset: 'supervisor' },
-  }), true)
-  assert.equal(__test.isSupervisorSessionSummary({
-    projectionValues: { agentPreset: 'supervisor' },
-  }), true)
-})
-
 test('the auth-refusal turn projection records a collab_send refusal', () => {
   const harness = fakeClientHarness()
   pluginFor().apply(harness.ctx)

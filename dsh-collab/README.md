@@ -215,12 +215,11 @@ Tasks** action. Opening a supervisor no longer expands the right sidebar or
 steals the active tab, and a running session is not auto-opened unless the user
 chooses it. Board, base-prompt, and link actions use the authorization Remote
 (`collabAuth.panel`) rather than slash-command execution, so reading the board
-does not add command rows to the conversation. The authorization Remote is
-optional: if its bundle is unavailable, the rest of the plugin still mounts and
-the auth page reports `collab-auth-unavailable` instead of taking down the
-sidebar, board, or base-prompt UI. Management Remote calls are owner-only; a
-non-owner Peer is rejected before it can list or mutate authorization pairs or
-the collaboration board.
+does not add command rows to the conversation. The authorization Remote is a required
+client dependency because Cordis resolves `ctx.remote.collabAuth` through the
+injected service namespace. Management Remote calls are owner-only; a non-owner
+Peer is rejected before it can list or mutate authorization pairs or the
+collaboration board.
 
 ## Copy session name
 
