@@ -536,6 +536,19 @@ export function findForeignSessionAccess(values, { selfId, selfWorkdir, selfLayo
     if (typeof value !== 'string' || value.length === 0 || value.length > 8192) continue
     const resolved = expandToken(value, selfWorkdir)
     const canonical = canonicalPath(resolved)
+    // A wildcard segment under the shared sessions directory can expand into
+    // every peer's private/comm, so it is not a harmless literal. Allow only
+    // wildcards whose literal prefix stays inside this session's own layout.
+    if (/[*?[\]]/.test(value) && /\.dsh-collab[\\/]sessions[\\/]/i.test(value)) {
+      const literalPrefix = value.split(/[*?[\]]/)[0]
+      const resolvedPrefix = expandToken(literalPrefix, selfWorkdir)
+      const canonicalPrefix = canonicalPath(resolvedPrefix)
+      const ownLayout = selfLayoutWorkdir ?? selfWorkdir
+      const canonicalOwnLayout = canonicalPath(ownLayout)
+      if (!isInside(resolvedPrefix, ownLayout) && !isInside(canonicalPrefix, canonicalOwnLayout)) {
+        return { sessionId: '<wildcard>', value }
+      }
+    }
     // The caller's own layout is never foreign, even when its directory name is
     // a generated token rather than the session id.
     if (typeof selfLayoutWorkdir === 'string') {

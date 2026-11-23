@@ -213,8 +213,11 @@ display name to the clipboard and briefly marks the button as copied.
   (`cd`), `read`, `read_image`, `write`, `edit`, `glob`, `grep`,
   `apply_patch`, and `office_render`/`office_convert`/`office_recalculate`,
   plus `present` file paths. Paths are resolved through symlinks before
-  comparison. For a collaboration session, recursive searches and shells whose
-  effective directory contains another session's work directory are refused.
+  comparison, including shared-delivery paths. For a collaboration session,
+  wildcard tokens that could expand into `.dsh-collab/sessions`, recursive
+  searches, and shells whose effective directory contains another session's
+  work directory are refused; ancestor checks are not skipped when a shell
+  starts in an authorized delivery directory.
   Normal project sessions keep their full shell and search behavior; only their
   direct access to a collaboration work directory is denied.
 - This is a session-level guard, not an OS security sandbox. Another OS user is

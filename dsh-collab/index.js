@@ -19,7 +19,7 @@ import {
   SUBDIR, SessionRegistry, credentialPath, defaultRegistryPath, discoverSiblingWorkdirs,
   ensureSessionLayout, findForeignAncestorAccess, findForeignSessionAccess,
   findForeignSessionAccessInCommand, findSuspiciousSearchPattern, inboxCount,
-  isDirectory, isSessionId, listInbox, markRead, migrateSessionArchive, mkdirp, readJson, sendMessage, writeJson,
+  canonicalPath, isDirectory, isSessionId, listInbox, markRead, migrateSessionArchive, mkdirp, readJson, sendMessage, writeJson,
 } from './lib/layout.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
@@ -1782,15 +1782,16 @@ export function apply(ctx, config = {}) {
       const resolvedRoot = path.resolve(root)
       return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
     }
+    const canonicalSharedRoot = canonicalPath(sharedRoot)
     const projectIdFromShared = (resolved) => {
-      if (!pathInside(resolved, sharedRoot)) return undefined
-      const relative = path.relative(sharedRoot, resolved).split(path.sep).filter(Boolean)
+      if (!pathInside(resolved, canonicalSharedRoot)) return undefined
+      const relative = path.relative(canonicalSharedRoot, resolved).split(path.sep).filter(Boolean)
       if (relative.length < 2 || relative[1] !== 'artifacts') return undefined
       return relative[0]
     }
     const deliveryAccessFor = (candidate, write) => {
       if (typeof candidate !== 'string' || candidate.length === 0) return false
-      const resolved = path.resolve(selfWorkdir, candidate)
+      const resolved = canonicalPath(path.resolve(selfWorkdir, candidate))
       const projectId = projectIdFromShared(resolved)
       if (projectId === undefined) return false
       const project = tasks.project(projectId)
@@ -1810,17 +1811,19 @@ export function apply(ctx, config = {}) {
     const sharedAccessDenied = (candidates, write) => {
       for (const candidate of candidates) {
         if (typeof candidate !== 'string' || candidate.length === 0) continue
-        const resolved = path.resolve(selfWorkdir, candidate)
-        if (!pathInside(resolved, sharedRoot)) continue
+        const lexical = path.resolve(selfWorkdir, candidate)
+        const resolved = canonicalPath(lexical)
+        if (!pathInside(lexical, sharedRoot) && !pathInside(resolved, canonicalSharedRoot)) continue
+        if (pathInside(lexical, sharedRoot) && !pathInside(resolved, canonicalSharedRoot)) return { path: lexical }
         if (deliveryAccessFor(candidate, write)) continue
-        return { path: resolved }
+        return { path: lexical }
       }
       return undefined
     }
     const managedWriteAllowed = (candidate) => {
       if (!isManagedWorker(sessionId)) return true
       if (typeof candidate !== 'string' || candidate.length === 0) return false
-      const resolved = path.resolve(selfWorkdir, candidate)
+      const resolved = canonicalPath(path.resolve(selfWorkdir, candidate))
       if (deliveryAccessFor(candidate, true)) return true
       for (const own of [path.join(selfWorkdir, 'private'), path.join(selfWorkdir, 'comm')]) {
         if (pathInside(resolved, own)) return true
@@ -1853,11 +1856,11 @@ export function apply(ctx, config = {}) {
         // directory could read it recursively; refuse that cwd. Normal project
         // sessions keep their full shell so the plugin does not break them.
         const bashCwdAllowed = deliveryAccessFor(bashWorkdir, true)
-        hit = (isCollabCaller && !bashCwdAllowed ? findForeignAncestorAccess([bashWorkdir], options) : undefined)
+        hit = (isCollabCaller ? findForeignAncestorAccess([bashWorkdir], options) : undefined)
           ?? findForeignSessionAccessInCommand(String(args?.command ?? ''), {
             ...options,
             selfWorkdir: bashWorkdir,
-            checkAncestors: isCollabCaller && !bashCwdAllowed,
+            checkAncestors: isCollabCaller,
           })
         if (hit === undefined && typeof args?.workdir === 'string') {
           hit = findForeignSessionAccess(allowedDeliveryPaths([args.workdir], true), options)
@@ -1904,7 +1907,7 @@ export function apply(ctx, config = {}) {
       case 'glob': {
         const globPath = typeof args?.path === 'string' ? args.path : selfWorkdir
         const pathAllowed = deliveryAccessFor(globPath, false)
-        hit = (pathAllowed ? undefined : findSuspiciousSearchPattern(String(args?.pattern ?? ''), options))
+        hit = findSuspiciousSearchPattern(String(args?.pattern ?? ''), options)
           ?? (isCollabCaller && !pathAllowed
             ? findForeignAncestorAccess([globPath].filter(value => typeof value === 'string'), options)
             : undefined)
@@ -1920,8 +1923,9 @@ export function apply(ctx, config = {}) {
         hit = (isCollabCaller && !pathAllowed
           ? findForeignAncestorAccess([grepPath].filter(value => typeof value === 'string'), options)
           : undefined)
+          ?? findSuspiciousSearchPattern(String(args?.pattern ?? ''), options)
           ?? findForeignSessionAccess(
-            allowedDeliveryPaths([args?.path].filter(value => typeof value === 'string'), false),
+            allowedDeliveryPaths([args?.path, args?.pattern].filter(value => typeof value === 'string'), false),
             options,
           )
         break

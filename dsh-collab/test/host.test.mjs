@@ -569,6 +569,18 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     fs.mkdirSync(deliveryDir, { recursive: true })
     fs.writeFileSync(path.join(deliveryDir, 'result.md'), 'delivered')
     assert.ok(guard({ agent: worker, name: 'write', arguments: { path: path.join(path.dirname(deliveryDir), 'adhoc.md') } }))
+    const sessions = path.join(workspace, '.dsh-collab', 'sessions')
+    assert.ok(guard({ agent: worker, name: 'bash', arguments: { workdir: deliveryDir, command: `cd ${sessions} && cat ${A}/private/secret.txt` } }))
+    assert.ok(guard({ agent: worker, name: 'bash', arguments: { workdir: deliveryDir, command: `cat ${sessions}/*/private/*` } }))
+    const supervisorPrivate = path.join(sessions, A, 'private')
+    fs.mkdirSync(supervisorPrivate, { recursive: true })
+    const secret = path.join(supervisorPrivate, 'secret.txt')
+    fs.writeFileSync(secret, 'secret')
+    const symlinkPath = path.join(deliveryDir, 'link-to-private.txt')
+    try {
+      fs.symlinkSync(secret, symlinkPath, 'file')
+      assert.ok(guard({ agent: worker, name: 'read', arguments: { path: symlinkPath } }))
+    } catch { /* platforms without symlinks */ }
     const manifestTool = harness.tools.find(entry => entry.definition.name === 'collab_delivery_manifest')
     const createTool = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
     assert.throws(() => createTool.definition.execute(

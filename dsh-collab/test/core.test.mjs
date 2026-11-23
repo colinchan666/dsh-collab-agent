@@ -251,6 +251,42 @@ test('a symlink into another private directory is resolved and rejected', () => 
   }
 })
 
+test('wildcard paths cannot enumerate every session private directory', () => {
+  const { root, workspace, self, peer } = fixture()
+  try {
+    const options = {
+      selfId: SELF,
+      selfWorkdir: self.workdir,
+      selfLayoutWorkdir: self.workdir,
+      roots: [{ sessionId: PEER, workdir: peer.workdir }],
+    }
+    const foreign = path.join(workspace, '.dsh-collab', 'sessions', '*', 'private', '*')
+    assert.equal(findForeignSessionAccess([foreign], options)?.sessionId, '<wildcard>')
+    assert.equal(findForeignSessionAccessInCommand(`cat ${foreign}`, options)?.sessionId, '<wildcard>')
+    const own = path.join(self.workdir, 'private', '*')
+    assert.equal(findForeignSessionAccess([own], options), undefined)
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('cd into the sessions parent cannot escape through relative paths', () => {
+  const { root, workspace, self, peer } = fixture()
+  try {
+    const options = {
+      selfId: SELF,
+      selfWorkdir: self.workdir,
+      selfLayoutWorkdir: self.workdir,
+      roots: [{ sessionId: PEER, workdir: peer.workdir }],
+    }
+    const sessions = path.join(workspace, '.dsh-collab', 'sessions')
+    const command = `cd ${sessions} && cat ${PEER}/private/secret.txt`
+    assert.equal(findForeignSessionAccessInCommand(command, { ...options, checkAncestors: true })?.sessionId, PEER)
+  } finally {
+    cleanup(root)
+  }
+})
+
 test('the registry discovers sessions under registered workspaces', () => {
   const { root, workspace } = fixture()
   try {
