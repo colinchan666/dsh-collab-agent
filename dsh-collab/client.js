@@ -1684,53 +1684,6 @@ window.__ModuleLoader__.load({
       }, t('board.open'))
     }
 
-    function CollabSupervisorTabsSeeder(props) {
-      const sessions = props.useSessions(selectSnapshot)
-      const summary = sessions.byId[props.sessionId]
-      const supervisor = isSupervisorSessionSummary(summary)
-      React.useEffect(() => {
-        if (!supervisor) return undefined
-        const seed = () => {
-          try { props.seed(props.sessionId) } catch (error) {
-            console.warn('[collab-sessions] could not seed right sidebar tabs:', error)
-          }
-        }
-        seed()
-        const timers = [setTimeout(seed, 120), setTimeout(seed, 700)]
-        const keeper = setInterval(() => {
-          try { props.ensure(props.sessionId) } catch { /* best effort */ }
-        }, 700)
-        const isOurTab = (element) => {
-          const close = element?.closest?.('[data-dockkit-tab-close]')
-          const tab = close?.closest?.('[data-dockkit-tab]')
-          return tab?.querySelector?.('.dsh-collab-board-tab-title') != null
-        }
-        const onCloseClick = (event) => {
-          const target = event.target instanceof Element ? event.target : null
-          if (!isOurTab(target)) return
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        const onAuxClick = (event) => {
-          if (event.button !== 1) return
-          const target = event.target instanceof Element ? event.target : null
-          const tab = target?.closest?.('[data-dockkit-tab]')
-          if (tab?.querySelector?.('.dsh-collab-board-tab-title') == null) return
-          event.preventDefault()
-          event.stopPropagation()
-        }
-        document.addEventListener('click', onCloseClick, true)
-        document.addEventListener('auxclick', onAuxClick, true)
-        return () => {
-          for (const timer of timers) clearTimeout(timer)
-          clearInterval(keeper)
-          document.removeEventListener('click', onCloseClick, true)
-          document.removeEventListener('auxclick', onAuxClick, true)
-        }
-      }, [supervisor, props.sessionId])
-      return null
-    }
-
     return {
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
