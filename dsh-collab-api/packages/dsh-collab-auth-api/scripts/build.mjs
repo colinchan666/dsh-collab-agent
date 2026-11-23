@@ -28,7 +28,6 @@ const bundle = await build({
   format: 'cjs',
   target: 'es2022',
   logLevel: 'silent',
-  external: ['zod'],
 })
 const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
 const wrapped = `window.__ModuleLoader__.load({id:${JSON.stringify(manifest.name)},factory:function(require){var module={exports:{}};var exports=module.exports;\n${bundle.outputFiles[0].text}\nreturn module.exports;}});\n`
