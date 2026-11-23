@@ -9,7 +9,7 @@ import {
   SessionRegistry, collabBaseOf, credentialPath, ensureCredential, ensureLayoutAt, ensureSessionLayout,
   findForeignAncestorAccess,
   findForeignSessionAccess, findForeignSessionAccessInCommand, findSuspiciousSearchPattern, inboxCount,
-  listInbox, markRead, readJson, sendMessage, sessionWorkdir, writeJson,
+  listInbox, markRead, readJson, sendMessage, sessionWorkdir, withFileLock, writeJson,
 } from '../lib/layout.js'
 import { NoticeStore } from '../lib/notices.js'
 import { TaskStore } from '../lib/tasks.js'
@@ -336,6 +336,24 @@ test('two RequestStore instances preserve independent request writes', () => {
     const fresh = new RequestStore(file)
     assert.ok(fresh.get(one.id))
     assert.ok(fresh.get(two.id))
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('a stale state lock is recovered and a live lock times out', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-lock-'))
+  try {
+    const file = path.join(root, 'state.json')
+    const lock = `${file}.lock`
+    fs.writeFileSync(lock, 'stale')
+    const old = new Date(Date.now() - 60_000)
+    fs.utimesSync(lock, old, old)
+    assert.equal(withFileLock(file, () => 'ok', { timeoutMs: 500, staleMs: 1000 }), 'ok')
+    assert.equal(fs.existsSync(lock), false)
+    fs.writeFileSync(lock, 'live')
+    assert.throws(() => withFileLock(file, () => 'no', { timeoutMs: 20, staleMs: 60_000 }), /timed out/u)
+    fs.unlinkSync(lock)
   } finally {
     cleanup(root)
   }
