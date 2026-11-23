@@ -771,9 +771,10 @@ window.__ModuleLoader__.load({
         onKeyDown: (event) => {
           if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
           event.preventDefault()
-          setActiveTab(current => {
-            if (current === 'pairs') return 'sessions'
-            return 'pairs'
+          const next = activeTab === 'pairs' ? 'sessions' : 'pairs'
+          setActiveTab(next)
+          window.requestAnimationFrame(() => {
+            document.getElementById(`dsh-collab-auth-tab-${next}`)?.focus()
           })
         },
       }, `${label} (${String(count)})`)

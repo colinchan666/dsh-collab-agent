@@ -1058,13 +1058,18 @@ export function apply(ctx, config = {}) {
     if (listed.truncated === true) throw new Error(`delivery has more than ${MAX_DELIVERY_LIST_FILES} files; split the project`)
     const files = listed.sort((left, right) => left.path.localeCompare(right.path)).map(file => {
       const full = path.join(root, file.path)
-      const stat = fs.statSync(full)
-      const hash = crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex')
+      const before = fs.statSync(full)
+      const content = fs.readFileSync(full)
+      const after = fs.statSync(full)
+      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
+        throw new Error(`delivery file changed while hashing: ${file.path}`)
+      }
+      const hash = crypto.createHash('sha256').update(content).digest('hex')
       return {
         path: file.path.split(path.sep).join('/'),
-        bytes: stat.size,
+        bytes: after.size,
         sha256: hash,
-        mode: `0${(stat.mode & 0o777).toString(8)}`,
+        mode: `0${(after.mode & 0o777).toString(8)}`,
       }
     })
     const manifest = {
