@@ -161,7 +161,9 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   assignment; ad-hoc shared writes are denied by the guard.
 - **Message hygiene**: opened inbox messages are recorded in a per-session
   replay ledger; a duplicate MAC-valid message id is quarantined. First-contact
-  credential creation is serialized by a pair lock.
+  credential creation is serialized by a pair lock. Undelivered notices older
+  than seven days and unreferenced delivery aliases older than seven days are
+  pruned at startup/flush.
 - **Notice outbox**: protocol notices are persisted in `notices.json` before
   delivery and retried by the Host, so a temporary offline peer or revoked
   authorization does not lose a committed acceptance, assignment, or result

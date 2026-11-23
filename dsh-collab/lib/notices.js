@@ -112,6 +112,21 @@ export class NoticeStore {
     })
   }
 
+  prune(now = Date.now(), maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      let changed = false
+      for (const [id, notice] of Object.entries(state.notices)) {
+        if (now - notice.createdAt <= maxAgeMs) continue
+        delete state.notices[id]
+        changed = true
+      }
+      if (changed) this.write(state)
+      return changed
+    })
+  }
+
   list() {
     return Object.values(this.read().notices)
       .sort((left, right) => left.createdAt - right.createdAt)

@@ -622,6 +622,7 @@ export function apply(ctx, config = {}) {
     if (noticeFlushInFlight) return
     noticeFlushInFlight = true
     try {
+      notices.prune()
       for (const notice of notices.list()) {
         // Let the originating send finish first; a crash leaves it eligible
         // for the next sweep after the grace period.
@@ -1148,6 +1149,27 @@ export function apply(ctx, config = {}) {
           warn(`could not promote legacy delivery ${request.id}: ${describeError(error)}`)
         }
       }
+    }
+  }
+
+  const pruneDeliveryAliases = () => {
+    const root = path.join(sharedRoot, '.deliveries')
+    let entries
+    try { entries = fs.readdirSync(root, { withFileTypes: true }) } catch { return }
+    const active = new Set(
+      requests.list()
+        .map(request => request.delivery?.deliveryId)
+        .filter(id => typeof id === 'string'),
+    )
+    const now = Date.now()
+    for (const entry of entries) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+      if (active.has(entry.name)) continue
+      const target = path.join(root, entry.name)
+      try {
+        const age = now - fs.statSync(target).mtimeMs
+        if (age > 7 * 24 * 60 * 60 * 1000) fs.rmSync(target, { recursive: true, force: true })
+      } catch { /* alias may disappear concurrently */ }
     }
   }
 
@@ -2419,6 +2441,7 @@ export function apply(ctx, config = {}) {
 
   refreshRegistry()
   reconcileRequestProjectBindings()
+  pruneDeliveryAliases()
   sweepRequestTimeouts()
   sweepExecutionDeadlines()
   void flushNotices()
