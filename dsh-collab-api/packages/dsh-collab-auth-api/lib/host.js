@@ -6,6 +6,11 @@
  * @param ctx - owning Host Context.
  */
 export function apply(ctx) {
+    const assertOwner = () => {
+        const principal = ctx.invocation?.peer?.principal;
+        if (principal !== undefined && principal.kind !== 'owner')
+            throw new Error('collaboration management is owner-only');
+    };
     const admin = () => {
         const face = ctx.get('collabAdmin');
         if (face === undefined)
@@ -13,10 +18,11 @@ export function apply(ctx) {
         return face;
     };
     const service = {
-        list: () => admin().listAuth(),
-        authorize: (a, b) => admin().authorize(a, b),
-        revoke: (a, b) => admin().revoke(a, b),
+        list: () => { assertOwner(); return admin().listAuth(); },
+        authorize: (a, b) => { assertOwner(); return admin().authorize(a, b); },
+        revoke: (a, b) => { assertOwner(); return admin().revoke(a, b); },
         panel: (sessionId, operation, argsJson) => {
+            assertOwner();
             let args = {};
             if (argsJson.trim().length > 0) {
                 const parsed = JSON.parse(argsJson);

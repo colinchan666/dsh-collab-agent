@@ -60,7 +60,7 @@ export class CollabAuthService extends TypertRemoteService {
    * @param b - second Session id.
    * @returns the resulting authorization snapshot.
    */
-  @Remote('authorize')
+  @Remote({ name: 'authorize', resources: { session: (a: string, b: string) => [a, b] } } as never)
   authorize(a: string, b: string): AuthSnapshot {
     return this.admin().authorize(sessionId(a, 'a'), sessionId(b, 'b'))
   }
@@ -71,7 +71,7 @@ export class CollabAuthService extends TypertRemoteService {
    * @param b - second Session id.
    * @returns the resulting authorization snapshot.
    */
-  @Remote('revoke')
+  @Remote({ name: 'revoke', resources: { session: (a: string, b: string) => [a, b] } } as never)
   revoke(a: string, b: string): AuthSnapshot {
     return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'))
   }
@@ -84,7 +84,7 @@ export class CollabAuthService extends TypertRemoteService {
    * @param args - operation-specific payload.
    * @returns the operation result.
    */
-  @Remote('panel')
+  @Remote({ name: 'panel', resources: { session: (sessionId: string) => sessionId } } as never)
   panel(sessionId: string, operation: string, argsJson: string): string {
     let args: Record<string, unknown> = {}
     if (argsJson.trim().length > 0) {

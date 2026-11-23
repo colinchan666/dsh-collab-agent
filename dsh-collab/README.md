@@ -200,7 +200,9 @@ chooses it. Board, base-prompt, and link actions use the authorization Remote
 does not add command rows to the conversation. The authorization Remote is
 optional: if its bundle is unavailable, the rest of the plugin still mounts and
 the auth page reports `collab-auth-unavailable` instead of taking down the
-sidebar, board, or base-prompt UI.
+sidebar, board, or base-prompt UI. Management Remote calls are owner-only; a
+non-owner Peer is rejected before it can list or mutate authorization pairs or
+the collaboration board.
 
 ## Copy session name
 

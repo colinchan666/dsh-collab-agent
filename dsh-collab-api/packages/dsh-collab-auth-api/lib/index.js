@@ -59,9 +59,9 @@ let CollabAuthService = (() => {
         static {
             const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(_classSuper[Symbol.metadata] ?? null) : void 0;
             _list_decorators = [Remote('list')];
-            _authorize_decorators = [Remote('authorize')];
-            _revoke_decorators = [Remote('revoke')];
-            _panel_decorators = [Remote('panel')];
+            _authorize_decorators = [Remote({ name: 'authorize', resources: { session: (a, b) => [a, b] } })];
+            _revoke_decorators = [Remote({ name: 'revoke', resources: { session: (a, b) => [a, b] } })];
+            _panel_decorators = [Remote({ name: 'panel', resources: { session: (sessionId) => sessionId } })];
             __esDecorate(this, null, _list_decorators, { kind: "method", name: "list", static: false, private: false, access: { has: obj => "list" in obj, get: obj => obj.list }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _authorize_decorators, { kind: "method", name: "authorize", static: false, private: false, access: { has: obj => "authorize" in obj, get: obj => obj.authorize }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _revoke_decorators, { kind: "method", name: "revoke", static: false, private: false, access: { has: obj => "revoke" in obj, get: obj => obj.revoke }, metadata: _metadata }, null, _instanceExtraInitializers);
