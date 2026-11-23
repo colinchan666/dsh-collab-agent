@@ -176,6 +176,21 @@ test('the client mounts when the auth Remote is unavailable', async () => {
   assert.equal(result.ok, false)
 })
 
+test('collab detection handles supervisor presets and Windows paths', () => {
+  const { __test } = pluginFor()
+  assert.equal(__test.isCollabSummary({
+    id: 'win',
+    projectionValues: { workingDirectory: 'C:\\workspace\\.dsh-collab\\sessions\\session-win' },
+  }), true)
+  assert.equal(__test.isCollabSummary({
+    id: 'supervisor',
+    projectionValues: { agentPreset: 'supervisor' },
+  }), true)
+  assert.equal(__test.isSupervisorSessionSummary({
+    projectionValues: { agentPreset: 'supervisor' },
+  }), true)
+})
+
 test('the auth-refusal turn projection records a collab_send refusal', () => {
   const harness = fakeClientHarness()
   pluginFor().apply(harness.ctx)

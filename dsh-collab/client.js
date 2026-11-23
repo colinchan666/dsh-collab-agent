@@ -1780,6 +1780,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
+      __test: { isCollabSummary, isSupervisorSessionSummary },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')

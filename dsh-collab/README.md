@@ -155,7 +155,10 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   sanitized manifest with `collab_request_deliver` only after the project is
   closed and every task is done or cancelled. Empty deliveries are refused.
   The notice's `root` is an opaque `.deliveries/<deliveryId>/artifacts` alias,
-  not the project path, so the requester does not receive a project id.
+  not the project path, so the requester does not receive a project id. The
+  auth API client bundle is minified but remains self-contained (`zod` is
+  bundled) for compatibility with module-loader configurations that do not
+  expose `zod` as an external module.
 - **No copy-out**: do not create a copy project or copy artifacts to an
   ad-hoc shared directory. The canonical `deliveryDir` is returned by the task
   assignment; ad-hoc shared writes are denied by the guard.

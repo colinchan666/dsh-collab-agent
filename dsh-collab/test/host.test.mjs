@@ -151,6 +151,8 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
       name: 'write',
       arguments: { path: path.join(root, 'shared', 'project-test', 'artifacts', 'x.txt') },
     }))
+    const admin = harness.ctx.get('collabAdmin')
+    assert.throws(() => admin.authorize('session-unknown', A), /known collaboration sessions/u)
     const registry = JSON.parse(fs.readFileSync(path.join(root, 'registry.json'), 'utf8'))
     assert.deepEqual(Object.keys(registry.sessions).sort(), [A, B])
   } finally {

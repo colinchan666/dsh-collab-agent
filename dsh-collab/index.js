@@ -438,6 +438,9 @@ export function apply(ctx, config = {}) {
       pending: auth.listPending(),
     }),
     authorize: (a, b) => {
+      const known = (id) => collabSessions.has(id)
+        || (registry.get(id)?.preset === 'collab' || registry.get(id)?.preset === 'supervisor')
+      if (!known(a) || !known(b)) throw new Error('authorization requires two known collaboration sessions')
       auth.authorize(a, b, 'ui')
       return collabAdmin.listAuth()
     },
