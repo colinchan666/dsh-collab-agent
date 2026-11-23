@@ -131,6 +131,7 @@ window.__ModuleLoader__.load({
       'board.loading': '加载中…',
       'board.open': '任务',
       'board.openTitle': '打开 supervisor 任务面板',
+      'board.overdue': '已超期',
       'board.error': '操作失败',
       'board.registerHint': '登记会同时完成双向通信授权；Phase 1 只开放被指派（offer）。',
       'board.confirmUnlink': '注销该功能会话并撤销通信授权？',
@@ -229,6 +230,7 @@ window.__ModuleLoader__.load({
       'board.loading': 'Loading…',
       'board.open': 'Tasks',
       'board.openTitle': 'Open the supervisor task panel',
+      'board.overdue': 'overdue',
       'board.error': 'Operation failed',
       'board.registerHint': 'Registration also authorizes the communication pair; Phase 1 exposes offer only.',
       'board.confirmUnlink': 'Unregister this worker and revoke its communication authorization?',
@@ -309,6 +311,8 @@ window.__ModuleLoader__.load({
       const [menuOpen, setMenuOpen] = React.useState(false)
       const [menuPos, setMenuPos] = React.useState(null)
       const buttonRef = React.useRef(null)
+      const menuRef = React.useRef(null)
+      const menuId = React.useId()
       const alertId = React.useId()
       const label = t('entry.label')
       const hint = t('entry.hint')
@@ -316,6 +320,29 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         if (workspaceReady && sessionsReady && workspaceCount > 0) setError(null)
       }, [workspaceReady, sessionsReady, workspaceCount])
+
+      React.useEffect(() => {
+        if (!menuOpen) return undefined
+        const first = menuRef.current?.querySelector('[role="menuitem"]')
+        if (first !== undefined) first.focus()
+        const close = () => { setMenuOpen(false); buttonRef.current?.focus() }
+        window.addEventListener('resize', close)
+        return () => window.removeEventListener('resize', close)
+      }, [menuOpen])
+
+      const moveMenuFocus = (event) => {
+        const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') ?? [])]
+        if (items.length === 0) return
+        const index = items.indexOf(document.activeElement)
+        let next = index
+        if (event.key === 'ArrowDown') next = (index + 1) % items.length
+        else if (event.key === 'ArrowUp') next = index <= 0 ? items.length - 1 : index - 1
+        else if (event.key === 'Home') next = 0
+        else if (event.key === 'End') next = items.length - 1
+        else return
+        event.preventDefault()
+        items[next].focus()
+      }
 
       const openMenu = () => {
         if (!workspaceReady || !sessionsReady) {
@@ -357,6 +384,7 @@ window.__ModuleLoader__.load({
         type: 'button',
         'aria-haspopup': 'menu',
         'aria-expanded': menuOpen ? 'true' : 'false',
+        'aria-controls': menuOpen ? menuId : undefined,
         title: errorText ?? hint,
         'aria-label': label,
         'aria-invalid': error === null ? undefined : 'true',
@@ -366,6 +394,12 @@ window.__ModuleLoader__.load({
         'data-collab-entry': 'true',
         className: 'dsh-collab-new-button',
         onClick: openMenu,
+        onKeyDown: (event) => {
+          if (event.key !== 'ArrowDown') return
+          event.preventDefault()
+          if (menuOpen) menuRef.current?.querySelector('[role="menuitem"]')?.focus()
+          else openMenu()
+        },
       },
       h(CollabIcon, { size: wide ? 16 : 18 }),
       wide ? h('span', { className: 'dsh-collab-new-label' }, t('entry.label')) : null)
@@ -382,19 +416,32 @@ window.__ModuleLoader__.load({
         ? h(React.Fragment, null,
             h('div', { className: 'dsh-collab-new-menu-backdrop', onClick: () => setMenuOpen(false) }),
             h('div', {
+              ref: menuRef,
+              id: menuId,
               className: 'dsh-collab-new-menu',
               role: 'menu',
               style: { left: menuPos.left, top: menuPos.top, width: menuPos.width },
+              onKeyDown: (event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setMenuOpen(false)
+                  buttonRef.current?.focus()
+                  return
+                }
+                moveMenuFocus(event)
+              },
             },
             h('button', {
               type: 'button',
               role: 'menuitem',
+              tabIndex: -1,
               className: 'dsh-collab-new-menu-item',
               onClick: () => launch('collab'),
             }, t('entry.menuCollab')),
             h('button', {
               type: 'button',
               role: 'menuitem',
+              tabIndex: -1,
               className: 'dsh-collab-new-menu-item',
               onClick: () => launch('supervisor'),
             }, t('entry.menuSupervisor'))))
@@ -1044,6 +1091,46 @@ window.__ModuleLoader__.load({
       })
     }
 
+    function useDialogFocus(dialogRef, open, close, blocked) {
+      React.useEffect(() => {
+        if (!open) return undefined
+        const previous = document.activeElement
+        const dialog = dialogRef.current
+        const focusable = () => dialog === null ? []
+          : [...dialog.querySelectorAll('button, textarea, input, select, a[href], [tabindex]:not([tabindex="-1"])')]
+        const first = focusable()[0]
+        if (first !== undefined) first.focus()
+        else dialog?.focus?.()
+        const onKey = (event) => {
+          if (event.key === 'Escape') {
+            if (blocked) return
+            event.preventDefault()
+            close()
+            return
+          }
+          if (event.key !== 'Tab') return
+          const items = focusable()
+          if (items.length === 0) {
+            event.preventDefault()
+            dialog?.focus?.()
+            return
+          }
+          const current = document.activeElement
+          const index = items.indexOf(current)
+          const next = event.shiftKey
+            ? (index <= 0 ? items[items.length - 1] : items[index - 1])
+            : (index < 0 || index === items.length - 1 ? items[0] : items[index + 1])
+          event.preventDefault()
+          next.focus()
+        }
+        document.addEventListener('keydown', onKey)
+        return () => {
+          document.removeEventListener('keydown', onKey)
+          if (previous !== null && typeof previous.focus === 'function') previous.focus()
+        }
+      }, [open, blocked, close])
+    }
+
     function CollabCapabilityDetailOverlay(props) {
       const state = useCapabilityDetailState()
       React.useEffect(() => {
@@ -1116,6 +1203,8 @@ window.__ModuleLoader__.load({
           },
         },
         h('div', {
+          ref: dialogRef,
+          tabIndex: -1,
           className: 'dsh-collab-base-dialog',
           role: 'dialog',
           'aria-modal': 'true',
@@ -1239,32 +1328,31 @@ window.__ModuleLoader__.load({
 
     function CollabBasePromptEditor(props) {
       const state = useBasePromptState()
-      React.useEffect(() => {
-        if (!state.open) return undefined
-        const onKey = (event) => {
-          if (event.key === 'Escape') closeBasePromptEditor()
-        }
-        document.addEventListener('keydown', onKey)
-        return () => { document.removeEventListener('keydown', onKey) }
-      }, [state.open])
+      const dialogRef = React.useRef(null)
+      useDialogFocus(dialogRef, state.open, closeBasePromptEditor, state.saving)
       if (!state.open) return null
       return h(React.Fragment, null,
         h('style', null, BASE_CSS),
         h('div', {
           className: 'dsh-collab-base-overlay',
-          onMouseDown: (event) => { if (event.target === event.currentTarget) closeBasePromptEditor() },
+          onMouseDown: (event) => {
+            if (event.target === event.currentTarget && !state.saving) closeBasePromptEditor()
+          },
         },
         h('div', {
+          ref: dialogRef,
+          tabIndex: -1,
           className: 'dsh-collab-base-dialog',
           role: 'dialog',
           'aria-modal': 'true',
           'aria-labelledby': 'dsh-collab-base-title',
+          'aria-describedby': 'dsh-collab-base-desc',
         },
         h('h2', { id: 'dsh-collab-base-title', className: 'dsh-collab-base-title' }, props.t('base.title')),
         state.sessionTitle.length === 0
           ? null
           : h('p', { className: 'dsh-collab-base-session' }, `${props.t('base.session')}: ${state.sessionTitle}`),
-        h('p', { className: 'dsh-collab-base-desc' }, props.t('base.description')),
+        h('p', { id: 'dsh-collab-base-desc', className: 'dsh-collab-base-desc' }, props.t('base.description')),
         state.loading
           ? h('p', { className: 'dsh-collab-base-loading' }, props.t('base.loading'))
           : h('textarea', {
@@ -1638,7 +1726,7 @@ window.__ModuleLoader__.load({
                     request.title,
                     request.reason === undefined ? null : h('span', { className: 'dsh-collab-board-muted' }, ` · ${request.reason}`)),
                   h('code', { className: 'dsh-collab-board-id' }, shortId(request.requester)),
-                  h('span', { className: 'dsh-collab-board-status' }, request.status)))),
+                  h('span', { className: 'dsh-collab-board-status' }, `${request.status}${request.overdue === true ? ` · ${t('board.overdue')}` : ''}`)))),
               visibleSections.length === 0
                 ? h('section', { className: 'dsh-collab-board-section' },
                     h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyTasks')))

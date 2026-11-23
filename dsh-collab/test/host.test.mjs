@@ -137,7 +137,7 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     assert.equal(b.session.currentCwd, workdirB)
     assert.equal(plain.session.currentCwd, workspace)
 
-    assert.equal(harness.tools.length, 25)
+    assert.equal(harness.tools.length, 26)
     for (const name of ['collab_info', 'collab_peers', 'collab_send', 'collab_inbox']) {
       const entry = harness.tools.find(tool => tool.definition.name === name)
       assert.equal(entry.options.when({ agent: a }), true, name)
@@ -146,6 +146,11 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     const prompt = harness.prompts.get(A)[0]
     assert.ok(prompt.text().includes(workdirA))
     assert.ok(prompt.text().includes('collab_send'))
+    assert.ok(harness.guards[0]({
+      agent: plain,
+      name: 'write',
+      arguments: { path: path.join(root, 'shared', 'project-test', 'artifacts', 'x.txt') },
+    }))
     const registry = JSON.parse(fs.readFileSync(path.join(root, 'registry.json'), 'utf8'))
     assert.deepEqual(Object.keys(registry.sessions).sort(), [A, B])
   } finally {
@@ -424,6 +429,16 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     const overdueInbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox')
       .definition.execute({}, { agent: requester })
     assert.match(overdueInbox, /request-overdue/u)
+    const heartbeat = harness.tools.find(entry => entry.definition.name === 'collab_request_heartbeat')
+    const progressed = JSON.parse(await heartbeat.definition.execute(
+      { requestId: submitted.request.id, note: 'still working', extendByMs: 5000 },
+      { agent: supervisor },
+    ))
+    assert.notEqual(progressed.request.overdue, true)
+    assert.ok(progressed.request.executionDeadlineAt > Date.now())
+    const progressInbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox')
+      .definition.execute({}, { agent: requester })
+    assert.match(progressInbox, /request-progress/u)
     const completeTask = harness.tools.find(entry => entry.definition.name === 'collab_task_complete')
     await completeTask.definition.execute({ taskId: created.task.id, summary: 'done' }, { agent: worker })
     const closeProject = harness.tools.find(entry => entry.definition.name === 'collab_project_close')
@@ -442,6 +457,12 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     const firstDelivery = JSON.parse(await deliver.definition.execute({ requestId: submitted.request.id }, { agent: supervisor }))
     assert.equal(firstDelivery.alreadyDelivered, undefined)
     assert.equal(guard({ agent: requester, name: 'read', arguments: { path: path.join(deliveryDir, 'artifact.md') } }), undefined)
+    const aliasArtifact = path.join(root, 'shared', '.deliveries', firstDelivery.deliveryId, 'artifacts', 'artifact.md')
+    assert.equal(guard({ agent: requester, name: 'read', arguments: { path: aliasArtifact } }), undefined)
+    const deliveredInbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox')
+      .definition.execute({}, { agent: requester })
+    assert.match(deliveredInbox, /request-delivered/u)
+    assert.doesNotMatch(deliveredInbox, /project-[0-9a-f]/u)
     const afterDelivery = JSON.parse(requests.definition.execute({}, { agent: requester }))
     assert.equal(afterDelivery[0].status, 'delivered')
     assert.ok(afterDelivery[0].delivery?.deliveryId)

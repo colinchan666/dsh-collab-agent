@@ -241,6 +241,17 @@ const REQUEST_CANCEL_PARAMETERS = {
   additionalProperties: false,
 }
 
+const REQUEST_HEARTBEAT_PARAMETERS = {
+  type: 'object',
+  properties: {
+    requestId: { type: 'string' },
+    note: { type: 'string', description: 'Optional progress note for the requester.' },
+    extendByMs: { type: 'number', description: 'Optional execution deadline extension in milliseconds, capped at seven days.' },
+  },
+  required: ['requestId'],
+  additionalProperties: false,
+}
+
 function describeError(error) {
   return error instanceof Error ? error.message : String(error)
 }
@@ -299,7 +310,8 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
       '3. End your turn after dispatching. Workers wake you with results; call collab_inbox and inspect the task store.',
-      '4. Verify against the acceptance criteria. Reject/retry when needed. Close the project only after every task is done or cancelled, then deliver the bound request with collab_request_deliver.',
+      '4. Verify against the acceptance criteria. Reject/retry when needed. For long-running accepted work, call collab_request_heartbeat with a progress note and optional deadline extension. Close the project only after every task is done or cancelled, then deliver the bound request with collab_request_deliver.',
+      'If the requester cancels an accepted request, cancel its tasks and close the project; do not deliver it.',
       '5. Keep task instructions precise and self-contained; workers cannot see your private context.',
       'Workers write final artifacts directly to their assigned deliveryDir under shared/<projectId>/artifacts. Never create a copy project or copy task to a shared directory; publish the manifest with collab_delivery_manifest and send it with collab_request_deliver. A project is bound to exactly one accepted request.',
       'If no worker has the needed capability, tell the user what capability must be registered; do not do the work yourself.',
@@ -338,6 +350,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
     '- collab_send sends an authenticated chat message to one authorized peer session id, including a supervisor or worker.',
     '- collab_inbox reads and acknowledges messages queued for this session. Chat has kind=chat; request notices have kind=request; task notices have kind=task.',
     '- To request work, use collab_request_submit with a supervisor id; no offer relationship is required, only bilateral authorization.',
+    '- collab_request_cancel cancels your own pending or accepted request; accepted cancellation notifies the supervisor and ends delivery eligibility.',
     '- Chat never creates, accepts, or completes a task. Task state belongs to the task store and task tools.',
     'A live peer receives a notification in its next step; a cold peer is resumed first. The body is read with collab_inbox.',
     'When waiting for a peer reply, end your turn or use wait_agent; a running Agent is steered into its next step, so the wait returns promptly.',
@@ -1070,6 +1083,26 @@ export function apply(ctx, config = {}) {
 
 
   const MAX_DELIVERY_LIST_FILES = 2000
+  /** Publish an opaque delivery alias so the requester never receives projectId. */
+  const publishDeliveryAlias = (projectId, deliveryId) => {
+    const target = path.join(sharedRoot, projectId, 'artifacts')
+    const aliasRoot = path.join(sharedRoot, '.deliveries', deliveryId)
+    const alias = path.join(aliasRoot, 'artifacts')
+    mkdirp(aliasRoot, 0o755)
+    try {
+      const existing = fs.lstatSync(alias)
+      if (existing.isSymbolicLink() && fs.realpathSync(alias) === fs.realpathSync(target)) return alias
+      fs.rmSync(alias, { recursive: true, force: true })
+    } catch { /* alias does not exist yet */ }
+    try {
+      fs.symlinkSync(target, alias, 'dir')
+      return alias
+    } catch (error) {
+      warn(`delivery alias could not be published: ${describeError(error)}`)
+      return target
+    }
+  }
+
   const listDeliveryFiles = (root, base = root, out = []) => {
     if (out.length >= MAX_DELIVERY_LIST_FILES) { out.truncated = true; return out }
     let entries
@@ -1335,6 +1368,35 @@ export function apply(ctx, config = {}) {
       },
     },
     {
+      name: 'collab_request_heartbeat',
+      description: 'Report progress on an accepted request and optionally extend its execution deadline.',
+      parameters: REQUEST_HEARTBEAT_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: async (args, exec) => {
+        const self = requireSupervisor(exec)
+        const request = requests.get(String(args?.requestId ?? ''))
+        if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
+        if (request.status !== 'accepted') throw new Error(`request is ${request.status}, not accepted`)
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        const updated = requests.heartbeat(request.id, {
+          note: typeof args?.note === 'string' ? args.note : null,
+          extendByMs: Number.isFinite(Number(args?.extendByMs)) ? Number(args.extendByMs) : 0,
+        })
+        scheduleExecutionDeadline(updated)
+        const payload = {
+          type: 'collab-task/request-progress',
+          version: 1,
+          requestId: updated.id,
+          title: updated.title,
+          deadline: updated.executionDeadlineAt,
+          ...(typeof args?.note === 'string' && args.note.length > 0 ? { note: args.note } : {}),
+        }
+        const delivery = await sendTaskNotice(self, updated.requester, payload)
+        return JSON.stringify({ request: RequestStore.summary(updated), delivery })
+      },
+    },
+    {
       name: 'collab_tasks',
       description: 'List tasks for this supervisor or, for a worker, the tasks assigned to it.',
       parameters: TASK_LIST_PARAMETERS,
@@ -1522,6 +1584,7 @@ export function apply(ctx, config = {}) {
           })
         }
         const supersedes = request.delivery === null ? null : request.delivery.deliveryId
+        const publicRoot = publishDeliveryAlias(request.projectId, deliveryId)
         const payload = {
           type: 'collab-task/request-delivered',
           version: 1,
@@ -1530,7 +1593,7 @@ export function apply(ctx, config = {}) {
           deliveryId,
           manifestSha256,
           ...(supersedes === null ? {} : { supersedes }),
-          root: manifest.root,
+          root: publicRoot,
           files: manifest.files,
         }
           const delivery = await sendTaskNotice(self, request.requester, payload)
@@ -1690,6 +1753,7 @@ export function apply(ctx, config = {}) {
         if (request === undefined || request.requester !== self.sessionId) throw new Error('unknown request')
         const cancelled = requests.cancel(request.id, self.sessionId)
         clearRequestTimer(request.id)
+        clearExecutionTimer(request.id)
         try {
           await sendTaskNotice(self, request.supervisor, {
             type: 'collab-task/request-cancelled',
@@ -2285,7 +2349,7 @@ export function apply(ctx, config = {}) {
       default:
         return undefined
     }
-    if (hit === undefined && isCollabCaller) {
+    if (hit === undefined) {
       const write = ['write', 'edit', 'apply_patch', 'working_directory', 'office_render', 'office_convert', 'office_recalculate'].includes(exec.name)
       const candidates = []
       if (typeof args?.path === 'string') candidates.push(args.path)

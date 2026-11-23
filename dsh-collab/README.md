@@ -154,9 +154,14 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   `collab_delivery_manifest` (path, bytes, sha256, mode), and sends the
   sanitized manifest with `collab_request_deliver` only after the project is
   closed and every task is done or cancelled. Empty deliveries are refused.
+  The notice's `root` is an opaque `.deliveries/<deliveryId>/artifacts` alias,
+  not the project path, so the requester does not receive a project id.
 - **No copy-out**: do not create a copy project or copy artifacts to an
   ad-hoc shared directory. The canonical `deliveryDir` is returned by the task
   assignment; ad-hoc shared writes are denied by the guard.
+- **Message hygiene**: opened inbox messages are recorded in a per-session
+  replay ledger; a duplicate MAC-valid message id is quarantined. First-contact
+  credential creation is serialized by a pair lock.
 - **Notice outbox**: protocol notices are persisted in `notices.json` before
   delivery and retried by the Host, so a temporary offline peer or revoked
   authorization does not lose a committed acceptance, assignment, or result
@@ -188,8 +193,10 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **Execution deadline**: an accepted request gets a soft
   `executionTimeoutMs` deadline (default 24 hours). When it passes, the request
   becomes `overdue` and the requester receives a `request-overdue` notice; work
-  is not automatically killed. Successful delivery clears the deadline and
-  moves the request to the terminal `delivered` state.
+  is not automatically killed. The supervisor can call
+  `collab_request_heartbeat` with progress and an optional deadline extension;
+  the requester can cancel a pending or accepted request. Successful delivery
+  clears the deadline and moves the request to the terminal `delivered` state.
 - **Request tools**: `collab_request_submit`, `collab_request_cancel`,
   `collab_requests`, `collab_request_accept`, `collab_request_reject`.
   Requests are stored in `requests.json` next to the other collaboration state.

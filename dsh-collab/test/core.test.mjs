@@ -103,7 +103,11 @@ test('send writes an outbox copy and an authenticated inbox copy', () => {
     assert.equal(inboxCount(peer.workdir, SELF), 0)
     assert.equal(fs.readdirSync(path.join(peer.workdir, 'comm', SELF, 'archive', 'inbox')).length, 1)
     assert.equal(fs.existsSync(path.join(peer.workdir, 'comm', SELF, 'read')), false)
-    assert.equal(listInbox({ selfId: PEER, selfWorkdir: peer.workdir }).messages.length, 0)
+    const replay = path.join(peer.workdir, 'comm', SELF, 'inbox', path.basename(archived))
+    fs.copyFileSync(archived, replay)
+    const afterReplay = listInbox({ selfId: PEER, selfWorkdir: peer.workdir })
+    assert.equal(afterReplay.messages.length, 0)
+    assert.equal(afterReplay.rejected, 1)
   } finally {
     cleanup(root)
   }
@@ -360,6 +364,20 @@ test('a cached store observes an external state write', () => {
     const writer = new TaskStore(file)
     writer.createProject({ supervisor: SELF, title: 'external' })
     assert.equal(reader.listProjects(SELF).length, 1)
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('an accepted request can be cancelled and loses its execution deadline', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-cancel-'))
+  try {
+    const store = new RequestStore(path.join(root, 'requests.json'))
+    const request = store.create({ requester: SELF, supervisor: PEER, title: 'cancel', requirement: 'cancel me' })
+    store.accept(request.id, { projectId: 'project-1', executionDeadlineAt: Date.now() + 10000 })
+    const cancelled = store.cancel(request.id, SELF)
+    assert.equal(cancelled.status, 'cancelled')
+    assert.equal(cancelled.executionDeadlineAt, null)
   } finally {
     cleanup(root)
   }

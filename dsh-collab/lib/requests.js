@@ -30,6 +30,8 @@ function requestSummary(request) {
     updatedAt: request.updatedAt,
     ...(request.expiresAt === null ? {} : { expiresAt: request.expiresAt }),
     ...(request.executionDeadlineAt === null ? {} : { executionDeadlineAt: request.executionDeadlineAt }),
+    ...(request.lastHeartbeatAt === null ? {} : { lastHeartbeatAt: request.lastHeartbeatAt }),
+    ...(request.heartbeatNote === null ? {} : { heartbeatNote: request.heartbeatNote }),
     ...(request.overdue === true ? { overdue: true, overdueAt: request.overdueAt } : {}),
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
     ...(request.delivery === null ? {} : { delivery: request.delivery }),
@@ -50,6 +52,8 @@ function requesterSummary(request) {
     updatedAt: request.updatedAt,
     ...(request.expiresAt === null ? {} : { expiresAt: request.expiresAt }),
     ...(request.executionDeadlineAt === null ? {} : { executionDeadlineAt: request.executionDeadlineAt }),
+    ...(request.lastHeartbeatAt === null ? {} : { lastHeartbeatAt: request.lastHeartbeatAt }),
+    ...(request.heartbeatNote === null ? {} : { heartbeatNote: request.heartbeatNote }),
     ...(request.overdue === true ? { overdue: true, overdueAt: request.overdueAt } : {}),
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
     ...(request.delivery === null ? {} : { delivery: request.delivery }),
@@ -78,6 +82,8 @@ export class RequestStore {
       if (normalized.delivery === undefined) normalized.delivery = null
       if (normalized.expiresAt === undefined) normalized.expiresAt = null
       if (normalized.executionDeadlineAt === undefined) normalized.executionDeadlineAt = null
+      if (normalized.lastHeartbeatAt === undefined) normalized.lastHeartbeatAt = null
+      if (normalized.heartbeatNote === undefined) normalized.heartbeatNote = null
       if (normalized.overdue === undefined) normalized.overdue = false
       if (normalized.overdueAt === undefined) normalized.overdueAt = null
       if (!Array.isArray(normalized.taskIds)) normalized.taskIds = []
@@ -144,6 +150,8 @@ export class RequestStore {
       delivery: null,
       expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
       executionDeadlineAt: null,
+      lastHeartbeatAt: null,
+      heartbeatNote: null,
       overdue: false,
       overdueAt: null,
     }
@@ -182,6 +190,8 @@ export class RequestStore {
       request.reason = null
       request.resolvedAt = now
       request.executionDeadlineAt = Number.isFinite(executionDeadlineAt) ? executionDeadlineAt : null
+      request.lastHeartbeatAt = null
+      request.heartbeatNote = null
       request.overdue = false
       request.overdueAt = null
     }, now)
@@ -199,6 +209,8 @@ export class RequestStore {
       request.resolvedAt = null
       request.delivery = null
       request.executionDeadlineAt = null
+      request.lastHeartbeatAt = null
+      request.heartbeatNote = null
       request.overdue = false
       request.overdueAt = null
     }, now)
@@ -237,6 +249,23 @@ export class RequestStore {
     }, now)
   }
 
+  heartbeat(id, { note = null, extendByMs = 0 }, now = Date.now()) {
+    return this.update(id, (request) => {
+      if (request.status !== 'accepted') throw new Error(`request is ${request.status}, not active`)
+      const extension = Number.isFinite(extendByMs) ? Math.max(0, Math.min(extendByMs, 7 * 24 * 60 * 60 * 1000)) : 0
+      if (extension > 0) {
+        const base = Number.isFinite(request.executionDeadlineAt)
+          ? Math.max(request.executionDeadlineAt, now)
+          : now
+        request.executionDeadlineAt = base + extension
+        request.overdue = false
+        request.overdueAt = null
+      }
+      request.lastHeartbeatAt = now
+      request.heartbeatNote = note === null ? null : String(note)
+    }, now)
+  }
+
   markOverdue(id, now = Date.now()) {
     return this.update(id, (request) => {
       if (request.status !== 'accepted' || request.overdue === true) return
@@ -248,8 +277,13 @@ export class RequestStore {
   cancel(id, requester, now = Date.now()) {
     return this.update(id, (request) => {
       if (request.requester !== requester) throw new Error('request belongs to another session')
-      if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
+      if (request.status !== 'pending' && request.status !== 'accepted') {
+        throw new Error(`request is already ${request.status}`)
+      }
       request.status = 'cancelled'
+      request.executionDeadlineAt = null
+      request.overdue = false
+      request.overdueAt = null
       request.resolvedAt = now
     }, now)
   }

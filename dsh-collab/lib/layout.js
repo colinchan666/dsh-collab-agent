@@ -34,6 +34,9 @@ const MAX_STORED_MESSAGE_BYTES = 256 * 1024
 /** Maximum number of inbox files considered per pair in one read. */
 const MAX_INBOX_FILES = 200
 
+/** Maximum message ids retained by the per-session replay ledger. */
+const MAX_SEEN_IDS = 5000
+
 /** Session ids become directory names, so accept only one safe path segment. */
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
@@ -294,12 +297,14 @@ export class SessionRegistry {
       const sessionsDir = path.join(workspacePath, SUBDIR, 'sessions')
       let entries
       try { entries = fs.readdirSync(sessionsDir, { withFileTypes: true }) } catch { continue }
+      const discoveredIds = new Set()
       for (const entry of entries) {
         if (!entry.isDirectory() || !isSessionId(entry.name)) continue
         const workdir = path.join(sessionsDir, entry.name)
         const meta = readJson(path.join(workdir, 'session.json'))
         if (meta === undefined || meta.sessionId !== entry.name) continue
         if (meta.preset !== 'collab' && meta.preset !== 'supervisor') continue
+        discoveredIds.add(entry.name)
         const existing = state.sessions[entry.name]
         if (existing === undefined) {
           state.sessions[entry.name] = { ...meta, workdir }
@@ -321,6 +326,13 @@ export class SessionRegistry {
           changed = true
         }
       }
+      for (const [id, entry] of Object.entries(state.sessions)) {
+        if (typeof entry?.workdir !== 'string') continue
+        if (path.dirname(entry.workdir) !== sessionsDir) continue
+        if (discoveredIds.has(id)) continue
+        delete state.sessions[id]
+        changed = true
+      }
     }
     if (changed) this.write(state)
     return discovered
@@ -338,7 +350,7 @@ export function credentialPath(workdir, peerSessionId) {
  * Ensure both sides of a pair hold the same shared secret.
  * The first caller generates it; later callers adopt the existing value.
  */
-export function ensureCredential({ selfId, selfWorkdir, peerId, peerWorkdir, now = Date.now() }) {
+function ensureCredentialUnlocked({ selfId, selfWorkdir, peerId, peerWorkdir, now = Date.now() }) {
   if (!isSessionId(selfId) || !isSessionId(peerId)) throw new Error('invalid collaboration session id')
   if (selfId === peerId) throw new Error('a session cannot talk to itself')
   if (selfWorkdir === peerWorkdir) throw new Error('peer work directories must differ')
@@ -396,6 +408,19 @@ export function ensureCredential({ selfId, selfWorkdir, peerId, peerWorkdir, now
     }
   }
   return token
+}
+
+/**
+ * Serialize the first-contact credential write for both directions of a pair.
+ * Both sides acquire the same pair of lock files in lexicographic order.
+ */
+export function ensureCredential(args) {
+  const { selfId, selfWorkdir, peerId, peerWorkdir } = args
+  const locks = [
+    credentialPath(selfWorkdir, peerId),
+    credentialPath(peerWorkdir, selfId),
+  ].sort()
+  return withFileLock(locks[0], () => withFileLock(locks[1], () => ensureCredentialUnlocked(args)))
 }
 
 const MESSAGE_KINDS = new Set(['chat', 'request', 'task'])
@@ -518,6 +543,8 @@ export function listInbox({ selfId, selfWorkdir }) {
   const messages = []
   let rejected = 0
   let truncated = 0
+  const seenRaw = readJson(path.join(commDir, '.seen.json'))
+  const seen = new Set(Array.isArray(seenRaw?.ids) ? seenRaw.ids.filter(id => typeof id === 'string') : [])
   for (const pair of pairs) {
     if (!pair.isDirectory() || !isSessionId(pair.name) || pair.name === selfId) continue
     const peerId = pair.name
@@ -540,6 +567,11 @@ export function listInbox({ selfId, selfWorkdir }) {
       }
       const message = readJson(file)
       if (!verifyMessage(credential?.token, message, peerId, selfId)) {
+        quarantine(file, selfWorkdir, peerId)
+        rejected += 1
+        continue
+      }
+      if (seen.has(message.id)) {
         quarantine(file, selfWorkdir, peerId)
         rejected += 1
         continue
@@ -567,11 +599,23 @@ export function migrateSessionArchive(workdir) {
 export function markRead(file, workdir) {
   const pairDir = path.dirname(path.dirname(file))
   migratePairLayout(pairDir)
+  const message = readJson(file)
   const archiveDir = path.join(pairDir, 'archive', 'inbox')
   mkdirp(archiveDir, 0o700)
   let target = path.join(archiveDir, path.basename(file))
   if (fs.existsSync(target)) target = `${target}.${crypto.randomBytes(3).toString('hex')}`
   fs.renameSync(file, target)
+  if (typeof message?.id === 'string' && message.id.length > 0) {
+    const seenFile = path.join(path.dirname(pairDir), '.seen.json')
+    try {
+      withFileLock(seenFile, () => {
+        const raw = readJson(seenFile)
+        const seen = new Set(Array.isArray(raw?.ids) ? raw.ids.filter(id => typeof id === 'string') : [])
+        seen.add(message.id)
+        writeJson(seenFile, { version: 1, ids: [...seen].slice(-MAX_SEEN_IDS) }, 0o600)
+      })
+    } catch { /* a ledger failure must not prevent acknowledging the message */ }
+  }
   return target
 }
 
