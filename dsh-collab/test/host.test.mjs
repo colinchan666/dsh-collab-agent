@@ -417,15 +417,24 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     const requesterInbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox').definition.execute({}, { agent: requester })
     assert.match(requesterInbox, /kind: request/u)
     assert.doesNotMatch(requesterInbox, /projectId|taskId/u)
+    const completeTask = harness.tools.find(entry => entry.definition.name === 'collab_task_complete')
+    await completeTask.definition.execute({ taskId: created.task.id, summary: 'done' }, { agent: worker })
+    const closeProject = harness.tools.find(entry => entry.definition.name === 'collab_project_close')
+    closeProject.definition.execute({ projectId: created.projectId }, { agent: supervisor })
+    const deliver = harness.tools.find(entry => entry.definition.name === 'collab_request_deliver')
+    await assert.rejects(
+      deliver.definition.execute({ requestId: submitted.request.id }, { agent: supervisor }),
+      /no artifacts/u,
+    )
     const deliveryDir = path.join(root, 'shared', created.projectId, 'artifacts')
     fs.mkdirSync(deliveryDir, { recursive: true })
     fs.writeFileSync(path.join(deliveryDir, 'artifact.md'), 'artifact')
     const guard = harness.guards[0]
-    assert.equal(guard({ agent: requester, name: 'read', arguments: { path: path.join(deliveryDir, 'artifact.md') } }), undefined)
+    assert.ok(guard({ agent: requester, name: 'read', arguments: { path: path.join(deliveryDir, 'artifact.md') } }))
     assert.ok(guard({ agent: requester, name: 'write', arguments: { path: path.join(deliveryDir, 'x.md') } }))
-    const deliver = harness.tools.find(entry => entry.definition.name === 'collab_request_deliver')
     const firstDelivery = JSON.parse(await deliver.definition.execute({ requestId: submitted.request.id }, { agent: supervisor }))
     assert.equal(firstDelivery.alreadyDelivered, undefined)
+    assert.equal(guard({ agent: requester, name: 'read', arguments: { path: path.join(deliveryDir, 'artifact.md') } }), undefined)
     const secondDelivery = JSON.parse(await deliver.definition.execute({ requestId: submitted.request.id }, { agent: supervisor }))
     assert.equal(secondDelivery.alreadyDelivered, true)
   } finally {

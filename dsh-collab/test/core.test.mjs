@@ -12,6 +12,7 @@ import {
   listInbox, markRead, readJson, sendMessage, sessionWorkdir, writeJson,
 } from '../lib/layout.js'
 import { NoticeStore } from '../lib/notices.js'
+import { TaskStore } from '../lib/tasks.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SELF = 'session-11111111-1111-4111-8111-111111111111'
@@ -283,6 +284,21 @@ test('cd into the sessions parent cannot escape through relative paths', () => {
     const sessions = path.join(workspace, '.dsh-collab', 'sessions')
     const command = `cd ${sessions} && cat ${PEER}/private/secret.txt`
     assert.equal(findForeignSessionAccessInCommand(command, { ...options, checkAncestors: true })?.sessionId, PEER)
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('a project can be bound to only one request', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-binding-'))
+  try {
+    const store = new TaskStore(path.join(root, 'tasks.json'))
+    const project = store.createProject({ supervisor: SELF, title: 'bound' })
+    assert.equal(project.requestId, null)
+    store.bindProject(project.id, 'request-one')
+    assert.equal(store.project(project.id).requestId, 'request-one')
+    assert.throws(() => store.bindProject(project.id, 'request-two'), /another request/u)
+    assert.equal(store.project(project.id).requestId, 'request-one')
   } finally {
     cleanup(root)
   }

@@ -44,6 +44,9 @@ export class TaskStore {
     if (this.state !== undefined) return this.state
     const raw = readJson(this.file)
     const projects = raw?.projects !== null && typeof raw?.projects === 'object' ? raw.projects : {}
+    for (const project of Object.values(projects)) {
+      if (project !== null && typeof project === 'object' && project.requestId === undefined) project.requestId = null
+    }
     const tasks = raw?.tasks !== null && typeof raw?.tasks === 'object' ? raw.tasks : {}
     this.state = { version: 1, projects, tasks }
     return this.state
@@ -96,6 +99,7 @@ export class TaskStore {
       supervisor,
       title: String(title ?? 'Supervisor project'),
       status: 'open',
+      requestId: null,
       createdAt: now,
       closedAt: null,
     }
@@ -236,6 +240,21 @@ export class TaskStore {
       task.status = 'cancelled'
       task.history.push({ at: nowIso(now), status: 'cancelled', note: 'cancelled by supervisor' })
     }, now)
+  }
+
+  bindProject(projectId, requestId, now = Date.now()) {
+    if (!isSessionId(requestId)) throw new Error('project binding requires a request id')
+    const state = this.read()
+    const project = state.projects[projectId]
+    if (project === undefined) throw new Error(`unknown project: ${String(projectId)}`)
+    if (project.requestId !== null && project.requestId !== requestId) {
+      throw new Error('project is already bound to another request')
+    }
+    if (project.requestId === requestId) return project
+    project.requestId = requestId
+    project.updatedAt = now
+    this.write(state)
+    return project
   }
 
   closeProject(projectId, now = Date.now()) {

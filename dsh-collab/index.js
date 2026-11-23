@@ -168,8 +168,7 @@ const PROJECT_CLOSE_PARAMETERS = {
 const DELIVERY_LIST_PARAMETERS = {
   type: 'object',
   properties: {
-    projectId: { type: 'string', description: 'Optional project id.' },
-    workerId: { type: 'string', description: 'Optional worker subdirectory.' },
+    projectId: { type: 'string', description: 'Optional project id; omitted lists only this supervisor\'s projects.' },
   },
   additionalProperties: false,
 }
@@ -300,9 +299,9 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
       '3. End your turn after dispatching. Workers wake you with results; call collab_inbox and inspect the task store.',
-      '4. Verify against the acceptance criteria. Reject/retry when needed. Only deliver when every task is done or cancelled.',
+      '4. Verify against the acceptance criteria. Reject/retry when needed. Close the project only after every task is done or cancelled, then deliver the bound request with collab_request_deliver.',
       '5. Keep task instructions precise and self-contained; workers cannot see your private context.',
-      'Workers write final artifacts directly to their assigned deliveryDir under shared/<projectId>/artifacts. Never create a copy project or copy task to a shared directory; publish the manifest with collab_delivery_manifest and send it with collab_request_deliver.',
+      'Workers write final artifacts directly to their assigned deliveryDir under shared/<projectId>/artifacts. Never create a copy project or copy task to a shared directory; publish the manifest with collab_delivery_manifest and send it with collab_request_deliver. A project is bound to exactly one accepted request.',
       'If no worker has the needed capability, tell the user what capability must be registered; do not do the work yourself.',
     ].join('\n')
   }
@@ -954,7 +953,9 @@ export function apply(ctx, config = {}) {
     const project = tasks.project(projectId)
     if (project === undefined) throw new Error('unknown project')
     const root = deliveryRoot(projectId)
-    const files = listDeliveryFiles(root).map(file => {
+    const listed = listDeliveryFiles(root)
+    if (listed.truncated === true) throw new Error(`delivery has more than ${MAX_DELIVERY_LIST_FILES} files; split the project`)
+    const files = listed.sort((left, right) => left.path.localeCompare(right.path)).map(file => {
       const full = path.join(root, file.path)
       const stat = fs.statSync(full)
       const hash = crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex')
@@ -980,12 +981,13 @@ export function apply(ctx, config = {}) {
   }
 
 
+  const MAX_DELIVERY_LIST_FILES = 2000
   const listDeliveryFiles = (root, base = root, out = []) => {
-    if (out.length >= 200) return out
+    if (out.length >= MAX_DELIVERY_LIST_FILES) { out.truncated = true; return out }
     let entries
     try { entries = fs.readdirSync(root, { withFileTypes: true }) } catch { return out }
     for (const entry of entries) {
-      if (out.length >= 200) break
+      if (out.length >= MAX_DELIVERY_LIST_FILES) { out.truncated = true; break }
       const full = path.join(root, entry.name)
       if (entry.isDirectory()) {
         listDeliveryFiles(full, base, out)
@@ -1001,6 +1003,20 @@ export function apply(ctx, config = {}) {
       })
     }
     return out
+  }
+
+  const reconcileRequestProjectBindings = () => {
+    for (const request of requests.list().sort((left, right) => left.createdAt - right.createdAt)) {
+      if (request.status !== 'accepted' || typeof request.projectId !== 'string') continue
+      const project = tasks.project(request.projectId)
+      if (project === undefined) continue
+      if ((project.requestId ?? null) !== null) continue
+      try {
+        tasks.bindProject(project.id, request.id)
+      } catch (error) {
+        warn(`could not bind legacy request ${request.id} to project ${project.id}: ${describeError(error)}`)
+      }
+    }
   }
 
   const taskTools = [
@@ -1165,11 +1181,21 @@ export function apply(ctx, config = {}) {
         ))
         if (assigned.length === 0) throw new Error('assign at least one task to an offered worker before accepting')
         if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        const existingBinding = project.requestId ?? null
+        if (existingBinding !== null && existingBinding !== request.id) {
+          throw new Error('project is already bound to another request')
+        }
         const accepted = requests.accept(request.id, {
           projectId,
           taskIds: assigned.map(task => task.id),
           response: typeof args?.response === 'string' ? args.response : null,
         })
+        try {
+          tasks.bindProject(projectId, request.id)
+        } catch (error) {
+          try { requests.reopen(request.id) } catch { /* preserve the binding failure */ }
+          throw error
+        }
         clearRequestTimer(request.id)
         const payload = {
           type: 'collab-task/request-accepted',
@@ -1319,7 +1345,7 @@ export function apply(ctx, config = {}) {
     },
     {
       name: 'collab_delivery_list',
-      description: 'List delivery files under this supervisor project/worker subdirectories. Names, sizes, and times only; content is not read.',
+      description: 'List canonical delivery files for this supervisor\'s projects. Names, sizes, and times only; content is not read.',
       parameters: DELIVERY_LIST_PARAMETERS,
       output: TEXT_OUTPUT,
       when: ({ agent }) => isSupervisorSession(agent.id),
@@ -1330,11 +1356,21 @@ export function apply(ctx, config = {}) {
         if (projectId !== undefined) {
           const project = tasks.project(projectId)
           if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
+          const files = listDeliveryFiles(path.join(sharedRoot, projectId, 'artifacts'))
+          if (files.length === 0) return 'No delivery files.'
+          const lines = files.map(file => `${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`)
+          if (files.truncated === true) lines.push(`(truncated at ${MAX_DELIVERY_LIST_FILES} files)`)
+          return lines.join('\n')
         }
-        const root = projectId === undefined ? sharedRoot : path.join(sharedRoot, projectId, 'artifacts')
-        const files = listDeliveryFiles(root)
-        if (files.length === 0) return 'No delivery files.'
-        return files.map(file => `${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`).join('\n')
+        const lines = []
+        for (const project of tasks.listProjects(self.sessionId)) {
+          const files = listDeliveryFiles(path.join(sharedRoot, project.id, 'artifacts'))
+          for (const file of files) {
+            lines.push(`${project.id}/${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`)
+          }
+          if (files.truncated === true) lines.push(`${project.id}/(truncated at ${MAX_DELIVERY_LIST_FILES} files)`)
+        }
+        return lines.length === 0 ? 'No delivery files.' : lines.join('\n')
       },
     },
     {
@@ -1363,11 +1399,19 @@ export function apply(ctx, config = {}) {
         if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
         if (request.status !== 'accepted') throw new Error(`request is ${request.status}, not accepted`)
         if (request.projectId === null) throw new Error('accepted request has no project')
+        const project = tasks.project(request.projectId)
+        if (project === undefined) throw new Error('request project no longer exists')
+        if (project.requestId !== request.id) throw new Error('project is not bound to this request')
+        if (project.status !== 'closed') throw new Error('close the project before delivery')
+        const activeTasks = tasks.listForSupervisor(self.sessionId)
+          .filter(task => task.projectId === project.id && !['done', 'cancelled'].includes(task.status))
+        if (activeTasks.length > 0) throw new Error('all project tasks must be done or cancelled before delivery')
         if (deliveryInFlight.has(request.id)) throw new Error('delivery is already in progress')
         if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
         deliveryInFlight.add(request.id)
         try {
           const manifest = buildDeliveryManifest(request.projectId)
+          if (manifest.files.length === 0) throw new Error('delivery has no artifacts')
         const manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex')
         const deliveryId = `delivery-${manifestSha256.slice(0, 16)}`
         if (request.delivery !== null && request.delivery.manifestSha256 === manifestSha256) {
@@ -1859,7 +1903,10 @@ export function apply(ctx, config = {}) {
       }
       if (write) return false
       return requests.listForRequester(sessionId).some(request => (
-        request.projectId === projectId && request.status === 'accepted'
+        request.projectId === projectId
+        && request.status === 'accepted'
+        && project.requestId === request.id
+        && request.delivery !== null
       ))
     }
     const sharedAccessDenied = (candidates, write) => {
@@ -2115,6 +2162,7 @@ export function apply(ctx, config = {}) {
   }, 'collab:notice-outbox')
 
   refreshRegistry()
+  reconcileRequestProjectBindings()
   sweepRequestTimeouts()
   void flushNotices()
   for (const entry of registry.list()) {

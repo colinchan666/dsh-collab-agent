@@ -165,6 +165,20 @@ export class RequestStore {
     }, now)
   }
 
+  /** Revert an acceptance that could not be bound/notified; the timer is left to the caller. */
+  reopen(id, now = Date.now()) {
+    return this.update(id, (request) => {
+      if (request.status !== 'accepted') throw new Error(`request is ${request.status}`)
+      request.status = 'pending'
+      request.projectId = null
+      request.taskIds = []
+      request.response = null
+      request.reason = null
+      request.resolvedAt = null
+      request.delivery = null
+    }, now)
+  }
+
   reject(id, reason, now = Date.now()) {
     const normalizedReason = normalizeText(reason)
     if (normalizedReason.length === 0) throw new Error('reject requires a reason')

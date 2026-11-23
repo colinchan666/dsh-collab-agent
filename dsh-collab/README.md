@@ -147,11 +147,13 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   results still route to the task’s supervisor.
 - **Shared delivery**: workers write final artifacts directly to
   `shared/<projectId>/artifacts/`; the worker can write while the project is
-  open, and read after close. An accepted requester can read the same project
-  artifacts but cannot write. The supervisor lists them with
+  open, and read after close. A project is bound to exactly one accepted
+  request. The requester can read the project artifacts only after a successful
+  delivery, and cannot write. The supervisor lists them with
   `collab_delivery_list`, generates `manifest.json` with
   `collab_delivery_manifest` (path, bytes, sha256, mode), and sends the
-  sanitized manifest with `collab_request_deliver`.
+  sanitized manifest with `collab_request_deliver` only after the project is
+  closed and every task is done or cancelled. Empty deliveries are refused.
 - **No copy-out**: do not create a copy project or copy artifacts to an
   ad-hoc shared directory. The canonical `deliveryDir` is returned by the task
   assignment; ad-hoc shared writes are denied by the guard.
