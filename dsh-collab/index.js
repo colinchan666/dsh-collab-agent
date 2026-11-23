@@ -2179,8 +2179,9 @@ export function apply(ctx, config = {}) {
       if (typeof candidate !== 'string' || candidate.length === 0) return false
       const resolved = canonicalPath(path.resolve(selfWorkdir, candidate))
       if (deliveryAccessFor(candidate, true)) return true
-      for (const own of [path.join(selfWorkdir, 'private'), path.join(selfWorkdir, 'comm')]) {
-        if (pathInside(resolved, own)) return true
+      const layoutWorkdir = self?.workdir ?? selfWorkdir
+      for (const own of [path.join(layoutWorkdir, 'private'), path.join(layoutWorkdir, 'comm')]) {
+        if (pathInside(resolved, canonicalPath(own))) return true
       }
       return false
     }

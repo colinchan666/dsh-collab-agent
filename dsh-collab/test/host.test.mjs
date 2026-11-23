@@ -618,6 +618,8 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     assert.equal(guard({ agent: worker, name: 'bash', arguments: { workdir: deliveryDir, command: 'echo ok > result2.md' } }), undefined)
     assert.ok(guard({ agent: worker, name: 'apply_patch', arguments: { input: `*** Begin Patch\n*** Add File: ${path.join(workspace, 'pwn.js')}\n+alert(1)\n*** End Patch` } }))
     assert.equal(guard({ agent: worker, name: 'apply_patch', arguments: { input: `*** Begin Patch\n*** Add File: ${path.join(deliveryDir, 'new.md')}\n+ok\n*** End Patch` } }), undefined)
+    worker.session.currentCwd = deliveryDir
+    assert.equal(guard({ agent: worker, name: 'write', arguments: { path: path.join(sessions, B, 'private', 'own.txt') } }), undefined)
     const supervisorPrivate = path.join(sessions, A, 'private')
     fs.mkdirSync(supervisorPrivate, { recursive: true })
     const secret = path.join(supervisorPrivate, 'secret.txt')
