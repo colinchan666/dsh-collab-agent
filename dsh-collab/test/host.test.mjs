@@ -423,6 +423,11 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     const guard = harness.guards[0]
     assert.equal(guard({ agent: requester, name: 'read', arguments: { path: path.join(deliveryDir, 'artifact.md') } }), undefined)
     assert.ok(guard({ agent: requester, name: 'write', arguments: { path: path.join(deliveryDir, 'x.md') } }))
+    const deliver = harness.tools.find(entry => entry.definition.name === 'collab_request_deliver')
+    const firstDelivery = JSON.parse(await deliver.definition.execute({ requestId: submitted.request.id }, { agent: supervisor }))
+    assert.equal(firstDelivery.alreadyDelivered, undefined)
+    const secondDelivery = JSON.parse(await deliver.definition.execute({ requestId: submitted.request.id }, { agent: supervisor }))
+    assert.equal(secondDelivery.alreadyDelivered, true)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

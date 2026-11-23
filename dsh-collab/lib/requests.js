@@ -29,6 +29,7 @@ function requestSummary(request) {
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
+    ...(request.delivery === null ? {} : { delivery: request.delivery }),
   }
 }
 
@@ -45,6 +46,7 @@ function requesterSummary(request) {
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
+    ...(request.delivery === null ? {} : { delivery: request.delivery }),
   }
 }
 
@@ -66,6 +68,7 @@ export class RequestStore {
       if (!isSessionId(requester) || !isSessionId(entry.supervisor)) continue
       const normalized = { ...entry, requester }
       delete normalized.worker
+      if (normalized.delivery === undefined) normalized.delivery = null
       requests[id] = normalized
     }
     this.state = { version: 1, requests }
@@ -117,6 +120,7 @@ export class RequestStore {
       createdAt: now,
       updatedAt: now,
       resolvedAt: null,
+      delivery: null,
     }
     const state = this.read()
     state.requests[id] = request
@@ -156,6 +160,13 @@ export class RequestStore {
       request.status = 'rejected'
       request.reason = normalizedReason
       request.resolvedAt = now
+    }, now)
+  }
+
+  markDelivered(id, delivery, now = Date.now()) {
+    return this.update(id, (request) => {
+      request.delivery = delivery
+      request.updatedAt = now
     }, now)
   }
 

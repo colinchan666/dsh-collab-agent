@@ -1236,16 +1236,36 @@ export function apply(ctx, config = {}) {
         if (request.projectId === null) throw new Error('accepted request has no project')
         if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
         const manifest = buildDeliveryManifest(request.projectId)
+        const manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex')
+        const deliveryId = `delivery-${manifestSha256.slice(0, 16)}`
+        if (request.delivery !== null && request.delivery.manifestSha256 === manifestSha256) {
+          return JSON.stringify({
+            requestId: request.id,
+            alreadyDelivered: true,
+            deliveryId: request.delivery.deliveryId,
+            files: manifest.files.length,
+          })
+        }
+        const supersedes = request.delivery === null ? null : request.delivery.deliveryId
         const payload = {
           type: 'collab-task/request-delivered',
           version: 1,
           requestId: request.id,
           title: request.title,
+          deliveryId,
+          manifestSha256,
+          ...(supersedes === null ? {} : { supersedes }),
           root: manifest.root,
           files: manifest.files,
         }
         const delivery = await sendTaskNotice(self, request.requester, payload)
-        return JSON.stringify({ requestId: request.id, files: manifest.files.length, delivery })
+        requests.markDelivered(request.id, {
+          deliveryId,
+          manifestSha256,
+          deliveredAt: Date.now(),
+          ...(supersedes === null ? {} : { supersedes }),
+        })
+        return JSON.stringify({ requestId: request.id, files: manifest.files.length, deliveryId, delivery })
       },
     },
     {

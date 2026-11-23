@@ -3,7 +3,8 @@
 - insert:
     - id: dsh-collab-sessions
       name: '@local/dsh-collab-sessions'
-      config: {}
+      config:
+        sharedRoot: /Users/cc/dsh/collab/shared
 
     - id: preset-collab
       name: '@deepseek-ai/dsh-agent-preset'
