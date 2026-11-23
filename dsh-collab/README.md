@@ -155,6 +155,13 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **No copy-out**: do not create a copy project or copy artifacts to an
   ad-hoc shared directory. The canonical `deliveryDir` is returned by the task
   assignment; ad-hoc shared writes are denied by the guard.
+- **Notice outbox**: protocol notices are persisted in `notices.json` before
+  delivery and retried by the Host, so a temporary offline peer or revoked
+  authorization does not lose a committed acceptance, assignment, or result
+  wake-up.
+- **Managed-worker write scope**: `write`, `edit`, `apply_patch`, and ordinary
+  shell write targets are limited to the assigned deliveryDir, `private/`, and
+  `comm/`. Shell target extraction is conservative; it is not an OS sandbox.
 - **Requests do not require offer**: any collaboration session with bilateral
   authorization to a supervisor can call `collab_request_submit`; it does not
   need to be an offered worker. The request is a normal structured message and
@@ -212,7 +219,8 @@ display name to the clipboard and briefly marks the button as copied.
   `bash` tool (including `workdir` and command tokens), `working_directory`
   (`cd`), `read`, `read_image`, `write`, `edit`, `glob`, `grep`,
   `apply_patch`, and `office_render`/`office_convert`/`office_recalculate`,
-  plus `present` file paths. Paths are resolved through symlinks before
+  plus `present` file paths. Managed-worker writes are additionally checked for
+  `write`, `edit`, `apply_patch`, and bash destination/redirection targets. Paths are resolved through symlinks before
   comparison, including shared-delivery paths. For a collaboration session,
   wildcard tokens that could expand into `.dsh-collab/sessions`, recursive
   searches, and shells whose effective directory contains another session's

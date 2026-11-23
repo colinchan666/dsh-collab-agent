@@ -12,6 +12,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { AuthorizationStore, authorizationPathFor } from './lib/auth.js'
+import { NoticeStore } from './lib/notices.js'
 import { RelationshipStore } from './lib/relationships.js'
 import { RequestStore } from './lib/requests.js'
 import { TaskStore } from './lib/tasks.js'
@@ -406,7 +407,14 @@ export function apply(ctx, config = {}) {
       ? config.requestsPath
       : path.join(path.dirname(registryPath), 'requests.json'),
   )
+  const notices = new NoticeStore(
+    typeof config.noticesPath === 'string' && config.noticesPath.length > 0
+      ? config.noticesPath
+      : path.join(path.dirname(registryPath), 'notices.json'),
+  )
   const requestTimers = new Map()
+  const deliveryInFlight = new Set()
+  let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
   const collabAdmin = {
     listAuth: () => ({
@@ -559,8 +567,8 @@ export function apply(ctx, config = {}) {
   /** Communication is role-agnostic; inboxText filters by bilateral authorization. */
   const inboxPeerAllowed = () => true
 
-  /** Send a task protocol message through the authenticated pair transport. */
-  const sendTaskNotice = async (self, targetId, payload) => {
+  /** Deliver one task protocol message through the authenticated pair transport. */
+  const deliverTaskNotice = async (self, targetId, payload) => {
     if (!auth.isAuthorized(self.sessionId, targetId)) {
       throw new Error('未授权：请在“协作授权”页授权双方。')
     }
@@ -578,6 +586,46 @@ export function apply(ctx, config = {}) {
       text: JSON.stringify(payload),
     })
     return wakePeer(peer.sessionId, message)
+  }
+
+  /** Queue before sending so a committed state change cannot lose its wake-up. */
+  const sendTaskNotice = async (self, targetId, payload) => {
+    const notice = notices.enqueue({ from: self.sessionId, to: targetId, payload })
+    try {
+      const delivery = await deliverTaskNotice(self, targetId, payload)
+      notices.remove(notice.id)
+      return delivery
+    } catch (error) {
+      notices.fail(notice.id, error)
+      warn(`notice ${notice.id} queued for ${targetId}: ${describeError(error)}`)
+      return `queued (${describeError(error)})`
+    }
+  }
+
+  const flushNotices = async () => {
+    if (noticeFlushInFlight) return
+    noticeFlushInFlight = true
+    try {
+      for (const notice of notices.list()) {
+        // Let the originating send finish first; a crash leaves it eligible
+        // for the next sweep after the grace period.
+        if (notice.attempts === 0 && Date.now() - notice.createdAt < 30000) continue
+        const sender = registry.get(notice.from)
+        if (sender === undefined || typeof sender.workdir !== 'string') continue
+        try {
+          await deliverTaskNotice(
+            { sessionId: sender.sessionId, workdir: sender.workdir },
+            notice.to,
+            notice.payload,
+          )
+          notices.remove(notice.id)
+        } catch (error) {
+          notices.fail(notice.id, error)
+        }
+      }
+    } finally {
+      noticeFlushInFlight = false
+    }
   }
 
   const deliveryRoot = (projectId) => path.join(sharedRoot, projectId ?? 'default', 'artifacts')
@@ -1315,8 +1363,11 @@ export function apply(ctx, config = {}) {
         if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
         if (request.status !== 'accepted') throw new Error(`request is ${request.status}, not accepted`)
         if (request.projectId === null) throw new Error('accepted request has no project')
+        if (deliveryInFlight.has(request.id)) throw new Error('delivery is already in progress')
         if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
-        const manifest = buildDeliveryManifest(request.projectId)
+        deliveryInFlight.add(request.id)
+        try {
+          const manifest = buildDeliveryManifest(request.projectId)
         const manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex')
         const deliveryId = `delivery-${manifestSha256.slice(0, 16)}`
         if (request.delivery !== null && request.delivery.manifestSha256 === manifestSha256) {
@@ -1339,14 +1390,17 @@ export function apply(ctx, config = {}) {
           root: manifest.root,
           files: manifest.files,
         }
-        const delivery = await sendTaskNotice(self, request.requester, payload)
-        requests.markDelivered(request.id, {
-          deliveryId,
-          manifestSha256,
-          deliveredAt: Date.now(),
-          ...(supersedes === null ? {} : { supersedes }),
-        })
-        return JSON.stringify({ requestId: request.id, files: manifest.files.length, deliveryId, delivery })
+          const delivery = await sendTaskNotice(self, request.requester, payload)
+          requests.markDelivered(request.id, {
+            deliveryId,
+            manifestSha256,
+            deliveredAt: Date.now(),
+            ...(supersedes === null ? {} : { supersedes }),
+          })
+          return JSON.stringify({ requestId: request.id, files: manifest.files.length, deliveryId, delivery })
+        } finally {
+          deliveryInFlight.delete(request.id)
+        }
       },
     },
     {
@@ -1830,6 +1884,62 @@ export function apply(ctx, config = {}) {
       }
       return false
     }
+    const shellWords = (value) => (String(value).match(/"[^"]*"|'[^']*'|[^\s;&|]+/gu) ?? [])
+      .map(word => word.replace(/^["']|["']$/gu, ''))
+      .filter(word => word.length > 0)
+
+    /** Conservative write-target extraction for managed workers. */
+    const shellWriteTargets = (command, cwd) => {
+      const targets = []
+      const add = (value) => {
+        if (typeof value !== 'string' || value.length === 0 || value.startsWith('-')) return
+        targets.push(path.resolve(cwd, value))
+      }
+      const text = String(command)
+      for (const match of text.matchAll(/\b(?:cd|pushd)\s+("[^"]+"|'[^']+'|[^\s;&|]+)/gu)) {
+        const target = match[1].replace(/^["']|["']$/gu, '')
+        if (target === '-' || target.startsWith('-')) continue
+        if (path.resolve(cwd, target) === path.resolve(cwd)) continue
+        add(target)
+      }
+      for (const match of text.matchAll(/(?:^|[^>&])>{1,2}\s*("[^"]+"|'[^']+'|[^\s;&|]+)/gu)) {
+        const target = match[1].replace(/^["']|["']$/gu, '')
+        if (!target.startsWith('&')) add(target)
+      }
+      for (const match of text.matchAll(/\b(cp|mv|install|rsync|ln|tee|touch|mkdir|rm|rmdir|truncate|dd|chmod|chown)\b([^;&|]*)/giu)) {
+        const verb = match[1].toLowerCase()
+        const words = shellWords(match[2]).filter(word => !word.startsWith('-'))
+        if (verb === 'dd') {
+          const of = words.find(word => word.startsWith('of='))
+          if (of !== undefined) add(of.slice(3))
+          continue
+        }
+        if (verb === 'tee' || verb === 'touch' || verb === 'mkdir' || verb === 'rm' || verb === 'rmdir' || verb === 'truncate' || verb === 'chmod' || verb === 'chown') {
+          for (const word of words) {
+            if (verb === 'chmod' && /^[0-7]{3,4}$/u.test(word)) continue
+            add(word)
+          }
+          continue
+        }
+        if (words.length > 0) add(words[words.length - 1])
+      }
+      for (const match of text.matchAll(/\bsed\b([^;&|]*)/giu)) {
+        if (!/(?:^|\s)-i(?:\s|$)/u.test(match[1])) continue
+        const words = shellWords(match[1]).filter(word => !word.startsWith('-') && !word.startsWith('s/') && !word.startsWith('s#'))
+        for (const word of words) add(word)
+      }
+      return targets
+    }
+
+    const applyPatchTargets = (patch, cwd) => {
+      const targets = []
+      for (const match of String(patch).matchAll(/^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gmu)) {
+        const value = match[1].trim()
+        if (value.length > 0) targets.push(path.resolve(cwd, value))
+      }
+      return targets
+    }
+
     const allowedDeliveryPaths = (candidates, write) => candidates.filter(candidate => !deliveryAccessFor(candidate, write))
 
     const byId = new Map()
@@ -1864,6 +1974,11 @@ export function apply(ctx, config = {}) {
         if (hit === undefined && typeof args?.workdir === 'string') {
           hit = findForeignSessionAccess(allowedDeliveryPaths([args.workdir], true), options)
         }
+        if (hit === undefined && isManagedWorker(sessionId)) {
+          for (const target of shellWriteTargets(String(args?.command ?? ''), bashWorkdir)) {
+            if (!managedWriteAllowed(target)) { hit = { workerWrite: target }; break }
+          }
+        }
         break
       }
       case 'working_directory':
@@ -1872,9 +1987,16 @@ export function apply(ctx, config = {}) {
           options,
         )
         break
-      case 'apply_patch':
-        hit = findForeignSessionAccessInCommand(String(args?.input ?? args?.patch ?? ''), options)
+      case 'apply_patch': {
+        const patch = String(args?.input ?? args?.patch ?? '')
+        hit = findForeignSessionAccessInCommand(patch, options)
+        if (hit === undefined && isManagedWorker(sessionId)) {
+          for (const target of applyPatchTargets(patch, selfWorkdir)) {
+            if (!managedWriteAllowed(target)) { hit = { workerWrite: target }; break }
+          }
+        }
         break
+      }
       case 'office_render':
       case 'office_convert':
       case 'office_recalculate':
@@ -1986,8 +2108,15 @@ export function apply(ctx, config = {}) {
     requestTimers.clear()
   }, 'collab:request-timeouts')
 
+  ctx.effect(() => {
+    const timer = setInterval(() => { void flushNotices() }, 5000)
+    timer.unref?.()
+    return () => clearInterval(timer)
+  }, 'collab:notice-outbox')
+
   refreshRegistry()
   sweepRequestTimeouts()
+  void flushNotices()
   for (const entry of registry.list()) {
     try { migrateSessionArchive(entry.workdir) } catch (error) { warn(`archive migration failed for ${entry.sessionId}: ${describeError(error)}`) }
   }

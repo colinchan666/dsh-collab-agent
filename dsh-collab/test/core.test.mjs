@@ -11,6 +11,7 @@ import {
   findForeignSessionAccess, findForeignSessionAccessInCommand, findSuspiciousSearchPattern, inboxCount,
   listInbox, markRead, readJson, sendMessage, sessionWorkdir, writeJson,
 } from '../lib/layout.js'
+import { NoticeStore } from '../lib/notices.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SELF = 'session-11111111-1111-4111-8111-111111111111'
@@ -166,7 +167,7 @@ test('private paths of another session are detected by every spelling', () => {
     assert.equal(findForeignSessionAccessInCommand(`cat ${peer.privateDir}/secret.txt`, options)?.sessionId, PEER)
     assert.equal(findForeignSessionAccessInCommand('cat private/own.txt', options), undefined)
     assert.equal(findForeignSessionAccessInCommand(`cd ../${PEER} && cat private/x`, options)?.sessionId, PEER)
-    assert.equal(findForeignSessionAccessInCommand('cat ../*/private/*', options)?.sessionId, '<pattern>')
+    assert.equal(findForeignSessionAccessInCommand('cat ../*/private/*', options)?.sessionId, '<wildcard>')
     assert.equal(findForeignAncestorAccess([path.join('..')], options)?.sessionId, PEER)
     assert.equal(findForeignAncestorAccess([self.workdir], options), undefined)
     assert.equal(findSuspiciousSearchPattern('../*/private/*', options)?.sessionId, '<pattern>')
@@ -282,6 +283,26 @@ test('cd into the sessions parent cannot escape through relative paths', () => {
     const sessions = path.join(workspace, '.dsh-collab', 'sessions')
     const command = `cd ${sessions} && cat ${PEER}/private/secret.txt`
     assert.equal(findForeignSessionAccessInCommand(command, { ...options, checkAncestors: true })?.sessionId, PEER)
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('the notice outbox persists and removes queued wake-ups', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-notices-'))
+  try {
+    const store = new NoticeStore(path.join(root, 'notices.json'))
+    const payload = { type: 'collab-task/assign', version: 1, taskId: 'task-1' }
+    const notice = store.enqueue({ from: SELF, to: PEER, payload }, 10)
+    assert.equal(store.list().length, 1)
+    assert.equal(store.list()[0].payload.taskId, 'task-1')
+    const failed = store.fail(notice.id, new Error('offline'), 20)
+    assert.equal(failed.attempts, 1)
+    assert.equal(failed.lastError, 'offline')
+    assert.equal(store.remove(notice.id), true)
+    assert.equal(store.list().length, 0)
+    const reopened = new NoticeStore(path.join(root, 'notices.json'))
+    assert.equal(reopened.list().length, 0)
   } finally {
     cleanup(root)
   }

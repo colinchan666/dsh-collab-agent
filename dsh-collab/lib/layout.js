@@ -539,7 +539,7 @@ export function findForeignSessionAccess(values, { selfId, selfWorkdir, selfLayo
     // A wildcard segment under the shared sessions directory can expand into
     // every peer's private/comm, so it is not a harmless literal. Allow only
     // wildcards whose literal prefix stays inside this session's own layout.
-    if (/[*?[\]]/.test(value) && /\.dsh-collab[\\/]sessions[\\/]/i.test(value)) {
+    if (/[*?[\]]/.test(value) && (/\.dsh-collab[\\/]sessions[\\/]/i.test(value) || /\.dsh-collab[\\/]sessions[\\/]/i.test(canonical))) {
       const literalPrefix = value.split(/[*?[\]]/)[0]
       const resolvedPrefix = expandToken(literalPrefix, selfWorkdir)
       const canonicalPrefix = canonicalPath(resolvedPrefix)
