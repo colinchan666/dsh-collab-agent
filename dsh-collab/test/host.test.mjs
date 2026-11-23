@@ -137,7 +137,7 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     assert.equal(b.session.currentCwd, workdirB)
     assert.equal(plain.session.currentCwd, workspace)
 
-    assert.equal(harness.tools.length, 23)
+    assert.equal(harness.tools.length, 25)
     for (const name of ['collab_info', 'collab_peers', 'collab_send', 'collab_inbox']) {
       const entry = harness.tools.find(tool => tool.definition.name === name)
       assert.equal(entry.options.when({ agent: a }), true, name)
@@ -417,6 +417,12 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     const requesterInbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox').definition.execute({}, { agent: requester })
     assert.match(requesterInbox, /kind: request/u)
     assert.doesNotMatch(requesterInbox, /projectId|taskId/u)
+    const deliveryDir = path.join(root, 'shared', created.projectId, 'artifacts')
+    fs.mkdirSync(deliveryDir, { recursive: true })
+    fs.writeFileSync(path.join(deliveryDir, 'artifact.md'), 'artifact')
+    const guard = harness.guards[0]
+    assert.equal(guard({ agent: requester, name: 'read', arguments: { path: path.join(deliveryDir, 'artifact.md') } }), undefined)
+    assert.ok(guard({ agent: requester, name: 'write', arguments: { path: path.join(deliveryDir, 'x.md') } }))
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
@@ -513,6 +519,20 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     assert.ok(deliveryDir)
     const guard = harness.guards[0]
     assert.equal(guard({ agent: worker, name: 'write', arguments: { path: path.join(deliveryDir, 'result.md') } }), undefined)
+    fs.mkdirSync(deliveryDir, { recursive: true })
+    fs.writeFileSync(path.join(deliveryDir, 'result.md'), 'delivered')
+    assert.ok(guard({ agent: worker, name: 'write', arguments: { path: path.join(path.dirname(deliveryDir), 'adhoc.md') } }))
+    const manifestTool = harness.tools.find(entry => entry.definition.name === 'collab_delivery_manifest')
+    const createTool = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
+    assert.throws(() => createTool.definition.execute(
+      { title: 'Copy out', instruction: `复制到 ${path.join(root, 'shared', 'adhoc')}` },
+      { agent: supervisor },
+    ), /copy-out/u)
+    const manifest = JSON.parse(manifestTool.definition.execute({ projectId: created.projectId }, { agent: supervisor }))
+    assert.equal(manifest.files.length, 1)
+    assert.equal(manifest.files[0].bytes, 9)
+    assert.match(manifest.files[0].sha256, /^[0-9a-f]{64}$/)
+    assert.match(manifest.files[0].mode, /^0[0-7]{3}$/)
     assert.ok(guard({ agent: worker, name: 'write', arguments: { path: path.join(workspace, '.dsh-collab', 'sessions', A, 'private', 'x.md') } }))
     const complete = harness.tools.find(entry => entry.definition.name === 'collab_task_complete')
     await complete.definition.execute({ taskId, summary: 'written' }, { agent: worker })

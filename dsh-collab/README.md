@@ -145,10 +145,16 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **Task isolation**: a worker may chat with ordinary peers, but ordinary peers
   cannot assign work directly; they submit a request to the supervisor. Task
   results still route to the task’s supervisor.
-- **Delivery directory**: the supervisor creates
-  `deliverables/<projectId>/<workerId>/`; the worker can write its own subdir
-  until `collab_project_close`, after which it is read-only. The supervisor can
-  list names/sizes with `collab_delivery_list` but does not read content.
+- **Shared delivery**: workers write final artifacts directly to
+  `shared/<projectId>/artifacts/`; the worker can write while the project is
+  open, and read after close. An accepted requester can read the same project
+  artifacts but cannot write. The supervisor lists them with
+  `collab_delivery_list`, generates `manifest.json` with
+  `collab_delivery_manifest` (path, bytes, sha256, mode), and sends the
+  sanitized manifest with `collab_request_deliver`.
+- **No copy-out**: do not create a copy project or copy artifacts to an
+  ad-hoc shared directory. The canonical `deliveryDir` is returned by the task
+  assignment; ad-hoc shared writes are denied by the guard.
 - **Requests do not require offer**: any collaboration session with bilateral
   authorization to a supervisor can call `collab_request_submit`; it does not
   need to be an offered worker. The request is a normal structured message and

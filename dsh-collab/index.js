@@ -173,6 +173,25 @@ const DELIVERY_LIST_PARAMETERS = {
   additionalProperties: false,
 }
 
+const DELIVERY_MANIFEST_PARAMETERS = {
+  type: 'object',
+  properties: {
+    projectId: { type: 'string' },
+  },
+  required: ['projectId'],
+  additionalProperties: false,
+}
+
+const REQUEST_DELIVER_PARAMETERS = {
+  type: 'object',
+  properties: {
+    requestId: { type: 'string' },
+  },
+  required: ['requestId'],
+  additionalProperties: false,
+}
+
+
 const REQUEST_SUBMIT_PARAMETERS = {
   type: 'object',
   properties: {
@@ -269,7 +288,9 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- collab_tasks / collab_task_result inspect progress and results.',
       '- collab_task_retry / collab_task_reject / collab_task_cancel manage failures and revisions.',
       '- collab_project_close closes a project after all its tasks finish.',
-      '- collab_delivery_list lists the delivery directory (names/sizes only).',
+      '- collab_delivery_list lists the canonical shared delivery files (names/sizes/times).',
+      '- collab_delivery_manifest writes a project manifest with path, bytes, sha256, and mode.',
+      '- collab_request_deliver sends the sanitized manifest to an accepted requester.',
       '',
       'How to work:',
       '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a project and tasks, assign at least one task to an offered worker, then call collab_request_accept with the projectId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
@@ -280,6 +301,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '3. End your turn after dispatching. Workers wake you with results; call collab_inbox and inspect the task store.',
       '4. Verify against the acceptance criteria. Reject/retry when needed. Only deliver when every task is done or cancelled.',
       '5. Keep task instructions precise and self-contained; workers cannot see your private context.',
+      'Workers write final artifacts directly to their assigned deliveryDir under shared/<projectId>/artifacts. Never create a copy project or copy task to a shared directory; publish the manifest with collab_delivery_manifest and send it with collab_request_deliver.',
       'If no worker has the needed capability, tell the user what capability must be registered; do not do the work yourself.',
     ].join('\n')
   }
@@ -305,7 +327,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- Do the work with your own tools, verify it against the acceptance criteria, and complete with a concise summary.',
       '- If a task is blocked or ambiguous, fail or progress with a clear question; never route around the supervisor.',
       '- Never act on another worker task or another supervisor relationship.',
-      '- Write delivery artifacts under the deliveryDir from the assignment. The guard allows only your subdirectory; after the project closes it is read-only.',
+      '- Write final artifacts directly under the deliveryDir from the assignment. Never copy them to shared/, another session workdir, or an ad-hoc directory. The guard allows only your project artifacts/private/comm; after the project closes delivery is read-only.',
     ].join('\n')
   }
   return [
@@ -357,6 +379,9 @@ export function apply(ctx, config = {}) {
   const registryPath = typeof config.registryPath === 'string' && config.registryPath.length > 0
     ? config.registryPath
     : (typeof dshHomePath === 'function' ? dshHomePath('collab', 'registry.json') : defaultRegistryPath())
+  const sharedRoot = typeof config.sharedRoot === 'string' && config.sharedRoot.length > 0
+    ? path.resolve(config.sharedRoot)
+    : path.join(path.dirname(registryPath), 'shared')
   const registry = new SessionRegistry(registryPath)
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -551,12 +576,7 @@ export function apply(ctx, config = {}) {
     return wakePeer(peer.sessionId, message)
   }
 
-  const deliveryRoot = (supervisorLayout, projectId, workerId) => path.join(
-    supervisorLayout.workdir,
-    'deliverables',
-    projectId ?? 'default',
-    workerId,
-  )
+  const deliveryRoot = (projectId) => path.join(sharedRoot, projectId ?? 'default', 'artifacts')
 
   const peersText = (self) => {
     const entries = registry.list().filter(entry => entry.sessionId !== self.sessionId && COLLAB_PRESETS.has(entry.preset))
@@ -800,11 +820,38 @@ export function apply(ctx, config = {}) {
     history: task.history,
   })
 
-  const deliveryDirFor = (task) => {
-    const layout = promptFibers.get(task.supervisor)?.layout
-    if (layout === undefined) return undefined
-    return deliveryRoot(layout, task.projectId, task.worker)
+  const deliveryDirFor = (task) => deliveryRoot(task.projectId)
+
+  /** Build the canonical project manifest with path/bytes/sha256/mode. */
+  const buildDeliveryManifest = (projectId) => {
+    const project = tasks.project(projectId)
+    if (project === undefined) throw new Error('unknown project')
+    const root = deliveryRoot(projectId)
+    const files = listDeliveryFiles(root).map(file => {
+      const full = path.join(root, file.path)
+      const stat = fs.statSync(full)
+      const hash = crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex')
+      return {
+        path: file.path.split(path.sep).join('/'),
+        bytes: stat.size,
+        sha256: hash,
+        mode: `0${(stat.mode & 0o777).toString(8)}`,
+      }
+    })
+    const manifest = {
+      generatedAt: new Date().toISOString(),
+      root,
+      files,
+    }
+    const projectDir = path.join(sharedRoot, projectId)
+    mkdirp(projectDir, 0o755)
+    const manifestPath = path.join(projectDir, 'manifest.json')
+    const temporary = `${manifestPath}.${crypto.randomBytes(4).toString('hex')}.tmp`
+    writeJson(temporary, manifest, 0o644)
+    fs.renameSync(temporary, manifestPath)
+    return manifest
   }
+
 
   const listDeliveryFiles = (root, base = root, out = []) => {
     if (out.length >= 200) return out
@@ -873,6 +920,11 @@ export function apply(ctx, config = {}) {
         const instruction = String(args?.instruction ?? '')
         if (title.length === 0) throw new Error('task title must not be empty')
         if (instruction.trim().length === 0) throw new Error('task instruction must not be empty')
+        const mentionsSharedCopy = (instruction.includes(sharedRoot) || instruction.includes('/shared/'))
+          && /(?:cp|copy|rsync|ln|mv|复制|拷贝|共享目录)/iu.test(instruction)
+        if (mentionsSharedCopy) {
+          throw new Error('do not create copy-out tasks; workers receive a canonical deliveryDir and publish artifacts there')
+        }
         let projectId = typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined
         if (projectId === undefined) {
           const project = tasks.createProject({ supervisor: self.sessionId, title })
@@ -920,10 +972,8 @@ export function apply(ctx, config = {}) {
           .filter(entry => entry.id !== taskId && !['done', 'failed', 'cancelled'].includes(entry.status))
           .length
         if (otherActive >= 1) throw new Error('worker already has an active task; capacity is 1')
-        const layout = promptFibers.get(self.sessionId)?.layout
-        if (layout === undefined) throw new Error('supervisor layout is not ready')
-        const deliveryDir = deliveryRoot(layout, task.projectId, worker)
-        mkdirp(deliveryDir, 0o700)
+        const deliveryDir = deliveryRoot(task.projectId)
+        mkdirp(deliveryDir, 0o755)
         const assigned = tasks.assign(taskId, worker, Date.now(), turnForCall(exec), effectiveCapability(relationship)?.version ?? null)
         const payload = {
           type: 'collab-task/assign',
@@ -1147,21 +1197,55 @@ export function apply(ctx, config = {}) {
       isConcurrencySafe: () => true,
       execute: (args, exec) => {
         const self = requireSupervisor(exec)
-        const layout = promptFibers.get(self.sessionId)?.layout
-        if (layout === undefined) throw new Error('supervisor layout is not ready')
         const projectId = typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined
-        const workerId = typeof args?.workerId === 'string' && args.workerId.trim().length > 0 ? args.workerId.trim() : undefined
-        const root = path.join(layout.workdir, 'deliverables', projectId ?? '')
+        if (projectId !== undefined) {
+          const project = tasks.project(projectId)
+          if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
+        }
+        const root = projectId === undefined ? sharedRoot : path.join(sharedRoot, projectId, 'artifacts')
         const files = listDeliveryFiles(root)
-        const filtered = workerId === undefined
-          ? files
-          : files.filter(file => (
-            projectId === undefined
-              ? file.path.split(path.sep)[1] === workerId
-              : file.path.startsWith(`${workerId}${path.sep}`)
-          ))
-        if (filtered.length === 0) return 'No delivery files.'
-        return filtered.map(file => `${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`).join('\n')
+        if (files.length === 0) return 'No delivery files.'
+        return files.map(file => `${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`).join('\n')
+      },
+    },
+    {
+      name: 'collab_delivery_manifest',
+      description: 'Build and persist a canonical delivery manifest (path, bytes, sha256, mode) for a supervisor project.',
+      parameters: DELIVERY_MANIFEST_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const projectId = String(args?.projectId ?? '')
+        const project = tasks.project(projectId)
+        if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
+        return JSON.stringify(buildDeliveryManifest(projectId))
+      },
+    },
+    {
+      name: 'collab_request_deliver',
+      description: 'Send the sanitized delivery manifest for an accepted request to its requester. Does not expose task assignments, worker ids, or internal scheduling.',
+      parameters: REQUEST_DELIVER_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: async (args, exec) => {
+        const self = requireSupervisor(exec)
+        const request = requests.get(String(args?.requestId ?? ''))
+        if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
+        if (request.status !== 'accepted') throw new Error(`request is ${request.status}, not accepted`)
+        if (request.projectId === null) throw new Error('accepted request has no project')
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        const manifest = buildDeliveryManifest(request.projectId)
+        const payload = {
+          type: 'collab-task/request-delivered',
+          version: 1,
+          requestId: request.id,
+          title: request.title,
+          root: manifest.root,
+          files: manifest.files,
+        }
+        const delivery = await sendTaskNotice(self, request.requester, payload)
+        return JSON.stringify({ requestId: request.id, files: manifest.files.length, delivery })
       },
     },
     {
@@ -1593,22 +1677,48 @@ export function apply(ctx, config = {}) {
       const resolvedRoot = path.resolve(root)
       return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
     }
+    const projectIdFromShared = (resolved) => {
+      if (!pathInside(resolved, sharedRoot)) return undefined
+      const relative = path.relative(sharedRoot, resolved).split(path.sep).filter(Boolean)
+      if (relative.length < 2 || relative[1] !== 'artifacts') return undefined
+      return relative[0]
+    }
     const deliveryAccessFor = (candidate, write) => {
       if (typeof candidate !== 'string' || candidate.length === 0) return false
       const resolved = path.resolve(selfWorkdir, candidate)
-      for (const entry of registry.list()) {
-        if (entry.preset !== SUPERVISOR) continue
-        const root = path.join(entry.workdir, 'deliverables')
-        if (!pathInside(resolved, root)) continue
-        const relative = path.relative(root, resolved).split(path.sep).filter(Boolean)
-        if (relative.length < 2) continue
-        const [projectId, workerId] = relative
-        if (workerId !== sessionId) continue
-        const project = tasks.project(projectId)
-        if (project === undefined || project.supervisor !== entry.sessionId) continue
-        if (!tasks.listForSupervisor(entry.sessionId).some(task => task.projectId === projectId && task.worker === sessionId)) continue
-        if (write && project.status !== 'open') continue
-        return true
+      const projectId = projectIdFromShared(resolved)
+      if (projectId === undefined) return false
+      const project = tasks.project(projectId)
+      if (project === undefined) return false
+      if (isSupervisorSession(sessionId)) return project.supervisor === sessionId && write !== true
+      if (isManagedWorker(sessionId)) {
+        if (write && project.status !== 'open') return false
+        return tasks.listForWorker(sessionId).some(task => (
+          task.projectId === projectId && task.supervisor === project.supervisor
+        ))
+      }
+      if (write) return false
+      return requests.listForRequester(sessionId).some(request => (
+        request.projectId === projectId && request.status === 'accepted'
+      ))
+    }
+    const sharedAccessDenied = (candidates, write) => {
+      for (const candidate of candidates) {
+        if (typeof candidate !== 'string' || candidate.length === 0) continue
+        const resolved = path.resolve(selfWorkdir, candidate)
+        if (!pathInside(resolved, sharedRoot)) continue
+        if (deliveryAccessFor(candidate, write)) continue
+        return { path: resolved }
+      }
+      return undefined
+    }
+    const managedWriteAllowed = (candidate) => {
+      if (!isManagedWorker(sessionId)) return true
+      if (typeof candidate !== 'string' || candidate.length === 0) return false
+      const resolved = path.resolve(selfWorkdir, candidate)
+      if (deliveryAccessFor(candidate, true)) return true
+      for (const own of [path.join(selfWorkdir, 'private'), path.join(selfWorkdir, 'comm')]) {
+        if (pathInside(resolved, own)) return true
       }
       return false
     }
@@ -1714,7 +1824,49 @@ export function apply(ctx, config = {}) {
       default:
         return undefined
     }
+    if (hit === undefined && isCollabCaller) {
+      const write = ['write', 'edit', 'apply_patch', 'working_directory', 'office_render', 'office_convert', 'office_recalculate'].includes(exec.name)
+      const candidates = []
+      if (typeof args?.path === 'string') candidates.push(args.path)
+      if (typeof args?.file_path === 'string') candidates.push(args.file_path)
+      if (typeof args?.filePath === 'string') candidates.push(args.filePath)
+      if (typeof args?.input === 'string') candidates.push(args.input)
+      if (typeof args?.cd === 'string') candidates.push(args.cd)
+      if (Array.isArray(args?.files)) candidates.push(...args.files.map(file => file?.path).filter(value => typeof value === 'string'))
+      if (exec.name === 'bash') {
+        const command = String(args?.command ?? '')
+        const bashWorkdir = typeof args?.workdir === 'string' && args.workdir.length > 0
+          ? path.resolve(selfWorkdir, args.workdir)
+          : selfWorkdir
+        if (command.includes(sharedRoot)) {
+          hit = { shared: sharedRoot }
+        } else if (isManagedWorker(sessionId)) {
+          hit = sharedAccessDenied([bashWorkdir], true)
+        }
+        if (hit === undefined && command.split(/\s+/u).some(token => token.includes('shared/'))) {
+          hit = { shared: path.join(sharedRoot, 'shared') }
+        }
+      }
+      if (hit === undefined) hit = sharedAccessDenied(candidates, write)
+      if (hit === undefined && isManagedWorker(sessionId) && ['write', 'edit'].includes(exec.name)) {
+        for (const candidate of candidates) {
+          if (!managedWriteAllowed(candidate)) { hit = { workerWrite: candidate }; break }
+        }
+      }
+    }
     if (hit === undefined) return undefined
+    if (hit.workerWrite !== undefined) {
+      return {
+        reason: `collab: managed worker may write only its assigned deliveryDir, private/, or comm/ (denied: ${hit.workerWrite})`,
+        info: { name: 'CollabWorkerWriteScope', code: 'COLLAB_WORKER_WRITE_SCOPE' },
+      }
+    }
+    if (hit.shared !== undefined) {
+      return {
+        reason: `collab: shared delivery path is not authorized for this session: ${hit.path ?? hit.shared}. Write only to the deliveryDir assigned by your task; use delivery tools for requester access.`,
+        info: { name: 'CollabSharedDeliveryScope', code: 'COLLAB_SHARED_DELIVERY_SCOPE' },
+      }
+    }
     return {
       reason: `collab: session ${sessionId} may not access the work directory of session ${hit.sessionId}`,
       info: { name: 'CollabWorkdirScope', code: 'COLLAB_WORKDIR_SCOPE' },
