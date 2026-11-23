@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 import { apply } from '../lib/host.js'
 
@@ -42,4 +45,15 @@ test('panel args are parsed and malformed data is rejected', () => {
   assert.throws(() => service().panel(id, 'baseSet', '[]'), /JSON object/u)
   const output = JSON.parse(service().panel(id, 'baseSet', JSON.stringify({ value: 'x' })))
   assert.equal(output.args.value, 'x')
+})
+
+
+test('the packaged runtime is host.js and the bundled client carries the panel endpoint', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+  assert.equal(manifest.main, 'lib/host.js')
+  assert.equal(manifest.files.includes('lib/index.js'), false)
+  const bundle = fs.readFileSync(path.join(root, 'lib/client.js'), 'utf8')
+  assert.match(bundle, /collabAuth\/panel/u)
+  assert.ok(bundle.length < 600_000)
 })
