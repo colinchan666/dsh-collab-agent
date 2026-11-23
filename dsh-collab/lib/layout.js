@@ -80,7 +80,13 @@ function writeJsonExclusive(file, value, mode = 0o600) {
 export function writeJson(file, value, mode = 0o600) {
   mkdirp(path.dirname(file), 0o700)
   const temporary = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode })
+  const descriptor = fs.openSync(temporary, 'w', mode)
+  try {
+    fs.writeFileSync(descriptor, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8' })
+    try { fs.fsyncSync(descriptor) } catch { /* filesystems without fsync support */ }
+  } finally {
+    fs.closeSync(descriptor)
+  }
   fs.renameSync(temporary, file)
   try { fs.chmodSync(file, mode) } catch { /* platform without POSIX modes */ }
 }
@@ -167,6 +173,33 @@ export function ensureSessionLayout({ originalCwd, sessionId, preset, now = Date
   })
 }
 
+/** Acquire a short-lived cross-process lock for one state document. */
+export function withFileLock(file, operation, { timeoutMs = 5000, staleMs = 10000 } = {}) {
+  const lock = `${file}.lock`
+  const started = Date.now()
+  mkdirp(path.dirname(file), 0o700)
+  while (true) {
+    try {
+      const descriptor = fs.openSync(lock, 'wx', 0o600)
+      try { fs.writeFileSync(descriptor, `${String(process.pid)}\n`) } finally { fs.closeSync(descriptor) }
+      break
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error
+      try {
+        const age = Date.now() - fs.statSync(lock).mtimeMs
+        if (age > staleMs) fs.unlinkSync(lock)
+      } catch { /* the owner may have removed it */ }
+      if (Date.now() - started > timeoutMs) throw new Error(`timed out waiting for state lock: ${lock}`)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10)
+    }
+  }
+  try {
+    return operation()
+  } finally {
+    try { fs.unlinkSync(lock) } catch { /* already removed */ }
+  }
+}
+
 /** Durable, derived index of collaboration sessions. */
 export class SessionRegistry {
   constructor(file) {
@@ -201,20 +234,28 @@ export class SessionRegistry {
 
   upsert(entry) {
     if (!isSessionId(entry.sessionId)) return
-    const state = this.read()
-    state.sessions[entry.sessionId] = { ...state.sessions[entry.sessionId], ...entry }
-    this.write(state)
+    withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      state.sessions[entry.sessionId] = { ...state.sessions[entry.sessionId], ...entry }
+      this.write(state)
+    })
   }
 
   remove(sessionId) {
-    const state = this.read()
-    if (state.sessions[sessionId] === undefined) return
-    delete state.sessions[sessionId]
-    this.write(state)
+    withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      if (state.sessions[sessionId] === undefined) return
+      delete state.sessions[sessionId]
+      this.write(state)
+    })
   }
 
   /** Merge sessions discovered under registered workspace directories. */
   scanWorkspaces(workspacePaths) {
+    return withFileLock(this.file, () => {
+    this.state = undefined
     const state = this.read()
     let discovered = 0
     let changed = false
@@ -252,6 +293,7 @@ export class SessionRegistry {
     }
     if (changed) this.write(state)
     return discovered
+    })
   }
 }
 

@@ -13,6 +13,7 @@ import {
 } from '../lib/layout.js'
 import { NoticeStore } from '../lib/notices.js'
 import { TaskStore } from '../lib/tasks.js'
+import { RequestStore } from '../lib/requests.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const SELF = 'session-11111111-1111-4111-8111-111111111111'
@@ -299,6 +300,38 @@ test('a project can be bound to only one request', () => {
     assert.equal(store.project(project.id).requestId, 'request-one')
     assert.throws(() => store.bindProject(project.id, 'request-two'), /another request/u)
     assert.equal(store.project(project.id).requestId, 'request-one')
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('two TaskStore instances preserve independent project writes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-task-lock-'))
+  try {
+    const file = path.join(root, 'tasks.json')
+    const first = new TaskStore(file)
+    const second = new TaskStore(file)
+    const one = first.createProject({ supervisor: SELF, title: 'one' })
+    const two = second.createProject({ supervisor: SELF, title: 'two' })
+    const fresh = new TaskStore(file)
+    assert.ok(fresh.project(one.id))
+    assert.ok(fresh.project(two.id))
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('two RequestStore instances preserve independent request writes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-request-lock-'))
+  try {
+    const file = path.join(root, 'requests.json')
+    const first = new RequestStore(file)
+    const second = new RequestStore(file)
+    const one = first.create({ requester: SELF, supervisor: PEER, title: 'one', requirement: 'one' })
+    const two = second.create({ requester: SELF, supervisor: PEER, title: 'two', requirement: 'two' })
+    const fresh = new RequestStore(file)
+    assert.ok(fresh.get(one.id))
+    assert.ok(fresh.get(two.id))
   } finally {
     cleanup(root)
   }

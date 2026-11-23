@@ -8,7 +8,7 @@
  */
 import path from 'node:path'
 
-import { isSessionId, readJson, writeJson } from './layout.js'
+import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
 
 /** Stable key for a directed grant. */
 export function grantKey(from, to) {
@@ -125,6 +125,8 @@ export class AuthorizationStore {
     if (!isSessionId(from) || !isSessionId(to) || from === to) {
       throw new Error('grant requires two different session ids')
     }
+    return withFileLock(this.file, () => {
+    this.state = undefined
     const state = this.read()
     const existing = state.grants.find(entry => entry.from === from && entry.to === to)
     if (existing !== undefined) {
@@ -143,6 +145,7 @@ export class AuthorizationStore {
     state.grants.push(grant)
     this.write(state)
     return grant
+    })
   }
 
   /** Grant both directions in one explicit bilateral action. */
@@ -156,11 +159,14 @@ export class AuthorizationStore {
   }
 
   revokeGrant(from, to) {
-    const state = this.read()
-    const next = state.grants.filter(entry => !(entry.from === from && entry.to === to))
-    if (next.length === state.grants.length) return false
-    this.write({ ...state, grants: next })
-    return true
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      const next = state.grants.filter(entry => !(entry.from === from && entry.to === to))
+      if (next.length === state.grants.length) return false
+      this.write({ ...state, grants: next })
+      return true
+    })
   }
 
   /** Revoke both directions. */

@@ -3,7 +3,7 @@
  * human-pinned capability override. The worker's live capability is derived
  * by the Host, so a base-prompt update never silently keeps a stale snapshot.
  */
-import { isSessionId, readJson, writeJson } from './layout.js'
+import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
 
 function normalizeCapability(input) {
   if (input === null || typeof input !== 'object') return null
@@ -101,6 +101,8 @@ export class RelationshipStore {
       throw new Error('relationship requires two different session ids')
     }
     if (offer !== true && request !== true) throw new Error('a relationship must offer or request')
+    return withFileLock(this.file, () => {
+    this.state = undefined
     const state = this.read()
     const existing = state.relationships.find(entry => entry.supervisor === supervisor && entry.worker === worker)
     const override = capabilityOverride === undefined
@@ -136,13 +138,17 @@ export class RelationshipStore {
     state.relationships.push(relationship)
     this.write(state)
     return relationship
+    })
   }
 
   remove(supervisor, worker) {
-    const state = this.read()
-    const next = state.relationships.filter(entry => !(entry.supervisor === supervisor && entry.worker === worker))
-    if (next.length === state.relationships.length) return false
-    this.write({ ...state, relationships: next })
-    return true
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      const next = state.relationships.filter(entry => !(entry.supervisor === supervisor && entry.worker === worker))
+      if (next.length === state.relationships.length) return false
+      this.write({ ...state, relationships: next })
+      return true
+    })
   }
 }

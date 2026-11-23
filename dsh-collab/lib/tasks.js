@@ -5,7 +5,7 @@
  */
 import crypto from 'node:crypto'
 
-import { isSessionId, readJson, writeJson } from './layout.js'
+import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
 
 const ACTIVE_STATUSES = new Set(['created', 'assigned', 'accepted', 'running'])
 const TASK_STATUSES = new Set(['created', 'assigned', 'accepted', 'running', 'done', 'failed', 'cancelled'])
@@ -93,20 +93,23 @@ export class TaskStore {
 
   createProject({ supervisor, title }, now = Date.now()) {
     if (!isSessionId(supervisor)) throw new Error('project requires a supervisor session')
-    const id = `project-${crypto.randomUUID()}`
-    const project = {
-      id,
-      supervisor,
-      title: String(title ?? 'Supervisor project'),
-      status: 'open',
-      requestId: null,
-      createdAt: now,
-      closedAt: null,
-    }
-    const state = this.read()
-    state.projects[id] = project
-    this.write(state)
-    return project
+    return withFileLock(this.file, () => {
+      const id = `project-${crypto.randomUUID()}`
+      const project = {
+        id,
+        supervisor,
+        title: String(title ?? 'Supervisor project'),
+        status: 'open',
+        requestId: null,
+        createdAt: now,
+        closedAt: null,
+      }
+      this.state = undefined
+      const state = this.read()
+      state.projects[id] = project
+      this.write(state)
+      return project
+    })
   }
 
   createTask({
@@ -135,23 +138,29 @@ export class TaskStore {
       failure: null,
       history: [],
     }
-    const state = this.read()
-    if (projectId !== null && projectId !== undefined) {
-      if (state.projects[projectId] === undefined) throw new Error(`unknown project: ${String(projectId)}`)
-    }
-    state.tasks[id] = task
-    this.write(state)
-    return task
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      if (projectId !== null && projectId !== undefined) {
+        if (state.projects[projectId] === undefined) throw new Error(`unknown project: ${String(projectId)}`)
+      }
+      state.tasks[id] = task
+      this.write(state)
+      return task
+    })
   }
 
   update(taskId, mutate, now = Date.now()) {
-    const state = this.read()
-    const task = state.tasks[taskId]
-    if (task === undefined) throw new Error(`unknown task: ${String(taskId)}`)
-    mutate(task, now)
-    task.updatedAt = now
-    this.write(state)
-    return task
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      const task = state.tasks[taskId]
+      if (task === undefined) throw new Error(`unknown task: ${String(taskId)}`)
+      mutate(task, now)
+      task.updatedAt = now
+      this.write(state)
+      return task
+    })
   }
 
   assign(taskId, worker, now = Date.now(), assignedTurn = null, capabilityVersion = null) {
@@ -244,32 +253,38 @@ export class TaskStore {
 
   bindProject(projectId, requestId, now = Date.now()) {
     if (!isSessionId(requestId)) throw new Error('project binding requires a request id')
-    const state = this.read()
-    const project = state.projects[projectId]
-    if (project === undefined) throw new Error(`unknown project: ${String(projectId)}`)
-    if (project.requestId !== null && project.requestId !== requestId) {
-      throw new Error('project is already bound to another request')
-    }
-    if (project.requestId === requestId) return project
-    project.requestId = requestId
-    project.updatedAt = now
-    this.write(state)
-    return project
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      const project = state.projects[projectId]
+      if (project === undefined) throw new Error(`unknown project: ${String(projectId)}`)
+      if (project.requestId !== null && project.requestId !== requestId) {
+        throw new Error('project is already bound to another request')
+      }
+      if (project.requestId === requestId) return project
+      project.requestId = requestId
+      project.updatedAt = now
+      this.write(state)
+      return project
+    })
   }
 
   closeProject(projectId, now = Date.now()) {
-    const state = this.read()
-    const project = state.projects[projectId]
-    if (project === undefined) throw new Error(`unknown project: ${String(projectId)}`)
-    if (project.status === 'closed') return project
-    const active = Object.values(state.tasks).some(task => (
-      task.projectId === projectId && ACTIVE_STATUSES.has(task.status)
-    ))
-    if (active) throw new Error('project still has active tasks')
-    project.status = 'closed'
-    project.closedAt = now
-    this.write(state)
-    return project
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      const project = state.projects[projectId]
+      if (project === undefined) throw new Error(`unknown project: ${String(projectId)}`)
+      if (project.status === 'closed') return project
+      const active = Object.values(state.tasks).some(task => (
+        task.projectId === projectId && ACTIVE_STATUSES.has(task.status)
+      ))
+      if (active) throw new Error('project still has active tasks')
+      project.status = 'closed'
+      project.closedAt = now
+      this.write(state)
+      return project
+    })
   }
 
   summaryForSupervisor(supervisor) {

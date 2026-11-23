@@ -29,8 +29,6 @@
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
     "lib/typert.remote-client.d.ts",
-    "lib/index.js",
-    "lib/index.d.ts",
     "lib/client.js",
     "cordis.patch.yml",
     "lib/types.js",
@@ -58,5 +56,8 @@
     "zod": "4.6.6"
   },
   "types": "./lib/host.d.ts",
-  "module": "lib/host.js"
+  "module": "lib/host.js",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
 }

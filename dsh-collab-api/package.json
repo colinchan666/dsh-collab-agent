@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node packages/dsh-collab-auth-api/scripts/build.mjs"
+    "build": "node packages/dsh-collab-auth-api/scripts/build.mjs",
+    "test": "node --test packages/dsh-collab-auth-api/test/*.test.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "~4.1.0",

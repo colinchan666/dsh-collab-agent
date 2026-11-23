@@ -6,7 +6,7 @@
  */
 import crypto from 'node:crypto'
 
-import { isSessionId, readJson, writeJson } from './layout.js'
+import { isSessionId, readJson, withFileLock, writeJson } from './layout.js'
 
 const REQUEST_STATUSES = new Set(['pending', 'accepted', 'delivered', 'rejected', 'cancelled', 'expired'])
 
@@ -144,20 +144,26 @@ export class RequestStore {
       overdue: false,
       overdueAt: null,
     }
-    const state = this.read()
-    state.requests[id] = request
-    this.write(state)
-    return request
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      state.requests[id] = request
+      this.write(state)
+      return request
+    })
   }
 
   update(id, mutate, now = Date.now()) {
-    const state = this.read()
-    const request = state.requests[id]
-    if (request === undefined) throw new Error(`unknown request: ${String(id)}`)
-    mutate(request, now)
-    request.updatedAt = now
-    this.write(state)
-    return request
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      const request = state.requests[id]
+      if (request === undefined) throw new Error(`unknown request: ${String(id)}`)
+      mutate(request, now)
+      request.updatedAt = now
+      this.write(state)
+      return request
+    })
   }
 
   accept(id, { projectId, taskIds = [], response = null, executionDeadlineAt = null }, now = Date.now()) {
