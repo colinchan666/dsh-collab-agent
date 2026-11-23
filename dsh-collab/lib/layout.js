@@ -226,10 +226,26 @@ export class SessionRegistry {
         if (!entry.isDirectory() || !isSessionId(entry.name)) continue
         const workdir = path.join(sessionsDir, entry.name)
         const meta = readJson(path.join(workdir, 'session.json'))
-        if (meta === undefined || meta.sessionId !== entry.name || meta.preset !== 'collab') continue
-        if (state.sessions[entry.name] === undefined) {
+        if (meta === undefined || meta.sessionId !== entry.name) continue
+        if (meta.preset !== 'collab' && meta.preset !== 'supervisor') continue
+        const existing = state.sessions[entry.name]
+        if (existing === undefined) {
           state.sessions[entry.name] = { ...meta, workdir }
           discovered += 1
+          changed = true
+          continue
+        }
+        // A moved workspace or a changed preset must repair the derived entry,
+        // while preserving the live title maintained by session events.
+        const next = {
+          ...existing,
+          preset: meta.preset,
+          originalCwd: typeof meta.originalCwd === 'string' ? meta.originalCwd : existing.originalCwd,
+          workdir,
+          updatedAt: typeof meta.updatedAt === 'number' ? meta.updatedAt : existing.updatedAt,
+        }
+        if (next.preset !== existing.preset || next.originalCwd !== existing.originalCwd || next.workdir !== existing.workdir) {
+          state.sessions[entry.name] = next
           changed = true
         }
       }

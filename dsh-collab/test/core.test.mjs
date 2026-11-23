@@ -329,9 +329,13 @@ test('the registry discovers sessions under registered workspaces', () => {
   try {
     const registryFile = path.join(root, 'registry.json')
     const registry = new SessionRegistry(registryFile)
-    assert.equal(registry.scanWorkspaces([workspace]), 2)
+    const supervisorId = 'session-33333333-3333-4333-8333-333333333333'
+    ensureSessionLayout({ originalCwd: workspace, sessionId: supervisorId, preset: 'supervisor', now: 3 })
+    assert.equal(registry.scanWorkspaces([workspace]), 3)
+    assert.equal(registry.scanWorkspaces([workspace]), 0)
     const listed = registry.list()
-    assert.deepEqual(listed.map(entry => entry.sessionId), [SELF, PEER])
+    assert.deepEqual(listed.map(entry => entry.sessionId), [SELF, PEER, supervisorId])
+    assert.equal(registry.get(supervisorId).preset, 'supervisor')
     assert.equal(registry.get(SELF).workdir, sessionWorkdir(workspace, SELF))
     registry.remove(PEER)
     assert.equal(registry.get(PEER), undefined)

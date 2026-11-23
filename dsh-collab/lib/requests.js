@@ -8,7 +8,7 @@ import crypto from 'node:crypto'
 
 import { isSessionId, readJson, writeJson } from './layout.js'
 
-const REQUEST_STATUSES = new Set(['pending', 'accepted', 'rejected', 'cancelled', 'expired'])
+const REQUEST_STATUSES = new Set(['pending', 'accepted', 'delivered', 'rejected', 'cancelled', 'expired'])
 
 function normalizeText(value, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback
@@ -29,6 +29,8 @@ function requestSummary(request) {
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
     ...(request.expiresAt === null ? {} : { expiresAt: request.expiresAt }),
+    ...(request.executionDeadlineAt === null ? {} : { executionDeadlineAt: request.executionDeadlineAt }),
+    ...(request.overdue === true ? { overdue: true, overdueAt: request.overdueAt } : {}),
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
     ...(request.delivery === null ? {} : { delivery: request.delivery }),
   }
@@ -47,6 +49,8 @@ function requesterSummary(request) {
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
     ...(request.expiresAt === null ? {} : { expiresAt: request.expiresAt }),
+    ...(request.executionDeadlineAt === null ? {} : { executionDeadlineAt: request.executionDeadlineAt }),
+    ...(request.overdue === true ? { overdue: true, overdueAt: request.overdueAt } : {}),
     ...(request.resolvedAt === null ? {} : { resolvedAt: request.resolvedAt }),
     ...(request.delivery === null ? {} : { delivery: request.delivery }),
   }
@@ -72,6 +76,9 @@ export class RequestStore {
       delete normalized.worker
       if (normalized.delivery === undefined) normalized.delivery = null
       if (normalized.expiresAt === undefined) normalized.expiresAt = null
+      if (normalized.executionDeadlineAt === undefined) normalized.executionDeadlineAt = null
+      if (normalized.overdue === undefined) normalized.overdue = false
+      if (normalized.overdueAt === undefined) normalized.overdueAt = null
       if (!Array.isArray(normalized.taskIds)) normalized.taskIds = []
       if (normalized.response === undefined) normalized.response = null
       if (normalized.reason === undefined) normalized.reason = null
@@ -133,6 +140,9 @@ export class RequestStore {
       resolvedAt: null,
       delivery: null,
       expiresAt: Number.isFinite(expiresAt) ? expiresAt : null,
+      executionDeadlineAt: null,
+      overdue: false,
+      overdueAt: null,
     }
     const state = this.read()
     state.requests[id] = request
@@ -150,7 +160,7 @@ export class RequestStore {
     return request
   }
 
-  accept(id, { projectId, taskIds = [], response = null }, now = Date.now()) {
+  accept(id, { projectId, taskIds = [], response = null, executionDeadlineAt = null }, now = Date.now()) {
     const normalizedProjectId = normalizeText(projectId)
     if (normalizedProjectId.length === 0) throw new Error('accept requires a project id')
     return this.update(id, (request) => {
@@ -162,6 +172,9 @@ export class RequestStore {
       request.response = response === null ? null : String(response)
       request.reason = null
       request.resolvedAt = now
+      request.executionDeadlineAt = Number.isFinite(executionDeadlineAt) ? executionDeadlineAt : null
+      request.overdue = false
+      request.overdueAt = null
     }, now)
   }
 
@@ -176,6 +189,9 @@ export class RequestStore {
       request.reason = null
       request.resolvedAt = null
       request.delivery = null
+      request.executionDeadlineAt = null
+      request.overdue = false
+      request.overdueAt = null
     }, now)
   }
 
@@ -202,8 +218,21 @@ export class RequestStore {
 
   markDelivered(id, delivery, now = Date.now()) {
     return this.update(id, (request) => {
+      if (request.status !== 'accepted' && request.status !== 'delivered') {
+        throw new Error(`request is ${request.status}, not delivery-ready`)
+      }
+      request.status = 'delivered'
       request.delivery = delivery
+      request.executionDeadlineAt = null
       request.updatedAt = now
+    }, now)
+  }
+
+  markOverdue(id, now = Date.now()) {
+    return this.update(id, (request) => {
+      if (request.status !== 'accepted' || request.overdue === true) return
+      request.overdue = true
+      request.overdueAt = now
     }, now)
   }
 

@@ -5,6 +5,7 @@
       name: '@local/dsh-collab-sessions'
       config:
         sharedRoot: /Users/cc/dsh/collab/shared
+        executionTimeoutMs: 86400000
 
     - id: preset-collab
       name: '@deepseek-ai/dsh-agent-preset'

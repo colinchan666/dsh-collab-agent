@@ -179,6 +179,11 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   `request-expired` notice; an expired request cannot be accepted or rejected
   and the requester may submit a new one. The timeout covers supervisor
   acknowledgement only, not task execution.
+- **Execution deadline**: an accepted request gets a soft
+  `executionTimeoutMs` deadline (default 24 hours). When it passes, the request
+  becomes `overdue` and the requester receives a `request-overdue` notice; work
+  is not automatically killed. Successful delivery clears the deadline and
+  moves the request to the terminal `delivered` state.
 - **Request tools**: `collab_request_submit`, `collab_request_cancel`,
   `collab_requests`, `collab_request_accept`, `collab_request_reject`.
   Requests are stored in `requests.json` next to the other collaboration state.

@@ -385,6 +385,9 @@ export function apply(ctx, config = {}) {
   const requestTimeoutMs = Number.isFinite(Number(config.requestTimeoutMs))
     ? Math.max(100, Number(config.requestTimeoutMs))
     : 10 * 60 * 1000
+  const executionTimeoutMs = Number.isFinite(Number(config.executionTimeoutMs))
+    ? Math.max(100, Number(config.executionTimeoutMs))
+    : 24 * 60 * 60 * 1000
   const registry = new SessionRegistry(registryPath)
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -412,6 +415,7 @@ export function apply(ctx, config = {}) {
       : path.join(path.dirname(registryPath), 'notices.json'),
   )
   const requestTimers = new Map()
+  const executionTimers = new Map()
   const deliveryInFlight = new Set()
   let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
@@ -744,6 +748,90 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  const clearExecutionTimer = (requestId) => {
+    const timer = executionTimers.get(requestId)
+    if (timer !== undefined) clearTimeout(timer)
+    executionTimers.delete(requestId)
+  }
+
+  const sendRequestOverdueNotice = async (request) => {
+    const supervisor = registry.get(request.supervisor)
+    if (supervisor === undefined) return
+    try {
+      await sendTaskNotice(
+        { sessionId: supervisor.sessionId, workdir: supervisor.workdir },
+        request.requester,
+        {
+          type: 'collab-task/request-overdue',
+          version: 1,
+          requestId: request.id,
+          title: request.title,
+          deadline: request.executionDeadlineAt,
+        },
+      )
+    } catch (error) {
+      warn(`request overdue notice failed for ${request.id}: ${describeError(error)}`)
+    }
+  }
+
+  const markRequestOverdue = async (requestId) => {
+    const request = requests.get(requestId)
+    if (request === undefined || request.status !== 'accepted' || request.overdue === true) {
+      clearExecutionTimer(requestId)
+      return
+    }
+    clearExecutionTimer(requestId)
+    const overdue = requests.markOverdue(requestId)
+    await sendRequestOverdueNotice(overdue)
+  }
+
+  const scheduleExecutionDeadline = (request) => {
+    clearExecutionTimer(request.id)
+    if (request.status !== 'accepted' || request.overdue === true || !Number.isFinite(request.executionDeadlineAt)) return
+    const delay = Math.max(0, request.executionDeadlineAt - Date.now())
+    const timer = setTimeout(() => {
+      executionTimers.delete(request.id)
+      void markRequestOverdue(request.id).catch(error => {
+        warn(`execution deadline failed for ${request.id}: ${describeError(error)}`)
+      })
+    }, delay)
+    timer.unref?.()
+    executionTimers.set(request.id, timer)
+  }
+
+  const sweepExecutionDeadlines = () => {
+    const now = Date.now()
+    for (const request of requests.list()) {
+      if (request.status === 'delivered') {
+        clearExecutionTimer(request.id)
+        continue
+      }
+      if (request.status !== 'accepted') {
+        clearExecutionTimer(request.id)
+        continue
+      }
+      if (request.overdue === true) {
+        clearExecutionTimer(request.id)
+        continue
+      }
+      let deadline = request.executionDeadlineAt
+      if (!Number.isFinite(deadline)) {
+        const acceptedAt = Number.isFinite(request.resolvedAt) ? request.resolvedAt : request.updatedAt
+        const updated = requests.update(request.id, (entry) => {
+          entry.executionDeadlineAt = acceptedAt + executionTimeoutMs
+        }, now)
+        deadline = updated.executionDeadlineAt
+      }
+      if (deadline <= now) {
+        void markRequestOverdue(request.id).catch(error => {
+          warn(`execution deadline failed for ${request.id}: ${describeError(error)}`)
+        })
+      } else {
+        scheduleExecutionDeadline(request)
+      }
+    }
+  }
+
   const wakePeer = async (targetId, message) => {
     // Receiver gate: authorization can be revoked after the sender wrote the
     // file, so delivery re-checks the current pair.
@@ -1010,11 +1098,17 @@ export function apply(ctx, config = {}) {
       if (request.status !== 'accepted' || typeof request.projectId !== 'string') continue
       const project = tasks.project(request.projectId)
       if (project === undefined) continue
-      if ((project.requestId ?? null) !== null) continue
-      try {
-        tasks.bindProject(project.id, request.id)
-      } catch (error) {
-        warn(`could not bind legacy request ${request.id} to project ${project.id}: ${describeError(error)}`)
+      if ((project.requestId ?? null) === null) {
+        try {
+          tasks.bindProject(project.id, request.id)
+        } catch (error) {
+          warn(`could not bind legacy request ${request.id} to project ${project.id}: ${describeError(error)}`)
+        }
+      }
+      if (request.delivery !== null) {
+        try { requests.markDelivered(request.id, request.delivery) } catch (error) {
+          warn(`could not promote legacy delivery ${request.id}: ${describeError(error)}`)
+        }
       }
     }
   }
@@ -1185,11 +1279,13 @@ export function apply(ctx, config = {}) {
         if (existingBinding !== null && existingBinding !== request.id) {
           throw new Error('project is already bound to another request')
         }
+        const acceptedAt = Date.now()
         const accepted = requests.accept(request.id, {
           projectId,
           taskIds: assigned.map(task => task.id),
           response: typeof args?.response === 'string' ? args.response : null,
-        })
+          executionDeadlineAt: acceptedAt + executionTimeoutMs,
+        }, acceptedAt)
         try {
           tasks.bindProject(projectId, request.id)
         } catch (error) {
@@ -1197,6 +1293,7 @@ export function apply(ctx, config = {}) {
           throw error
         }
         clearRequestTimer(request.id)
+        scheduleExecutionDeadline(accepted)
         const payload = {
           type: 'collab-task/request-accepted',
           version: 1,
@@ -1397,7 +1494,9 @@ export function apply(ctx, config = {}) {
         const self = requireSupervisor(exec)
         const request = requests.get(String(args?.requestId ?? ''))
         if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
-        if (request.status !== 'accepted') throw new Error(`request is ${request.status}, not accepted`)
+        if (request.status !== 'accepted' && request.status !== 'delivered') {
+          throw new Error(`request is ${request.status}, not delivery-ready`)
+        }
         if (request.projectId === null) throw new Error('accepted request has no project')
         const project = tasks.project(request.projectId)
         if (project === undefined) throw new Error('request project no longer exists')
@@ -1435,13 +1534,14 @@ export function apply(ctx, config = {}) {
           files: manifest.files,
         }
           const delivery = await sendTaskNotice(self, request.requester, payload)
-          requests.markDelivered(request.id, {
+          const recorded = requests.markDelivered(request.id, {
             deliveryId,
             manifestSha256,
             deliveredAt: Date.now(),
             ...(supersedes === null ? {} : { supersedes }),
           })
-          return JSON.stringify({ requestId: request.id, files: manifest.files.length, deliveryId, delivery })
+          clearExecutionTimer(request.id)
+          return JSON.stringify({ requestId: request.id, status: recorded.status, files: manifest.files.length, deliveryId, delivery })
         } finally {
           deliveryInFlight.delete(request.id)
         }
@@ -1904,7 +2004,7 @@ export function apply(ctx, config = {}) {
       if (write) return false
       return requests.listForRequester(sessionId).some(request => (
         request.projectId === projectId
-        && request.status === 'accepted'
+        && (request.status === 'delivered' || (request.status === 'accepted' && request.delivery !== null))
         && project.requestId === request.id
         && request.delivery !== null
       ))
@@ -2153,6 +2253,8 @@ export function apply(ctx, config = {}) {
   ctx.effect(() => () => {
     for (const timer of requestTimers.values()) clearTimeout(timer)
     requestTimers.clear()
+    for (const timer of executionTimers.values()) clearTimeout(timer)
+    executionTimers.clear()
   }, 'collab:request-timeouts')
 
   ctx.effect(() => {
@@ -2164,6 +2266,7 @@ export function apply(ctx, config = {}) {
   refreshRegistry()
   reconcileRequestProjectBindings()
   sweepRequestTimeouts()
+  sweepExecutionDeadlines()
   void flushNotices()
   for (const entry of registry.list()) {
     try { migrateSessionArchive(entry.workdir) } catch (error) { warn(`archive migration failed for ${entry.sessionId}: ${describeError(error)}`) }
