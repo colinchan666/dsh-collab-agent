@@ -493,36 +493,39 @@ window.__ModuleLoader__.load({
         if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
         return result.value
       }
+      const mountedRef = React.useRef(true)
+      const requestSeqRef = React.useRef(0)
+      React.useEffect(() => () => { mountedRef.current = false }, [])
 
-      React.useEffect(() => {
-        let cancelled = false
-        setLoading(true)
+      const loadSnapshot = async (showLoading) => {
+        const seq = requestSeqRef.current + 1
+        requestSeqRef.current = seq
+        if (showLoading) setLoading(true)
         setError(null)
-        run(() => props.auth.list())
-          .then(next => {
-            if (cancelled) return
-            setPairs(next.pairs)
-            setPendingGrants(next.pending)
-          })
-          .catch(failure => {
-            if (!cancelled) setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
-          })
-          .finally(() => { if (!cancelled) setLoading(false) })
-        return () => { cancelled = true }
-      }, [])
+        try {
+          const next = await run(() => props.auth.list())
+          if (!mountedRef.current || seq !== requestSeqRef.current) return
+          setPairs(next.pairs)
+          setPendingGrants(next.pending)
+        } catch (failure) {
+          if (!mountedRef.current || seq !== requestSeqRef.current) return
+          setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
+        } finally {
+          if (mountedRef.current && seq === requestSeqRef.current) setLoading(false)
+        }
+      }
 
       React.useEffect(() => {
-        const reload = async () => {
-          try {
-            const next = await run(() => props.auth.list())
-            setPairs(next.pairs)
-            setPendingGrants(next.pending)
-          } catch { /* the refresh button reports errors */ }
-        }
-        const onChanged = () => { void reload() }
+        void loadSnapshot(true)
+        const onChanged = () => { void loadSnapshot(false) }
         window.addEventListener('dsh-collab-auth-changed', onChanged)
         return () => { window.removeEventListener('dsh-collab-auth-changed', onChanged) }
       }, [])
+
+      const rootIds = sorted.map(summary => summary.id).join('|')
+      React.useEffect(() => {
+        setSelected(current => current.filter(id => sorted.some(summary => summary.id === id)))
+      }, [rootIds])
 
       const toggle = (id) => {
         setNotice(null)
@@ -539,6 +542,11 @@ window.__ModuleLoader__.load({
           setError(t('panel.selectTwo'))
           return
         }
+        if (!selected.every(id => sorted.some(summary => summary.id === id))) {
+          setSelected([])
+          setError(t('panel.selectTwo'))
+          return
+        }
         setBusy(true)
         setError(null)
         setNotice(null)
@@ -549,6 +557,7 @@ window.__ModuleLoader__.load({
           setSelected([])
           setActiveTab('pairs')
           setNotice(t('panel.authorizedNotice'))
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('dsh-collab-auth-changed'))
         } catch (failure) {
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
         } finally {
@@ -566,6 +575,7 @@ window.__ModuleLoader__.load({
           setPairs(next.pairs)
           setPendingGrants(next.pending)
           setNotice(t('panel.revokedNotice'))
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('dsh-collab-auth-changed'))
         } catch (failure) {
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
         } finally {
@@ -584,6 +594,7 @@ window.__ModuleLoader__.load({
           setPendingGrants(next.pending)
           setActiveTab('pairs')
           setNotice(t('panel.authorizedNotice'))
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('dsh-collab-auth-changed'))
         } catch (failure) {
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
         } finally {
@@ -593,17 +604,7 @@ window.__ModuleLoader__.load({
 
       const refresh = async () => {
         setConfirmRevoke(null)
-        setLoading(true)
-        setError(null)
-        try {
-          const next = await run(() => props.auth.list())
-          setPairs(next.pairs)
-          setPendingGrants(next.pending)
-        } catch (failure) {
-          setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
-        } finally {
-          setLoading(false)
-        }
+        await loadSnapshot(true)
       }
 
       const hint = loading
@@ -678,10 +679,12 @@ window.__ModuleLoader__.load({
         className: 'dsh-collab-auth-card',
         'data-pairs': 'true',
         role: 'tabpanel',
+        id: 'dsh-collab-auth-panel-pairs',
+        'aria-labelledby': 'dsh-collab-auth-tab-pairs',
       },
       h('div', { className: 'dsh-collab-auth-list' },
         loading ? h('p', { className: 'dsh-collab-auth-muted' }, t('panel.loading')) : null,
-        pairs.length === 0 && pendingGrants.length === 0
+        !loading && pairs.length === 0 && pendingGrants.length === 0
           ? h('p', { className: 'dsh-collab-auth-muted' }, t('panel.emptyPairs'))
           : null,
         ...pairRows,
@@ -694,6 +697,8 @@ window.__ModuleLoader__.load({
         className: 'dsh-collab-auth-card',
         'data-grow': 'true',
         role: 'tabpanel',
+        id: 'dsh-collab-auth-panel-sessions',
+        'aria-labelledby': 'dsh-collab-auth-tab-sessions',
       },
       h('div', { className: 'dsh-collab-auth-list' }, ...sessionRows),
       h('div', { className: 'dsh-collab-auth-footer' },
@@ -710,10 +715,20 @@ window.__ModuleLoader__.load({
       const tabButton = (id, label, count) => h('button', {
         type: 'button',
         role: 'tab',
+        id: `dsh-collab-auth-tab-${id}`,
+        'aria-controls': `dsh-collab-auth-panel-${id}`,
         className: 'dsh-collab-auth-tab',
         'data-active': activeTab === id ? 'true' : 'false',
         'aria-selected': activeTab === id ? 'true' : 'false',
         onClick: () => setActiveTab(id),
+        onKeyDown: (event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+          event.preventDefault()
+          setActiveTab(current => {
+            if (current === 'pairs') return 'sessions'
+            return 'pairs'
+          })
+        },
       }, `${label} (${String(count)})`)
 
       return h('div', { className: 'dsh-collab-auth' },
@@ -725,15 +740,13 @@ window.__ModuleLoader__.load({
           h('div', { className: 'dsh-collab-auth-tabs', role: 'tablist' },
             tabButton('pairs', t('panel.pairsTab'), pairs.length),
             tabButton('sessions', t('panel.sessionsTab'), sorted.length)),
-          activeTab === 'pairs'
-            ? h('div', { className: 'dsh-collab-auth-tabs-actions' },
-                h('button', {
-                  type: 'button',
-                  className: 'dsh-collab-auth-button',
-                  disabled: loading || busy,
-                  onClick: () => { void refresh() },
-                }, t('panel.refresh')))
-            : null),
+          h('div', { className: 'dsh-collab-auth-tabs-actions' },
+            h('button', {
+              type: 'button',
+              className: 'dsh-collab-auth-button',
+              disabled: loading || busy,
+              onClick: () => { void refresh() },
+            }, t('panel.refresh')))),
         h('div', { className: 'dsh-collab-auth-body' },
           h('div', { className: 'dsh-collab-auth-content' },
             activeTab === 'pairs' ? pairCard : sessionCard)),
@@ -1678,13 +1691,23 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
+      inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
+        const authUnavailable = { ok: false, error: { code: 'collab-auth-unavailable', message: 'Collaboration authorization Remote is not loaded' } }
+        const authPanel = {
+          list: async () => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.list(),
+          authorize: async (a, b) => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.authorize(a, b),
+          revoke: async (a, b) => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.revoke(a, b),
+        }
+        const callPanel = (sessionId, operation, args) => {
+          if (ctx.remote.collabAuth === undefined) return Promise.resolve(authUnavailable)
+          return ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {}))
+        }
 
         const panelCommand = async (sessionId, operation, args) => {
           try {
-            const result = await ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {}))
+            const result = await callPanel(sessionId, operation, args)
             if (result === undefined || result.ok !== true) return result
             return {
               ok: true,
@@ -1751,13 +1774,7 @@ window.__ModuleLoader__.load({
           name: 'main',
           key: 'collab-auth',
           locale: NS,
-          inject: () => ({
-            auth: {
-              list: () => ctx.remote.collabAuth.list(),
-              authorize: (a, b) => ctx.remote.collabAuth.authorize(a, b),
-              revoke: (a, b) => ctx.remote.collabAuth.revoke(a, b),
-            },
-          }),
+          inject: () => ({ auth: authPanel }),
         }, CollabAuthPanel))
 
         ctx.effect(() => ctx.sidebarRightTabs.register({
@@ -1780,7 +1797,7 @@ window.__ModuleLoader__.load({
           locale: NS,
           inject: () => ({
             mode: 'tasks',
-            panel: (sessionId, operation, args) => ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {})),
+            panel: (sessionId, operation, args) => callPanel(sessionId, operation, args),
             openSession: (sessionId) => ctx.uiWorkspace.openSession(sessionId),
             openWorkers: (sessionId) => ctx.sidebarRight.openTab(WORKERS_TAB_KIND, { params: { sessionId } }),
           }),
@@ -1792,7 +1809,7 @@ window.__ModuleLoader__.load({
           locale: NS,
           inject: () => ({
             mode: 'workers',
-            panel: (sessionId, operation, args) => ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {})),
+            panel: (sessionId, operation, args) => callPanel(sessionId, operation, args),
             openSession: (sessionId) => ctx.uiWorkspace.openSession(sessionId),
           }),
         }, SupervisorBoardTab))

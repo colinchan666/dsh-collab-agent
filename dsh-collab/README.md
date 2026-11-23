@@ -197,7 +197,10 @@ Tasks** action. Opening a supervisor no longer expands the right sidebar or
 steals the active tab, and a running session is not auto-opened unless the user
 chooses it. Board, base-prompt, and link actions use the authorization Remote
 (`collabAuth.panel`) rather than slash-command execution, so reading the board
-does not add command rows to the conversation.
+does not add command rows to the conversation. The authorization Remote is
+optional: if its bundle is unavailable, the rest of the plugin still mounts and
+the auth page reports `collab-auth-unavailable` instead of taking down the
+sidebar, board, or base-prompt UI.
 
 ## Copy session name
 
