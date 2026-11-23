@@ -1855,7 +1855,6 @@ export function apply(ctx, config = {}) {
         // A collaboration shell whose cwd contains another session's work
         // directory could read it recursively; refuse that cwd. Normal project
         // sessions keep their full shell so the plugin does not break them.
-        const bashCwdAllowed = deliveryAccessFor(bashWorkdir, true)
         hit = (isCollabCaller ? findForeignAncestorAccess([bashWorkdir], options) : undefined)
           ?? findForeignSessionAccessInCommand(String(args?.command ?? ''), {
             ...options,
