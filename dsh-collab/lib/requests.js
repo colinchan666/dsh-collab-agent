@@ -17,7 +17,7 @@ function normalizeText(value, fallback = '') {
 function requestSummary(request) {
   return {
     id: request.id,
-    worker: request.worker,
+    requester: request.requester,
     supervisor: request.supervisor,
     title: request.title,
     requirement: request.requirement,
@@ -42,7 +42,16 @@ export class RequestStore {
   read() {
     if (this.state !== undefined) return this.state
     const raw = readJson(this.file)
-    const requests = raw?.requests !== null && typeof raw?.requests === 'object' ? raw.requests : {}
+    const source = raw?.requests !== null && typeof raw?.requests === 'object' ? raw.requests : {}
+    const requests = {}
+    for (const [id, entry] of Object.entries(source)) {
+      if (entry === null || typeof entry !== 'object') continue
+      const requester = typeof entry.requester === 'string' ? entry.requester : entry.worker
+      if (!isSessionId(requester) || !isSessionId(entry.supervisor)) continue
+      const normalized = { ...entry, requester }
+      delete normalized.worker
+      requests[id] = normalized
+    }
     this.state = { version: 1, requests }
     return this.state
   }
@@ -56,9 +65,9 @@ export class RequestStore {
     return this.read().requests[id]
   }
 
-  listForWorker(worker, status) {
+  listForRequester(requester, status) {
     return Object.values(this.read().requests)
-      .filter(request => request.worker === worker && (status === undefined || request.status === status))
+      .filter(request => request.requester === requester && (status === undefined || request.status === status))
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 
@@ -68,8 +77,8 @@ export class RequestStore {
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 
-  create({ worker, supervisor, title, requirement, createdTurn = null }, now = Date.now()) {
-    if (!isSessionId(worker) || !isSessionId(supervisor) || worker === supervisor) {
+  create({ requester, supervisor, title, requirement, createdTurn = null }, now = Date.now()) {
+    if (!isSessionId(requester) || !isSessionId(supervisor) || requester === supervisor) {
       throw new Error('request requires two different session ids')
     }
     const normalizedTitle = normalizeText(title)
@@ -79,7 +88,7 @@ export class RequestStore {
     const id = `request-${crypto.randomUUID()}`
     const request = {
       id,
-      worker,
+      requester,
       supervisor,
       title: normalizedTitle,
       requirement: normalizedRequirement,
@@ -134,9 +143,9 @@ export class RequestStore {
     }, now)
   }
 
-  cancel(id, worker, now = Date.now()) {
+  cancel(id, requester, now = Date.now()) {
     return this.update(id, (request) => {
-      if (request.worker !== worker) throw new Error('request belongs to another worker')
+      if (request.requester !== requester) throw new Error('request belongs to another session')
       if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
       request.status = 'cancelled'
       request.resolvedAt = now

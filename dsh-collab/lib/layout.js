@@ -309,7 +309,12 @@ export function ensureCredential({ selfId, selfWorkdir, peerId, peerWorkdir, now
   return token
 }
 
+const MESSAGE_KINDS = new Set(['chat', 'request', 'task'])
+
 function macInput(message) {
+  if (typeof message.kind === 'string') {
+    return `${message.id}\n${message.from}\n${message.to}\n${message.createdAt}\n${message.kind}\n${message.text}`
+  }
   return `${message.id}\n${message.from}\n${message.to}\n${message.createdAt}\n${message.text}`
 }
 
@@ -324,6 +329,7 @@ function verifyMessage(token, message, peerId, selfId) {
   if (typeof message.id !== 'string' || message.id.length === 0 || message.id.length > 128) return false
   if (message.from !== peerId || message.to !== selfId) return false
   if (typeof message.text !== 'string' || message.text.length === 0) return false
+  if (message.kind !== undefined && !MESSAGE_KINDS.has(message.kind)) return false
   if (typeof message.createdAt !== 'number' || !Number.isFinite(message.createdAt)) return false
   if (typeof message.mac !== 'string' || message.mac.length !== 64) return false
   const expected = Buffer.from(signMessage(token, message), 'hex')
@@ -379,15 +385,17 @@ function migratePairLayout(pairDir) {
  * Write one authenticated message into both sessions' pair directories.
  * The sender keeps the outbox copy; the receiver gets the inbox copy.
  */
-export function sendMessage({ selfId, selfWorkdir, peerId, peerWorkdir, text, now = Date.now() }) {
+export function sendMessage({ selfId, selfWorkdir, peerId, peerWorkdir, kind = 'chat', text, now = Date.now() }) {
   if (typeof text !== 'string' || text.trim().length === 0) throw new Error('message text must not be empty')
   if (Buffer.byteLength(text) > MAX_MESSAGE_BYTES) throw new Error('message is larger than 64 KiB')
+  if (!MESSAGE_KINDS.has(kind)) throw new Error(`invalid message kind: ${String(kind)}`)
   const token = ensureCredential({ selfId, selfWorkdir, peerId, peerWorkdir, now })
   const message = {
     version: 1,
     id: crypto.randomUUID(),
     from: selfId,
     to: peerId,
+    kind,
     createdAt: now,
     text,
   }

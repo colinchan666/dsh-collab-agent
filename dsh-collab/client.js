@@ -113,14 +113,6 @@ window.__ModuleLoader__.load({
       'board.pinnedNotice': '已固定当前能力。',
       'board.liveNotice': '已切换为实时能力。',
       'board.requests': '派活请求',
-      'board.emptyRequests': '暂无待处理请求。',
-      'board.requestPermission': '派活请求权限',
-      'board.requestOn': '允许请求',
-      'board.requestOff': '禁止请求',
-      'board.requestOnNotice': '已允许该 worker 发起派活请求。',
-      'board.requestOffNotice': '已禁止该 worker 发起派活请求。',
-      'board.requestAllowed': '已允许',
-      'board.requestDisallowed': '未允许',
       'board.search': '搜索能力描述',
       'board.searchEmpty': '无匹配内容。',
       'board.expand': '展开',
@@ -214,14 +206,6 @@ window.__ModuleLoader__.load({
       'board.pinnedNotice': 'Capability pinned.',
       'board.liveNotice': 'Switched to live capability.',
       'board.requests': 'Work requests',
-      'board.emptyRequests': 'No pending requests.',
-      'board.requestPermission': 'Work-request permission',
-      'board.requestOn': 'Allow requests',
-      'board.requestOff': 'Disallow requests',
-      'board.requestOnNotice': 'This worker may now submit work requests.',
-      'board.requestOffNotice': 'This worker may no longer submit work requests.',
-      'board.requestAllowed': 'Allowed',
-      'board.requestDisallowed': 'Not allowed',
       'board.search': 'Search capability description',
       'board.searchEmpty': 'No matching content.',
       'board.expand': 'Expand',
@@ -1008,22 +992,6 @@ window.__ModuleLoader__.load({
       const detailField = (label, value) => h('div', { className: 'dsh-collab-cap-field' },
         h('span', { className: 'dsh-collab-cap-label' }, label),
         value)
-      const applyRequest = async () => {
-        updateCapabilityDetail({ busy: true, error: null })
-        const mode = relationship.request ? 'off' : 'on'
-        try {
-          if (executeLinkCommand === null) throw new Error('command executor is not ready')
-          const result = await executeLinkCommand(state.sessionId, `/collab-link request ${relationship.worker} ${mode}`)
-          if (result === undefined || result.ok !== true) throw new Error(result?.error?.message ?? 'command failed')
-          if (result.value?.result?.kind === 'error') throw new Error(result.value.result.text)
-          closeCapabilityDetail()
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('dsh-collab-board-refresh', { detail: { action: mode === 'on' ? 'request-on' : 'request-off', worker: relationship.worker } }))
-          }
-        } catch (error) {
-          updateCapabilityDetail({ busy: false, error: error instanceof Error ? error.message : String(error) })
-        }
-      }
       const applyMode = async (action) => {
         updateCapabilityDetail({ busy: true, error: null })
         try {
@@ -1063,16 +1031,7 @@ window.__ModuleLoader__.load({
             ? h('span', { className: 'dsh-collab-board-status', 'data-warn': 'true', style: { marginLeft: 6 } }, props.t('board.changed'))
             : null)),
         detailField(props.t('board.version'), h('code', { className: 'dsh-collab-cap-value' }, capability?.version ?? '-')),
-        detailField(props.t('board.requestPermission'),
-          h('div', { className: 'dsh-collab-cap-tools' },
-            h('span', { className: 'dsh-collab-cap-value' },
-              relationship.request ? props.t('board.requestAllowed') : props.t('board.requestDisallowed')),
-            h('button', {
-              type: 'button',
-              className: 'dsh-collab-base-button',
-              disabled: state.busy,
-              onClick: () => { void applyRequest() },
-            }, relationship.request ? props.t('board.requestOff') : props.t('board.requestOn')))),
+
         detailField(props.t('board.description'),
           h(React.Fragment, null,
             rawDescription.length === 0
@@ -1402,8 +1361,6 @@ window.__ModuleLoader__.load({
           const action = event?.detail?.action
           if (action === 'pin') setNotice(t('board.pinnedNotice'))
           else if (action === 'live') setNotice(t('board.liveNotice'))
-          else if (action === 'request-on') setNotice(t('board.requestOnNotice'))
-          else if (action === 'request-off') setNotice(t('board.requestOffNotice'))
           if (action !== undefined) {
             if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
             noticeTimerRef.current = window.setTimeout(() => setNotice(null), 2600)
@@ -1418,7 +1375,7 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError(null)
         try {
-          const payload = { offer: true, request: false }
+          const payload = { offer: true }
           const encoded = encodeBasePrompt(JSON.stringify(payload))
           const result = await props.execute(props.sessionId, `/collab-link link ${entry.sessionId} ${encoded}`)
           if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
@@ -1450,7 +1407,7 @@ window.__ModuleLoader__.load({
       }
 
       const workers = data?.workers ?? []
-      const linked = data?.relationships ?? []
+      const linked = (data?.relationships ?? []).filter(rel => rel.offer === true)
       const available = workers.filter(entry => !linked.some(rel => rel.worker === entry.sessionId))
       const tasks = data?.tasks ?? []
       const projects = data?.projects ?? []
@@ -1549,7 +1506,7 @@ window.__ModuleLoader__.load({
                   },
                     h('span', { className: 'dsh-collab-board-row-main' }, rel.capability?.name ?? shortId(rel.worker)),
                     h('code', { className: 'dsh-collab-board-id' }, shortId(rel.worker)),
-                    h('span', { className: 'dsh-collab-board-status' }, rel.offer && rel.request ? 'offer+request' : (rel.offer ? 'offer' : 'request')),
+                    h('span', { className: 'dsh-collab-board-status' }, 'offer'),
                     h('button', {
                       type: 'button',
                       className: 'dsh-collab-board-button',
@@ -1585,7 +1542,7 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'dsh-collab-board-row-main' },
                     request.title,
                     request.reason === undefined ? null : h('span', { className: 'dsh-collab-board-muted' }, ` · ${request.reason}`)),
-                  h('code', { className: 'dsh-collab-board-id' }, shortId(request.worker)),
+                  h('code', { className: 'dsh-collab-board-id' }, shortId(request.requester)),
                   h('span', { className: 'dsh-collab-board-status' }, request.status)))),
               visibleSections.length === 0
                 ? h('section', { className: 'dsh-collab-board-section' },

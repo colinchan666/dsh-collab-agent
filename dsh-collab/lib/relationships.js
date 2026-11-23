@@ -79,11 +79,17 @@ export class RelationshipStore {
     return this.read().relationships.find(entry => entry.supervisor === supervisor && entry.worker === worker)
   }
 
-  isWorker(sessionId) {
-    return this.read().relationships.some(entry => entry.worker === sessionId)
+  /** Whether this session is a registered executor for at least one supervisor. */
+  hasOffer(sessionId) {
+    return this.read().relationships.some(entry => entry.worker === sessionId && entry.offer === true)
   }
 
-  hasOffer(supervisor, worker) {
+  /** Backward-compatible worker check: only offered executors count as workers. */
+  isWorker(sessionId) {
+    return this.hasOffer(sessionId)
+  }
+
+  offers(supervisor, worker) {
     return this.get(supervisor, worker)?.offer === true
   }
 

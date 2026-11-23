@@ -176,7 +176,7 @@ const DELIVERY_LIST_PARAMETERS = {
 const REQUEST_SUBMIT_PARAMETERS = {
   type: 'object',
   properties: {
-    supervisor: { type: 'string', description: 'Target supervisor id. Required when more than one request-enabled supervisor is registered.' },
+    supervisor: { type: 'string', description: 'Target supervisor id. Required when more than one authorized supervisor is available.' },
     title: { type: 'string', description: 'Short request title.' },
     requirement: { type: 'string', description: 'What the requester needs, with enough detail to evaluate and decompose.' },
   },
@@ -197,7 +197,7 @@ const REQUEST_ACCEPT_PARAMETERS = {
   properties: {
     requestId: { type: 'string' },
     projectId: { type: 'string', description: 'Project containing the tasks created for this request.' },
-    response: { type: 'string', description: 'Optional message for the requesting worker.' },
+    response: { type: 'string', description: 'Optional message for the requester.' },
   },
   required: ['requestId', 'projectId'],
   additionalProperties: false,
@@ -260,7 +260,8 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       'You have no shell, file, office, web, or edit tools. Never try to perform a task yourself.',
       '',
       'Coordination tools:',
-      '- collab_inbox reads task-result and work-request notifications from workers. Call it at the start of every turn.',
+      '- collab_inbox reads messages from any authorized peer, including task/request notifications. Call it at the start of every turn.',
+      '- collab_peers / collab_send are ordinary communication tools for authorized peers. Chat does not create or change tasks.',
       '- collab_requests lists work requests. For each pending request, evaluate registered capabilities before accepting or rejecting.',
       '- collab_capabilities lists the functional sessions registered to you, their capabilities, online/authorization state, and workload.',
       '- collab_task_create creates a task (optionally in a project).',
@@ -271,7 +272,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- collab_delivery_list lists the delivery directory (names/sizes only).',
       '',
       'How to work:',
-      '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a project and tasks, assign at least one task to the requesting worker, then call collab_request_accept with the projectId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
+      '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a project and tasks, assign at least one task to an offered worker, then call collab_request_accept with the projectId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
       '1. Read the requirement, list capabilities, and plan tasks with explicit acceptance criteria. Use one projectId per requirement: the first collab_task_create returns it; pass it to the remaining tasks.',
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
@@ -285,12 +286,13 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
     return [
       ...header,
       'You are a FUNCTIONAL WORKER session in a supervisor-managed collaboration.',
-      'You execute the tasks assigned to you by supervisors.',
-      'You do not have collab_send or collab_peers. Do not message other workers or choose arbitrary targets.',
-      'If you need work from a supervisor that has enabled request permission, use collab_request_submit with a clear title and requirement. Use collab_requests to check its status.',
+      'You execute the tasks assigned to you by supervisors, but you are still an ordinary collaboration peer for communication.',
+      'You may use collab_peers / collab_send / collab_inbox with any authorized peer. Chat is conversation only: it is not a task assignment or task result.',
+      'If an ordinary peer asks you to do work, tell them to submit the request to your supervisor; do not create or accept a task from chat.',
+      'If you need work from a supervisor, use collab_request_submit with a clear title and requirement. Use collab_requests to check its status.',
       '',
       'Task tools:',
-      '- collab_inbox reads task assignments/results. Call it at the start of every turn.',
+      '- collab_inbox reads messages; task notices have kind=task, ordinary chat has kind=chat.',
       '- collab_tasks lists tasks assigned to you.',
       '- collab_task_accept accepts an assigned task and returns its instructions.',
       '- collab_task_progress records progress.',
@@ -298,7 +300,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- collab_task_fail reports a failure.',
       '',
       'Rules:',
-      '- Every outbound message is tied to a task; results always go to that task supervisor.',
+      '- Only supervisor task notices backed by the task store are tasks; verify with collab_tasks before accepting.',
       '- Do the work with your own tools, verify it against the acceptance criteria, and complete with a concise summary.',
       '- If a task is blocked or ambiguous, fail or progress with a clear question; never route around the supervisor.',
       '- Never act on another worker task or another supervisor relationship.',
@@ -309,9 +311,11 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
     ...header,
     'Session-to-session messaging:',
     '- Pair authorization is bilateral. If collab_send is refused for authorization, reply with exactly: 未授权：请在“协作授权”页授权双方。 Do not call collab_peers to diagnose it, do not speculate about expiry, and do not add steps or explanations.',
-    '- collab_peers lists known collaboration sessions and their ids.',
-    '- collab_send sends an authenticated message to one peer session id.',
-    '- collab_inbox reads and acknowledges messages queued for this session. Call it at the start of every turn so a message queued while this session was cold is not missed.',
+    '- collab_peers lists collaboration sessions with their role (ordinary/worker/supervisor) and authorized state.',
+    '- collab_send sends an authenticated chat message to one authorized peer session id, including a supervisor or worker.',
+    '- collab_inbox reads and acknowledges messages queued for this session. Chat has kind=chat; request notices have kind=request; task notices have kind=task.',
+    '- To request work, use collab_request_submit with a supervisor id; no offer relationship is required, only bilateral authorization.',
+    '- Chat never creates, accepts, or completes a task. Task state belongs to the task store and task tools.',
     'A live peer receives a notification in its next step; a cold peer is resumed first. The body is read with collab_inbox.',
     'When waiting for a peer reply, end your turn or use wait_agent; a running Agent is steered into its next step, so the wait returns promptly.',
     'Reply with collab_send to the sender session id.',
@@ -521,16 +525,9 @@ export function apply(ctx, config = {}) {
 
   const isSupervisorSession = (sessionId) => sessionPresets.get(sessionId) === SUPERVISOR
   const isManagedWorker = (sessionId) => relationships.isWorker(sessionId)
-  const isOrdinaryCollab = (sessionId) => collabSessions.has(sessionId)
-    && !isSupervisorSession(sessionId)
-    && !isManagedWorker(sessionId)
 
-  /** Inbox routing: supervisors hear from related workers; workers from related supervisors. */
-  const inboxPeerAllowed = (selfId, peerId) => {
-    if (isSupervisorSession(selfId)) return relationships.get(selfId, peerId) !== undefined
-    if (isManagedWorker(selfId)) return relationships.get(peerId, selfId) !== undefined
-    return true
-  }
+  /** Communication is role-agnostic; inboxText filters by bilateral authorization. */
+  const inboxPeerAllowed = () => true
 
   /** Send a task protocol message through the authenticated pair transport. */
   const sendTaskNotice = async (self, targetId, payload) => {
@@ -547,6 +544,7 @@ export function apply(ctx, config = {}) {
       selfWorkdir: self.workdir,
       peerId: peer.sessionId,
       peerWorkdir: peer.workdir,
+      kind: String(payload?.type ?? '').includes('request') ? 'request' : 'task',
       text: JSON.stringify(payload),
     })
     return wakePeer(peer.sessionId, message)
@@ -560,7 +558,7 @@ export function apply(ctx, config = {}) {
   )
 
   const peersText = (self) => {
-    const entries = registry.list().filter(entry => entry.sessionId !== self.sessionId && isOrdinaryCollab(entry.sessionId))
+    const entries = registry.list().filter(entry => entry.sessionId !== self.sessionId && COLLAB_PRESETS.has(entry.preset))
     if (entries.length === 0) {
       return 'No other collaboration sessions are registered yet. Create another one from the left sidebar entry.'
     }
@@ -569,9 +567,11 @@ export function apply(ctx, config = {}) {
       const online = ctx.agents.get(entry.sessionId) !== undefined
       const credential = readJson(credentialPath(self.workdir, entry.sessionId)) !== undefined
       const unread = inboxCount(self.workdir, entry.sessionId)
+      const authorized = auth.isAuthorized(self.sessionId, entry.sessionId)
+      const role = isSupervisorSession(entry.sessionId) ? 'supervisor' : (isManagedWorker(entry.sessionId) ? 'worker' : 'ordinary')
       const title = typeof entry.title === 'string' && entry.title.length > 0 ? `  title=${JSON.stringify(entry.title)}` : ''
       lines.push(
-        `- ${entry.sessionId}  ${online ? 'online' : 'offline'}  unread=${unread}  credential=${credential ? 'yes' : 'no'}${title}`,
+        `- ${entry.sessionId}  role=${role}  ${online ? 'online' : 'offline'}  authorized=${authorized ? 'yes' : 'no'}  unread=${unread}  credential=${credential ? 'yes' : 'no'}${title}`,
       )
     }
     return lines.join('\n')
@@ -659,6 +659,7 @@ export function apply(ctx, config = {}) {
     for (const item of authorized) {
       lines.push(
         `from: ${item.message.from}`,
+        `kind: ${item.message.kind ?? 'chat'}`,
         `message id: ${item.message.id}`,
         `sent: ${iso(item.message.createdAt)}`,
         '---',
@@ -741,7 +742,9 @@ export function apply(ctx, config = {}) {
   }
 
   /** Compact live capability lines injected into the supervisor prompt each turn. */
-  const capabilityRoster = (supervisor) => relationships.listForSupervisor(supervisor).map(relationship => {
+  const capabilityRoster = (supervisor) => relationships.listForSupervisor(supervisor)
+    .filter(relationship => relationship.offer === true)
+    .map(relationship => {
     const capability = effectiveCapability(relationship)
     const name = capability?.name ?? '(request-only)'
     const description = capability?.description ?? ''
@@ -839,6 +842,7 @@ export function apply(ctx, config = {}) {
         if (relationshipsForSelf.length === 0) return 'No functional sessions are registered to this supervisor yet.'
         const lines = [`supervisor: ${self.sessionId}`, '']
         for (const relationship of relationshipsForSelf) {
+          if (relationship.offer !== true) continue
           const worker = registry.get(relationship.worker)
           const online = ctx.agents.get(relationship.worker) !== undefined
           const authorized = auth.isAuthorized(self.sessionId, relationship.worker)
@@ -850,7 +854,7 @@ export function apply(ctx, config = {}) {
           const version = capability?.version ?? '-'
           const changed = capability?.changed === true ? 'yes' : 'no'
           lines.push(
-            `- ${relationship.worker}  capability=${JSON.stringify(name)}  source=${source}  version=${version}  changed=${changed}  offer=${relationship.offer ? 'yes' : 'no'}  request=${relationship.request ? 'yes' : 'no'}  authorized=${authorized ? 'yes' : 'no'}  ${online ? 'online' : 'offline'}  active=${String(active)}${description.length === 0 ? '' : `  description=${JSON.stringify(description)}`}${worker?.title === undefined ? '' : `  title=${JSON.stringify(worker.title)}`}`,
+            `- ${relationship.worker}  capability=${JSON.stringify(name)}  source=${source}  version=${version}  changed=${changed}  offer=${relationship.offer ? 'yes' : 'no'}  authorized=${authorized ? 'yes' : 'no'}  ${online ? 'online' : 'offline'}  active=${String(active)}${description.length === 0 ? '' : `  description=${JSON.stringify(description)}`}${worker?.title === undefined ? '' : `  title=${JSON.stringify(worker.title)}`}`,
           )
         }
         return lines.join('\n')
@@ -945,17 +949,17 @@ export function apply(ctx, config = {}) {
     },
     {
       name: 'collab_requests',
-      description: 'List work requests. A supervisor sees requests sent to it; a worker sees its own requests.',
+      description: 'List work requests. A supervisor sees requests sent to it; any requester session sees its own requests.',
       parameters: REQUEST_LIST_PARAMETERS,
       output: TEXT_OUTPUT,
-      when: ({ agent }) => isSupervisorSession(agent.id) || isManagedWorker(agent.id),
+      when: ({ agent }) => collabSessions.has(agent.id),
       isConcurrencySafe: () => true,
       execute: (args, exec) => {
         const self = requireSelf(exec)
         const status = typeof args?.status === 'string' && args.status.trim().length > 0 ? args.status.trim() : undefined
         const list = isSupervisorSession(self.sessionId)
           ? requests.listForSupervisor(self.sessionId, status)
-          : requests.listForWorker(self.sessionId, status)
+          : requests.listForRequester(self.sessionId, status)
         if (list.length === 0) return 'No requests.'
         return JSON.stringify(list.map(RequestStore.summary))
       },
@@ -977,11 +981,12 @@ export function apply(ctx, config = {}) {
         if (project.status !== 'open') throw new Error('project is closed')
         const assigned = tasks.listForSupervisor(self.sessionId).filter(task => (
           task.projectId === projectId
-          && task.worker === request.worker
+          && task.worker !== null
+          && relationships.hasOffer(task.worker)
           && task.status !== 'cancelled'
         ))
-        if (assigned.length === 0) throw new Error('assign at least one task for the requesting worker before accepting')
-        if (!auth.isAuthorized(self.sessionId, request.worker)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        if (assigned.length === 0) throw new Error('assign at least one task to an offered worker before accepting')
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
         const accepted = requests.accept(request.id, {
           projectId,
           taskIds: assigned.map(task => task.id),
@@ -996,7 +1001,7 @@ export function apply(ctx, config = {}) {
           taskIds: assigned.map(task => task.id),
           response: accepted.response,
         }
-        const delivery = await sendTaskNotice(self, request.worker, payload)
+        const delivery = await sendTaskNotice(self, request.requester, payload)
         return JSON.stringify({
           request: RequestStore.summary(accepted),
           tasks: assigned.map(task => TaskStore.summary(task)),
@@ -1015,7 +1020,7 @@ export function apply(ctx, config = {}) {
         const request = requests.get(String(args?.requestId ?? ''))
         if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
         if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
-        if (!auth.isAuthorized(self.sessionId, request.worker)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
         const rejected = requests.reject(request.id, String(args?.reason ?? ''))
         const payload = {
           type: 'collab-task/request-rejected',
@@ -1024,7 +1029,7 @@ export function apply(ctx, config = {}) {
           title: rejected.title,
           reason: rejected.reason,
         }
-        const delivery = await sendTaskNotice(self, request.worker, payload)
+        const delivery = await sendTaskNotice(self, request.requester, payload)
         return JSON.stringify({ request: RequestStore.summary(rejected), delivery })
       },
     },
@@ -1242,42 +1247,42 @@ export function apply(ctx, config = {}) {
     },
     {
       name: 'collab_request_submit',
-      description: 'Ask a request-enabled supervisor to evaluate and decompose work for you. The supervisor must already offer a capability and both sides must be authorized.',
+      description: 'Ask an authorized supervisor to evaluate and decompose work. No offer/worker relationship is required; bilateral authorization is enough.',
       parameters: REQUEST_SUBMIT_PARAMETERS,
       output: TEXT_OUTPUT,
-      when: ({ agent }) => isManagedWorker(agent.id),
+      when: ({ agent }) => collabSessions.has(agent.id) && !isSupervisorSession(agent.id),
       execute: async (args, exec) => {
-        const self = requireWorker(exec)
-        const eligible = relationships.listForWorker(self.sessionId)
-          .filter(relationship => relationship.request === true && auth.isAuthorized(self.sessionId, relationship.supervisor))
+        const self = requireSelf(exec)
+        const eligible = registry.list()
+          .filter(entry => entry.preset === SUPERVISOR && auth.isAuthorized(self.sessionId, entry.sessionId))
         if (eligible.length === 0) {
-          throw new Error('no request-enabled supervisor; ask the human to enable request in registration and authorize both sides')
+          throw new Error('no authorized supervisor; authorize a supervisor pair in the authorization page first')
         }
         const targetId = typeof args?.supervisor === 'string' && args.supervisor.trim().length > 0
           ? args.supervisor.trim()
           : undefined
-        let relationship
+        let supervisor
         if (targetId !== undefined) {
-          relationship = eligible.find(candidate => candidate.supervisor === targetId)
-          if (relationship === undefined) throw new Error('target supervisor is not request-enabled for this worker')
+          supervisor = eligible.find(candidate => candidate.sessionId === targetId)
+          if (supervisor === undefined) throw new Error('target supervisor is not authorized for this session')
         } else if (eligible.length === 1) {
-          relationship = eligible[0]
+          supervisor = eligible[0]
         } else {
-          throw new Error(`specify a supervisor: ${eligible.map(candidate => candidate.supervisor).join(', ')}`)
+          throw new Error(`specify a supervisor: ${eligible.map(candidate => candidate.sessionId).join(', ')}`)
         }
         const request = requests.create({
-          worker: self.sessionId,
-          supervisor: relationship.supervisor,
+          requester: self.sessionId,
+          supervisor: supervisor.sessionId,
           title: String(args?.title ?? ''),
           requirement: String(args?.requirement ?? ''),
           createdTurn: turnForCall(exec),
         })
         try {
-          const delivery = await sendTaskNotice(self, relationship.supervisor, {
+          const delivery = await sendTaskNotice(self, supervisor.sessionId, {
             type: 'collab-task/request',
             version: 1,
             requestId: request.id,
-            worker: self.sessionId,
+            requester: self.sessionId,
             title: request.title,
             requirement: request.requirement,
           })
@@ -1293,11 +1298,11 @@ export function apply(ctx, config = {}) {
       description: 'Cancel one of your pending work requests.',
       parameters: REQUEST_CANCEL_PARAMETERS,
       output: TEXT_OUTPUT,
-      when: ({ agent }) => isManagedWorker(agent.id),
+      when: ({ agent }) => collabSessions.has(agent.id) && !isSupervisorSession(agent.id),
       execute: async (args, exec) => {
-        const self = requireWorker(exec)
+        const self = requireSelf(exec)
         const request = requests.get(String(args?.requestId ?? ''))
-        if (request === undefined || request.worker !== self.sessionId) throw new Error('unknown request')
+        if (request === undefined || request.requester !== self.sessionId) throw new Error('unknown request')
         const cancelled = requests.cancel(request.id, self.sessionId)
         try {
           await sendTaskNotice(self, request.supervisor, {
@@ -1323,8 +1328,8 @@ export function apply(ctx, config = {}) {
     },
     {
       name: 'collab_peers',
-      description: 'List other ordinary collaboration sessions with their exact session ids and online state.',
-      when: ({ agent }) => isOrdinaryCollab(agent.id),
+      description: 'List other collaboration sessions with their role, session id, authorization, and online state.',
+      when: ({ agent }) => collabSessions.has(agent.id),
       parameters: NO_PARAMETERS,
       output: TEXT_OUTPUT,
       isConcurrencySafe: () => true,
@@ -1336,8 +1341,8 @@ export function apply(ctx, config = {}) {
     },
     {
       name: 'collab_send',
-      description: 'Send an authenticated message to another collaboration session. The pair must be explicitly authorized; the message is written under comm/<target>/outbox and the target inbox; a live target is woken with a notification and reads it through collab_inbox.',
-      when: ({ agent }) => isOrdinaryCollab(agent.id),
+      description: 'Send an authenticated chat message to another collaboration session. The pair must be explicitly authorized; the message is written under comm/<target>/outbox and the target inbox; a live target is woken with a notification and reads it through collab_inbox. Chat never changes task state.',
+      when: ({ agent }) => collabSessions.has(agent.id),
       parameters: SEND_PARAMETERS,
       output: TEXT_OUTPUT,
       execute: async (args, exec) => {
@@ -1346,8 +1351,9 @@ export function apply(ctx, config = {}) {
         const text = String(args?.message ?? '')
         if (!isSessionId(targetId)) throw new Error('target must be an exact session id such as session-<uuid>')
         if (targetId === self.sessionId) throw new Error('a collaboration session cannot send a message to itself')
-        if (!isOrdinaryCollab(targetId)) {
-          throw new Error('this target is managed by a supervisor; use the task tools instead of collab_send')
+        const targetEntry = registry.get(targetId)
+        if (targetEntry === undefined || !COLLAB_PRESETS.has(targetEntry.preset)) {
+          throw new Error('target must be a collaboration session')
         }
         if (!auth.isAuthorized(self.sessionId, targetId)) {
           throw new Error('未授权：请在“协作授权”页授权双方。')
@@ -1366,6 +1372,7 @@ export function apply(ctx, config = {}) {
           selfWorkdir: self.workdir,
           peerId: peer.sessionId,
           peerWorkdir,
+          kind: 'chat',
           text,
         })
         const delivery = await wakePeer(peer.sessionId, message)
@@ -1468,7 +1475,7 @@ export function apply(ctx, config = {}) {
     handler: (invocation) => {
       const supervisor = invocation.agent?.id
       if (!isSupervisorSession(supervisor)) return { kind: 'error', text: 'not a supervisor session' }
-      const usage = 'usage: /collab-link [get | link <worker> <base64-json> | pin <worker> | live <worker> | request <worker> on|off | unlink <worker>]'
+      const usage = 'usage: /collab-link [get | link <worker> <base64-json> | pin <worker> | live <worker> | unlink <worker>]'
       const view = relationship => relationship === undefined
         ? undefined
         : { ...relationship, capability: effectiveCapability(relationship) }
@@ -1483,7 +1490,7 @@ export function apply(ctx, config = {}) {
           }),
         }
       }
-      if (action === 'link' || action === 'unlink' || action === 'pin' || action === 'live' || action === 'request') {
+      if (action === 'link' || action === 'unlink' || action === 'pin' || action === 'live') {
         const worker = parts[1]
         if (!isSessionId(worker) || worker === supervisor) return { kind: 'error', text: usage }
         const entry = registry.get(worker)
@@ -1494,24 +1501,8 @@ export function apply(ctx, config = {}) {
           return { kind: 'success', text: JSON.stringify({ removed: true, worker, communicationRevoked: true }) }
         }
         const existing = relationships.get(supervisor, worker)
-        if ((action === 'pin' || action === 'live' || action === 'request') && existing === undefined) {
+        if ((action === 'pin' || action === 'live') && existing === undefined) {
           return { kind: 'error', text: 'worker is not registered to this supervisor' }
-        }
-        if (action === 'request') {
-          const mode = parts[2]
-          if (mode !== 'on' && mode !== 'off') return { kind: 'error', text: usage }
-          try {
-            const relationship = relationships.upsert({
-              supervisor,
-              worker,
-              offer: existing.offer,
-              request: mode === 'on',
-              createdBy: 'human',
-            })
-            return { kind: 'success', text: JSON.stringify({ relationship: view(relationship) }) }
-          } catch (error) {
-            return { kind: 'error', text: describeError(error) }
-          }
         }
         if (action === 'pin' || action === 'live') {
           const live = liveCapability(worker)
@@ -1540,7 +1531,6 @@ export function apply(ctx, config = {}) {
         const live = liveCapability(worker)
         const override = payload?.override === true ? (payload?.capability ?? null) : undefined
         const offer = payload?.offer !== false
-        const request = payload?.request === true
         try {
           const relationship = relationships.upsert({
             supervisor,
@@ -1548,7 +1538,6 @@ export function apply(ctx, config = {}) {
             capabilityOverride: override,
             capabilityVersion: live?.version,
             offer,
-            request,
             createdBy: 'human',
           })
           auth.authorize(supervisor, worker, 'relationship')

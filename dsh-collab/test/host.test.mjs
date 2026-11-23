@@ -11,6 +11,7 @@ const A = 'session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const B = 'session-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const PLAIN = 'session-cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const D = 'session-dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+const E = 'session-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 
 /** Minimal Cordis-shaped surface used by index.js. */
 function fakeHarness(workspace) {
@@ -241,7 +242,7 @@ test('a supervisor links a worker, assigns a task, and the worker completes it',
     assert.equal(create.options.when({ agent: worker }), false)
     assert.equal(accept.options.when({ agent: worker }), true)
     assert.equal(accept.options.when({ agent: supervisor }), false)
-    assert.equal(harness.tools.find(entry => entry.definition.name === 'collab_send').options.when({ agent: worker }), false)
+    assert.equal(harness.tools.find(entry => entry.definition.name === 'collab_send').options.when({ agent: worker }), true)
     await harness.emit('session/event', supervisor.session, {
       type: 'tool/call',
       data: { callId: 'call-create', turn: 4 },
@@ -278,7 +279,7 @@ test('a supervisor links a worker, assigns a task, and the worker completes it',
   }
 })
 
-test('a request-enabled worker asks a supervisor and gets decomposed work', async () => {
+test('a requester asks a supervisor and gets decomposed work', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-request-'))
   const workspace = path.join(root, 'workspace')
   fs.mkdirSync(workspace, { recursive: true })
@@ -302,20 +303,6 @@ test('a request-enabled worker asks a supervisor and gets decomposed work', asyn
       signal: new AbortController().signal,
     })
     assert.equal(linked.kind, 'success')
-    const requestOff = await link.handler({
-      agent: supervisor,
-      rawInput: `request ${B} off`,
-      attachments: [],
-      signal: new AbortController().signal,
-    })
-    assert.equal(requestOff.kind, 'success')
-    const requestOn = await link.handler({
-      agent: supervisor,
-      rawInput: `request ${B} on`,
-      attachments: [],
-      signal: new AbortController().signal,
-    })
-    assert.equal(requestOn.kind, 'success')
     const submit = harness.tools.find(entry => entry.definition.name === 'collab_request_submit')
     const requests = harness.tools.find(entry => entry.definition.name === 'collab_requests')
     const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
@@ -333,6 +320,8 @@ test('a request-enabled worker asks a supervisor and gets decomposed work', asyn
     ))
     const requestId = submitted.request.id
     assert.equal(submitted.request.status, 'pending')
+    const inbox = harness.tools.find(entry => entry.definition.name === 'collab_inbox')
+    assert.match(inbox.definition.execute({}, { agent: supervisor }), /kind: request/u)
     const pending = JSON.parse(requests.definition.execute({ status: 'pending' }, { agent: supervisor }))
     assert.equal(pending.length, 1)
     assert.equal(pending[0].id, requestId)
@@ -363,6 +352,124 @@ test('a request-enabled worker asks a supervisor and gets decomposed work', asyn
     ))
     assert.equal(rejected.request.status, 'rejected')
     assert.equal(rejected.request.reason, 'missing report-writing capability')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('an ordinary authorized peer can submit a request without an offer', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-ordinary-request-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    const requester = harness.makeAgent(E, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    await harness.emit('agent/created', { agent: requester, source: 'startup' })
+    const link = harness.commands.find(entry => entry.name === 'collab-link')
+    const payload = Buffer.from(JSON.stringify({
+      capability: { name: 'worker', description: 'does tasks' },
+      offer: true,
+    }), 'utf8').toString('base64')
+    await link.handler({
+      agent: supervisor,
+      rawInput: `link ${B} ${payload}`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    const auth = harness.commands.find(entry => entry.name === 'collab-auth')
+    await auth.handler({
+      agent: requester,
+      rawInput: `authorize ${A} ${E}`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    const submit = harness.tools.find(entry => entry.definition.name === 'collab_request_submit')
+    assert.equal(submit.options.when({ agent: requester }), true)
+    const submitted = JSON.parse(await submit.definition.execute(
+      { title: 'Ordinary request', requirement: 'Do the work' },
+      { agent: requester },
+    ))
+    assert.equal(submitted.request.requester, E)
+    const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
+    const assign = harness.tools.find(entry => entry.definition.name === 'collab_task_assign')
+    const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
+    const created = JSON.parse(create.definition.execute(
+      { title: 'Task from ordinary request', instruction: 'Do it' },
+      { agent: supervisor },
+    ))
+    await assign.definition.execute({ taskId: created.task.id, worker: B }, { agent: supervisor })
+    const accepted = JSON.parse(await accept.definition.execute(
+      { requestId: submitted.request.id, projectId: created.projectId },
+      { agent: supervisor },
+    ))
+    assert.equal(accepted.request.status, 'accepted')
+    assert.equal(accepted.request.requester, E)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('communication is role-agnostic after bilateral authorization', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-communication-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    const ordinary = harness.makeAgent(E, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    await harness.emit('agent/created', { agent: ordinary, source: 'startup' })
+    supervisor.status = 'running'
+    supervisor.steer = () => {}
+    worker.status = 'running'
+    worker.steer = () => {}
+    ordinary.status = 'running'
+    ordinary.steer = () => {}
+    const link = harness.commands.find(entry => entry.name === 'collab-link')
+    const payload = Buffer.from(JSON.stringify({
+      capability: { name: 'test-worker', description: 'runs a test task' },
+      offer: true,
+    }), 'utf8').toString('base64')
+    await link.handler({
+      agent: supervisor,
+      rawInput: `link ${B} ${payload}`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    const auth = harness.commands.find(entry => entry.name === 'collab-auth')
+    for (const pair of [[A, E], [B, E]]) {
+      const result = await auth.handler({
+        agent: ordinary,
+        rawInput: `authorize ${pair[0]} ${pair[1]}`,
+        attachments: [],
+        signal: new AbortController().signal,
+      })
+      assert.equal(result.kind, 'success')
+    }
+    const send = harness.tools.find(entry => entry.definition.name === 'collab_send')
+    assert.equal(send.options.when({ agent: supervisor }), true)
+    assert.equal(send.options.when({ agent: worker }), true)
+    assert.equal(send.options.when({ agent: ordinary }), true)
+    const call = (agent, target, message) => send.definition.execute(
+      { target, message },
+      { agent, name: 'collab_send', arguments: { target, message } },
+    )
+    assert.match(await call(ordinary, A, 'requirement from ordinary'), /sent:/)
+    assert.match(await call(supervisor, E, 'request received'), /sent:/)
+    assert.match(await call(worker, E, 'chat from worker'), /sent:/)
+    const outbox = path.join(ordinary.session.currentCwd, 'comm', A, 'outbox')
+    const file = fs.readdirSync(outbox).find(name => name.endsWith('.json'))
+    assert.ok(file)
+    const message = JSON.parse(fs.readFileSync(path.join(outbox, file), 'utf8'))
+    assert.equal(message.kind, 'chat')
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

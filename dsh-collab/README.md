@@ -139,26 +139,26 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   executes, and calls `collab_task_complete`; the supervisor reads
   `collab_tasks` / `collab_task_result` and may reject/retry/cancel. Capacity is
   one active task per worker.
-- **Worker isolation**: managed workers/supervisors do not get generic
-  `collab_send`; workers cannot message other workers or pick arbitrary targets.
-  Task results are routed to the task’s supervisor. Ordinary collab sessions
-  keep the existing peer messaging.
+- **Communication is role-agnostic**: `collab_send`, `collab_inbox`, and
+  `collab_peers` use bilateral authorization for ordinary peers, workers, and
+  supervisors alike. Chat never creates or changes tasks; only task tools do.
+- **Task isolation**: a worker may chat with ordinary peers, but ordinary peers
+  cannot assign work directly; they submit a request to the supervisor. Task
+  results still route to the task’s supervisor.
 - **Delivery directory**: the supervisor creates
   `deliverables/<projectId>/<workerId>/`; the worker can write its own subdir
   until `collab_project_close`, after which it is read-only. The supervisor can
   list names/sizes with `collab_delivery_list` but does not read content.
-- **Request permission**: in the 注册 tab, open a worker's detail modal and use
-  **允许请求 / 禁止请求** to set the `request` relationship flag. The worker must
-  also have bilateral communication authorization.
-- **Worker requests**: a request-enabled worker calls `collab_request_submit`
-  with a title and requirement. The supervisor is notified and must evaluate
-  `collab_capabilities` before deciding.
-- **Supervisor accept**: create a project and tasks, assign at least one task to
-  the requesting worker, then call `collab_request_accept` with the `projectId`.
-  The request becomes `accepted`; the worker is notified.
+- **Requests do not require offer**: any collaboration session with bilateral
+  authorization to a supervisor can call `collab_request_submit`; it does not
+  need to be an offered worker. The request is a normal structured message and
+  has no fixed requester role.
+- **Supervisor accept**: evaluate `collab_capabilities`, create a project and
+  tasks, assign at least one task to an offered worker, then call
+  `collab_request_accept` with the `projectId`. The request becomes `accepted`;
+  the requester is notified.
 - **Supervisor reject**: call `collab_request_reject` with a concrete reason,
-  naming the missing capability. The request becomes `rejected`; the human can
-  then register another worker for the supervisor.
+  naming the missing capability. The request becomes `rejected`.
 - **Request tools**: `collab_request_submit`, `collab_request_cancel`,
   `collab_requests`, `collab_request_accept`, `collab_request_reject`.
   Requests are stored in `requests.json` next to the other collaboration state.
