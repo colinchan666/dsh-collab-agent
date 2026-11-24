@@ -10,8 +10,8 @@ recent Workspace). It does not create a new Workspace per session.
 
 This repository contains two bundles that must both be installed and enabled:
 
-- `@local/dsh-collab-sessions` — Host plugin, presets, sidebar/board client;
-- `@local/dsh-collab-auth-api` — generated authorization Remote and client
+- `@xmodelin/dsh-collab-sessions` — Host plugin, presets, sidebar/board client;
+- `@xmodelin/dsh-collab-auth-api` — generated authorization Remote and client
   bundle. The collab client injects it, so enabling only the first bundle leaves
   the auth/board Remote unavailable.
 
@@ -28,17 +28,17 @@ Steps:
 
 2. Link both package directories into the target DSH profile. The profile is
    normally `~/.dsh/profiles/desktop` for Desktop. The package names are already
-   `@local/...`, so use these exact directory names.
+   `@xmodelin/...`, so use these exact directory names.
 
    macOS/Linux:
 
    ```sh
    PROFILE="$HOME/.dsh/profiles/desktop"
    REPO="$HOME/src/dsh-collab-agent"
-   mkdir -p "$PROFILE/node_modules/@local"
-   ln -s "$REPO/dsh-collab" "$PROFILE/node_modules/@local/dsh-collab-sessions"
+   mkdir -p "$PROFILE/node_modules/@xmodelin"
+   ln -s "$REPO/dsh-collab" "$PROFILE/node_modules/@xmodelin/dsh-collab-sessions"
    ln -s "$REPO/dsh-collab-api/packages/dsh-collab-auth-api" \
-     "$PROFILE/node_modules/@local/dsh-collab-auth-api"
+     "$PROFILE/node_modules/@xmodelin/dsh-collab-auth-api"
    ```
 
    Windows PowerShell (junctions work without Developer Mode):
@@ -46,18 +46,17 @@ Steps:
    ```powershell
    $ProfileDir = "$env:USERPROFILE\.dsh\profiles\desktop"
    $Repo = "C:\src\dsh-collab-agent"
-   New-Item -ItemType Directory -Force "$ProfileDir\node_modules\@local" | Out-Null
-   New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@local\dsh-collab-sessions" `
+   New-Item -ItemType Directory -Force "$ProfileDir\node_modules\@xmodelin" | Out-Null
+   New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@xmodelin\dsh-collab-sessions" `
      -Target "$Repo\dsh-collab"
-   New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@local\dsh-collab-auth-api" `
+   New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@xmodelin\dsh-collab-auth-api" `
      -Target "$Repo\dsh-collab-api\packages\dsh-collab-auth-api"
    ```
 
-3. Edit `dsh-collab/cordis.patch.yml`: replace or remove the absolute
-   `sharedRoot: /Users/cc/dsh/collab/shared`. Removing it uses
-   `<dsh home>/collab/shared`; a custom path must be writable by the DSH process.
-   For Windows use a native absolute path, for example
-   `C:/Users/me/.dsh/collab/shared`.
+3. By default the release uses `<dsh home>/collab/shared`. To use another
+   location, add a `sharedRoot` under the `dsh-collab-sessions` config; it must
+   be an absolute path writable by the DSH process. For Windows use a native
+   path, for example `C:/Users/me/.dsh/collab/shared`.
 
 4. `perSessionSandbox` is active on macOS/Linux only when the profile provides
    DSH's `sandboxPolicy` and OS sandbox provider. On Windows it is forced off:
@@ -68,8 +67,8 @@ Steps:
 5. Enable both bundles in the DSH plugin manager, in this order:
 
    ```text
-   @local/dsh-collab-auth-api
-   @local/dsh-collab-sessions
+   @xmodelin/dsh-collab-auth-api
+   @xmodelin/dsh-collab-sessions
    ```
 
    Then completely quit and reopen DSH. A page refresh or bundle reload is not
@@ -168,7 +167,7 @@ pnpm build
 ```
 
 This emits `lib/typert.host.js`, `lib/typert.remote-client.js`, and the bundled
-`lib/client.js`. The profile links `@local/dsh-collab-auth-api` as a bundle;
+`lib/client.js`. The profile links `@xmodelin/dsh-collab-auth-api` as a bundle;
 after rebuilding, disable/enable that bundle (or restart DSH) and refresh the
 Web client so the generated `remote.collabAuth` namespace remounts. Board, base
 prompt, and link actions also use `collabAuth.panel`; they do not add command

@@ -4,7 +4,7 @@ import type {
   TypertRemoteInfo,
   TypertRemoteMethod,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { AuthSnapshot } from '@local/dsh-collab-auth-api/types'
+import type { AuthSnapshot } from '@xmodelin/dsh-collab-auth-api/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$636f6c6c616241757468 {
