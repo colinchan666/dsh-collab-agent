@@ -255,7 +255,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
     if (chip === undefined) throw new Error('standard mode chip not found')
     chip.click()
   })()`)
-  await waitFor(browser.evaluate, `document.querySelector('[role="menu"]') !== null`)
+  await waitFor(browser.evaluate, `Array.from(document.querySelectorAll('[role="menuitem"]')).some(element => element.getClientRects().length > 0)`)
   const visiblePresetNames = await browser.evaluate(`Array.from(
     document.querySelectorAll('[role="menuitem"]'),
   ).filter(element => element.getClientRects().length > 0)
