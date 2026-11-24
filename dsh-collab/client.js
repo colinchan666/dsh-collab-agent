@@ -1022,6 +1022,20 @@ window.__ModuleLoader__.load({
       return typeof data.basePrompt === 'string' ? data.basePrompt : ''
     }
 
+    function parseBasePromptCommand(line) {
+      if (line === '/collab-base get') return { operation: 'baseGet' }
+      const match = /^\/collab-base set(?: (.*))?$/u.exec(line)
+      if (match === null) return null
+      const encoded = match[1] ?? ''
+      try {
+        const binary = atob(encoded)
+        const value = new TextDecoder().decode(Uint8Array.from(binary, character => character.charCodeAt(0)))
+        return { operation: 'baseSet', value }
+      } catch {
+        return null
+      }
+    }
+
     const capabilityDetailStore = {
       open: false,
       sessionId: null,
@@ -1792,7 +1806,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      __test: { isCollabSummary, isSupervisorSessionSummary },
+      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
@@ -1958,16 +1972,10 @@ window.__ModuleLoader__.load({
         }, CollabAuthRefusedTail))
 
         setBasePromptExecutor((sessionId, line) => {
-          if (line === '/collab-base get') return panelCommand(sessionId, 'baseGet')
-          const match = /^\/collab-base set (\S+)$/u.exec(line)
-          if (match === null) return Promise.resolve({ ok: false, error: { code: 'invalid-base', message: 'invalid base prompt command' } })
-          try {
-            const binary = atob(match[1])
-            const value = new TextDecoder().decode(Uint8Array.from(binary, character => character.charCodeAt(0)))
-            return panelCommand(sessionId, 'baseSet', { value })
-          } catch (error) {
-            return Promise.resolve({ ok: false, error: { code: 'invalid-base', message: error instanceof Error ? error.message : String(error) } })
-          }
+          const command = parseBasePromptCommand(line)
+          if (command === null) return Promise.resolve({ ok: false, error: { code: 'invalid-base', message: 'invalid base prompt command' } })
+          if (command.operation === 'baseGet') return panelCommand(sessionId, 'baseGet')
+          return panelCommand(sessionId, 'baseSet', { value: command.value })
         })
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
