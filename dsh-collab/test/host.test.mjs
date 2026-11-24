@@ -781,7 +781,7 @@ test('collab_send refuses a pair that is not explicitly authorized', async () =>
         { target: B, message: 'should be blocked' },
         { agent: a, name: 'collab_send', arguments: { target: B, message: 'should be blocked' } },
       ),
-      /未授权|协作授权/,
+      /未授权|协同授权/,
     )
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
@@ -840,7 +840,7 @@ test('a one-sided grant does not authorize communication until the other side gr
         { target: B, message: 'blocked one-sided' },
         { agent: a, name: 'collab_send', arguments: { target: B, message: 'blocked one-sided' } },
       ),
-      /未授权|协作授权/,
+      /未授权|协同授权/,
     )
     await command({ ...invocation, rawInput: `grant ${B} ${A}` })
     const result = await tool.execute(

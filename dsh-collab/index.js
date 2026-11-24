@@ -346,7 +346,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
   return [
     ...header,
     'Session-to-session messaging:',
-    '- Pair authorization is bilateral. If collab_send is refused for authorization, reply with exactly: 未授权：请在“协作授权”页授权双方。 Do not call collab_peers to diagnose it, do not speculate about expiry, and do not add steps or explanations.',
+    '- Pair authorization is bilateral. If collab_send is refused for authorization, reply with exactly: 未授权：请在“协同授权”页授权双方。 Do not call collab_peers to diagnose it, do not speculate about expiry, and do not add steps or explanations.',
     '- collab_peers lists collaboration sessions with their role (ordinary/worker/supervisor) and authorized state.',
     '- collab_send sends an authenticated chat message to one authorized peer session id, including a supervisor or worker.',
     '- collab_inbox reads and acknowledges messages queued for this session. Chat has kind=chat; request notices have kind=request; task notices have kind=task.',
@@ -699,7 +699,7 @@ export function apply(ctx, config = {}) {
   /** Deliver one task protocol message through the authenticated pair transport. */
   const deliverTaskNotice = async (self, targetId, payload) => {
     if (!auth.isAuthorized(self.sessionId, targetId)) {
-      throw new Error('未授权：请在“协作授权”页授权双方。')
+      throw new Error('未授权：请在“协同授权”页授权双方。')
     }
     const peer = registry.get(targetId)
     if (peer === undefined) throw new Error(`unknown collaboration session: ${targetId}`)
@@ -963,7 +963,7 @@ export function apply(ctx, config = {}) {
     // Receiver gate: authorization can be revoked after the sender wrote the
     // file, so delivery re-checks the current pair.
     if (!auth.isAuthorized(message.from, targetId)) {
-      return 'blocked（未授权：请在“协作授权”页授权双方）'
+      return 'blocked（未授权：请在“协同授权”页授权双方）'
     }
     let target = ctx.agents.get(targetId)
     let resumed = false
@@ -1374,7 +1374,7 @@ export function apply(ctx, config = {}) {
           throw new Error('worker is not registered to this supervisor with an offer capability')
         }
         if (!auth.isAuthorized(self.sessionId, worker)) {
-          throw new Error('未授权：请在“协作授权”页授权双方。')
+          throw new Error('未授权：请在“协同授权”页授权双方。')
         }
         const project = task.projectId === null ? undefined : tasks.project(task.projectId)
         if (project !== undefined && project.status !== 'open') throw new Error('project is closed')
@@ -1448,7 +1448,7 @@ export function apply(ctx, config = {}) {
           && task.status !== 'cancelled'
         ))
         if (assigned.length === 0) throw new Error('assign at least one task to an offered worker before accepting')
-        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协同授权”页授权双方。')
         const existingBinding = project.requestId ?? null
         if (existingBinding !== null && existingBinding !== request.id) {
           throw new Error('project is already bound to another request')
@@ -1494,7 +1494,7 @@ export function apply(ctx, config = {}) {
         const request = requests.get(String(args?.requestId ?? ''))
         if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
         if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
-        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协同授权”页授权双方。')
         const rejected = requests.reject(request.id, String(args?.reason ?? ''))
         clearRequestTimer(request.id)
         const payload = {
@@ -1519,7 +1519,7 @@ export function apply(ctx, config = {}) {
         const request = requests.get(String(args?.requestId ?? ''))
         if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
         if (request.status !== 'accepted') throw new Error(`request is ${request.status}, not accepted`)
-        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协同授权”页授权双方。')
         const updated = requests.heartbeat(request.id, {
           note: typeof args?.note === 'string' ? args.note : null,
           extendByMs: Number.isFinite(Number(args?.extendByMs)) ? Number(args.extendByMs) : 0,
@@ -1713,7 +1713,7 @@ export function apply(ctx, config = {}) {
           .filter(task => task.projectId === project.id && !['done', 'cancelled'].includes(task.status))
         if (activeTasks.length > 0) throw new Error('all project tasks must be done or cancelled before delivery')
         if (deliveryInFlight.has(request.id)) throw new Error('delivery is already in progress')
-        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协作授权”页授权双方。')
+        if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协同授权”页授权双方。')
         deliveryInFlight.add(request.id)
         try {
           const manifest = buildDeliveryManifest(request.projectId)
@@ -1953,7 +1953,7 @@ export function apply(ctx, config = {}) {
           throw new Error('target must be a collaboration session')
         }
         if (!auth.isAuthorized(self.sessionId, targetId)) {
-          throw new Error('未授权：请在“协作授权”页授权双方。')
+          throw new Error('未授权：请在“协同授权”页授权双方。')
         }
         if (text.trim().length === 0) throw new Error('message must not be empty')
         if (Buffer.byteLength(text) > MAX_MESSAGE_BYTES) throw new Error('message is larger than 64 KiB')

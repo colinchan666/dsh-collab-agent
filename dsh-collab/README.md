@@ -123,7 +123,7 @@ communication pair must be authorized explicitly and **bilaterally**: A must
 authorize B and B must authorize A. A single-sided grant is shown as pending
 but does not open the gate.
 
-Open **Collab access** (协作授权) from the left sidebar panel list:
+Open **Collab access** (协同授权) from the left sidebar panel list:
 
 - **已授权会话对** — pairs where both sides have authorized, with a **Revoke**
   action for each. One-sided grants appear below them as pending until the
