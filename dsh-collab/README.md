@@ -6,6 +6,36 @@ Agent preset **in the currently selected Workspace** (the same target the
 built-in New Session button uses: the current Session's Workspace, then the
 recent Workspace). It does not create a new Workspace per session.
 
+## Installing in another DSH profile
+
+This repository contains two bundles that must both be installed and enabled:
+
+- `@local/dsh-collab-sessions` — Host plugin, presets, sidebar/board client;
+- `@local/dsh-collab-auth-api` — generated authorization Remote and client
+  bundle. The collab client injects it, so enabling only the first bundle leaves
+  the auth/board Remote unavailable.
+
+Steps:
+
+1. Put both packages under the target profile's `node_modules/@local/`
+   (or install them with the profile's package manager), then enable both
+   bundles and restart DSH completely.
+2. Edit `cordis.patch.yml`: replace or remove the absolute
+   `sharedRoot: /Users/cc/dsh/collab/shared`. Removing it uses
+   `<dsh home>/collab/shared`; a custom path must be writable by the DSH process.
+3. Keep `perSessionSandbox: true` only when the profile provides DSH's
+   `sandboxPolicy` and OS sandbox provider. On Windows, extra writable roots
+   apply to file tools but not necessarily to sandboxed shell processes; test
+   delivery writes and set it to `false` if the platform cannot enforce them.
+4. Rebuild the API only if its generated `lib/` is absent or its source changed:
+   `cd ../dsh-collab-api && pnpm install && pnpm build`.
+5. After restart, create a collab session, open its right sidebar once, confirm
+   the start/tasks/registration tabs, and authorize a pair in **Collab access**.
+
+The `collab` preset is a copy of the shipped `standard` preset; when upgrading
+DSH, re-sync `cordis.patch.yml` from the installed
+`dsh-web-app/presets/standard.patch.yml`.
+
 ## What a collab session gets
 
 1. **A unique session ID.** The Host session id (`session-<uuid>`) is stored in
@@ -86,9 +116,9 @@ pnpm build
 This emits `lib/typert.host.js`, `lib/typert.remote-client.js`, and the bundled
 `lib/client.js`. The profile links `@local/dsh-collab-auth-api` as a bundle;
 after rebuilding, disable/enable that bundle (or restart DSH) and refresh the
-Web client so the generated `remote.collabAuth` namespace remounts. The task
-board still uses the older command bridge for now; the authorization page is
-the first migrated surface.
+Web client so the generated `remote.collabAuth` namespace remounts. Board, base
+prompt, and link actions also use `collabAuth.panel`; they do not add command
+rows to the conversation.
 
 ## Base prompt
 
@@ -217,16 +247,16 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 
 ## Supervisor panel
 
-Supervisor sessions expose their task/capability tabs through the header **任务 /
-Tasks** action. Opening a supervisor no longer expands the right sidebar or
-steals the active tab, and a running session is not auto-opened unless the user
-chooses it. Board, base-prompt, and link actions use the authorization Remote
+Supervisor sessions expose their task/capability tabs when the right sidebar is
+opened. The plugin does not force the sidebar open or steal the active tab; it
+seeds **start**, **任务**, and **注册** once on each collapse-to-expand
+transition. Board, base-prompt, and link actions use the authorization Remote
 (`collabAuth.panel`) rather than slash-command execution, so reading the board
-does not add command rows to the conversation. The authorization Remote is a required
-client dependency because Cordis resolves `ctx.remote.collabAuth` through the
-injected service namespace. Management Remote calls are owner-only; a non-owner
-Peer is rejected before it can list or mutate authorization pairs or the
-collaboration board.
+does not add command rows to the conversation. The authorization Remote is a
+required client dependency because Cordis resolves `ctx.remote.collabAuth`
+through the injected service namespace. Management Remote calls are owner-only;
+a non-owner Peer is rejected before it can list or mutate authorization pairs or
+the collaboration board.
 
 ## Copy session name
 
@@ -273,11 +303,13 @@ display name to the clipboard and briefly marks the button as copied.
   starts in an authorized delivery directory.
   Normal project sessions keep their full shell and search behavior; only their
   direct access to a collaboration work directory is denied.
-- This is a session-level guard, not an OS security sandbox. Another OS user is
-  kept out by the `0700` mode, but the same OS user running another session is
-  blocked only by the guard: a deliberately obfuscated shell script, a hard
-  link to a protected file, a future file-reading tool the guard does not know,
-  or the human GUI's file browser is outside that boundary.
+- The guard is not itself an OS security sandbox. With `perSessionSandbox`
+  enabled and a DSH `sandboxPolicy` provider, the OS boundary is narrowed to
+  the session workdir plus open delivery roots; without that provider, another
+  OS user is kept out by `0700` mode, but the same OS user running another
+  session is blocked only by the guard: a deliberately obfuscated shell script,
+  a hard link to a protected file, a future file-reading tool the guard does not
+  know, or the human GUI's file browser is outside that boundary.
 - Messaging is local to this Harness profile. Nothing is sent over the network.
   The pair credential is a shared secret, so either side of a pair can produce
   a valid MAC for that pair; the file guard prevents a third session from
