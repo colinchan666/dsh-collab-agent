@@ -128,7 +128,7 @@ Open **Collab access** (协作授权) from the left sidebar panel list:
 - **已授权会话对** — pairs where both sides have authorized, with a **Revoke**
   action for each. One-sided grants appear below them as pending until the
   other side grants too.
-- **协作会话** — every collaboration session. Select exactly two and click
+- **协同会话** — every collaboration session. Select exactly two and click
   **Authorize both sides**.
 
 The gate is enforced on both sides: `collab_send` requires both directional
@@ -196,7 +196,7 @@ The Host command is also available:
 
 ## Supervisor sessions
 
-The Collab button is a dropdown with **协作会话** and **超级会话**. A supervisor
+The Collab button is a dropdown with **协同会话** and **超级会话**. A supervisor
 session is a coordination-only preset: no shell, files, office, web, or edit
 tools. It uses task tools to plan/assign/verify; workers execute.
 
@@ -694,7 +694,7 @@ asserts that the tasks and registration tabs are seeded.
 ## Usage
 
 1. Open the Workspace you want the collab session in.
-2. Click **New collab session** / **新建协作会话** directly below the sidebar's
+2. Click **New collab session** / **新建协同会话** directly below the sidebar's
    New session button (the same rounded 38px shape; icon-only in the collapsed
    rail).
 3. The new Session opens in that Workspace; its working directory is the
