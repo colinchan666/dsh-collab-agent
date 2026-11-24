@@ -9,7 +9,7 @@ import {
   SessionRegistry, collabBaseOf, credentialPath, ensureCredential, ensureLayoutAt, ensureSessionLayout,
   findForeignAncestorAccess,
   findForeignSessionAccess, findForeignSessionAccessInCommand, findSuspiciousSearchPattern, inboxCount,
-  listInbox, markRead, readJson, sendMessage, sessionWorkdir, withFileLock, writeJson,
+  configureFileLocks, listInbox, markRead, readJson, sendMessage, sessionWorkdir, withFileLock, writeJson,
 } from '../lib/layout.js'
 import { NoticeStore } from '../lib/notices.js'
 import { TaskStore } from '../lib/tasks.js'
@@ -354,6 +354,22 @@ test('a stale state lock is recovered and a live lock times out', () => {
     fs.writeFileSync(lock, 'live')
     assert.throws(() => withFileLock(file, () => 'no', { timeoutMs: 20, staleMs: 60_000 }), /timed out/u)
     fs.unlinkSync(lock)
+  } finally {
+    cleanup(root)
+  }
+})
+
+test('the lock wait is bounded and reports the holder pid', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-lock-default-'))
+  try {
+    const file = path.join(root, 'state.json')
+    fs.writeFileSync(`${file}.lock`, '4242\n')
+    configureFileLocks({ timeoutMs: 30 })
+    try {
+      assert.throws(() => withFileLock(file, () => 'no'), /timed out after 30ms.*holder pid 4242/u)
+    } finally {
+      configureFileLocks({ timeoutMs: 1000 })
+    }
   } finally {
     cleanup(root)
   }

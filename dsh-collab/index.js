@@ -21,7 +21,7 @@ import {
   SUBDIR, SessionRegistry, credentialPath, defaultRegistryPath, discoverSiblingWorkdirs,
   ensureSessionLayout, findForeignAncestorAccess, findForeignSessionAccess,
   findForeignSessionAccessInCommand, findSuspiciousSearchPattern, inboxCount,
-  canonicalPath, isDirectory, isSessionId, listInbox, markRead, migrateSessionArchive, mkdirp, readJson, sendMessage, writeJson,
+  canonicalPath, configureFileLocks, isDirectory, isSessionId, listInbox, markRead, migrateSessionArchive, mkdirp, readJson, sendMessage, writeJson,
 } from './lib/layout.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
@@ -390,6 +390,10 @@ function makeWakeMessage(message) {
 
 /** Register the plugin. */
 export function apply(ctx, config = {}) {
+  configureFileLocks({
+    timeoutMs: config.lockTimeoutMs,
+    staleMs: config.lockStaleMs,
+  })
   const dshHomePath = ctx.get('dshHomePath')
   const registryPath = typeof config.registryPath === 'string' && config.registryPath.length > 0
     ? config.registryPath

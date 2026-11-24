@@ -204,6 +204,9 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **Cross-process state locks**: registry, authorization, relationship, task,
   request, and notice mutations use a short-lived lock and re-read the state
   document under that lock; JSON writes are fsynced and atomically renamed.
+  The default wait is bounded to 1 second (`lockTimeoutMs`), after which the
+  error names the holder pid instead of blocking the Host event loop for five
+  seconds; `lockStaleMs` controls when an abandoned lock can be reclaimed.
   Parsed state caches invalidate on file identity changes, and a malformed
   state document is moved to a `.corrupt-<timestamp>` backup instead of being
   silently replaced by an empty store.

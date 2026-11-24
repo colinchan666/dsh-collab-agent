@@ -204,8 +204,19 @@ export function ensureSessionLayout({ originalCwd, sessionId, preset, now = Date
   })
 }
 
+/** Bounded lock wait; the default is intentionally short because the wait blocks the event loop. */
+const lockDefaults = { timeoutMs: 1000, staleMs: 10000 }
+
+/** Override the bounded lock defaults for this Host process. */
+export function configureFileLocks({ timeoutMs, staleMs } = {}) {
+  if (Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0) lockDefaults.timeoutMs = Math.max(1, Number(timeoutMs))
+  if (Number.isFinite(Number(staleMs)) && Number(staleMs) > 0) lockDefaults.staleMs = Math.max(1, Number(staleMs))
+}
+
 /** Acquire a short-lived cross-process lock for one state document. */
-export function withFileLock(file, operation, { timeoutMs = 5000, staleMs = 10000 } = {}) {
+export function withFileLock(file, operation, options = {}) {
+  const timeoutMs = Number.isFinite(Number(options.timeoutMs)) ? Math.max(1, Number(options.timeoutMs)) : lockDefaults.timeoutMs
+  const staleMs = Number.isFinite(Number(options.staleMs)) ? Math.max(1, Number(options.staleMs)) : lockDefaults.staleMs
   const lock = `${file}.lock`
   const started = Date.now()
   mkdirp(path.dirname(file), 0o700)
@@ -220,7 +231,11 @@ export function withFileLock(file, operation, { timeoutMs = 5000, staleMs = 1000
         const age = Date.now() - fs.statSync(lock).mtimeMs
         if (age > staleMs) fs.unlinkSync(lock)
       } catch { /* the owner may have removed it */ }
-      if (Date.now() - started > timeoutMs) throw new Error(`timed out waiting for state lock: ${lock}`)
+      if (Date.now() - started > timeoutMs) {
+        let holder = 'unknown'
+        try { holder = fs.readFileSync(lock, 'utf8').trim() || holder } catch { /* lock vanished */ }
+        throw new Error(`timed out after ${String(timeoutMs)}ms waiting for state lock: ${lock} (holder pid ${holder})`)
+      }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10)
     }
   }

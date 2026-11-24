@@ -7,6 +7,8 @@
         sharedRoot: /Users/cc/dsh/collab/shared
         executionTimeoutMs: 86400000
         perSessionSandbox: true
+        lockTimeoutMs: 1000
+        lockStaleMs: 10000
 
     - id: preset-collab
       name: '@deepseek-ai/dsh-agent-preset'
