@@ -208,3 +208,11 @@ test('the supervisor header registers the on-open tab scheduler', () => {
 })
 
 
+
+test('base prompt command parsing allows an empty value', () => {
+  const { __test } = pluginFor()
+  assert.deepEqual(__test.parseBasePromptCommand('/collab-base set'), { operation: 'baseSet', value: '' })
+  assert.deepEqual(__test.parseBasePromptCommand('/collab-base set '), { operation: 'baseSet', value: '' })
+  assert.deepEqual(__test.parseBasePromptCommand('/collab-base set aGVsbG8='), { operation: 'baseSet', value: 'hello' })
+  assert.equal(__test.parseBasePromptCommand('/collab-base set %%%'), null)
+})
