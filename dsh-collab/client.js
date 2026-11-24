@@ -1582,6 +1582,22 @@ window.__ModuleLoader__.load({
         setError(null)
         try { props.openSession?.(props.sessionId) } catch { /* the current session may already be shown */ }
         let settled = false
+        const chatScroller = () => {
+          const anchor = document.querySelector('[data-turn-process], [data-turn-tail]')
+          let node = anchor?.parentElement ?? null
+          while (node !== null) {
+            const style = window.getComputedStyle(node)
+            if (/(auto|scroll)/u.test(style.overflowY) && node.scrollHeight > node.clientHeight) return node
+            node = node.parentElement
+          }
+          return document.scrollingElement
+        }
+        const nudgeOlderTurns = () => {
+          const scroller = chatScroller()
+          if (scroller === null) return
+          scroller.scrollTop = 0
+          scroller.dispatchEvent(new Event('scroll', { bubbles: true }))
+        }
         const reveal = () => {
           if (settled) return
           const processElement = document.querySelector(`[data-turn-process="${turn}"]`)
@@ -1589,15 +1605,20 @@ window.__ModuleLoader__.load({
           const element = processElement !== null && processElement.getClientRects().length > 0
             ? processElement
             : (tailElement ?? processElement)
-          if (element === null) return
+          if (element === null) {
+            // DSH virtualizes long conversations; scrolling to the oldest loaded
+            // turn asks the chat pager to render the page that owns this turn.
+            nudgeOlderTurns()
+            return
+          }
           settled = true
           element.scrollIntoView({ behavior: 'smooth', block: 'center' })
           element.setAttribute('data-collab-focus', 'true')
           window.setTimeout(() => element.removeAttribute('data-collab-focus'), 1500)
         }
         reveal()
-        for (const delay of [80, 180, 360, 700]) window.setTimeout(reveal, delay)
-        window.setTimeout(() => { if (!settled) setError(t('board.notFound')) }, 900)
+        for (const delay of [80, 180, 360, 700, 1200, 1800, 2500]) window.setTimeout(reveal, delay)
+        window.setTimeout(() => { if (!settled) setError(t('board.notFound')) }, 3000)
       }
 
       const headerActions = []
