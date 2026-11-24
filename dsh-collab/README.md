@@ -271,19 +271,70 @@ Every named session row has a copy action in its hover strip, and the session
 right-click menu has **复制会话名 / Copy session name**. The action copies the
 display name to the clipboard and briefly marks the button as copied.
 
-## State recovery
+## Manual state recovery
 
-The left-sidebar **状态修复 / State recovery** page lists the collaboration
-state documents (`registry`, `authorization`, `relationships`, `tasks`,
-`requests`, and `notices`) and any `.corrupt-*` backups beside them.
+There is intentionally no state-recovery page. These files are small, local,
+owner-only JSON documents; inspect and repair them manually while DSH is
+stopped.
 
-- **Reset** is available for a malformed current document. It moves the current
-  file to a new `.corrupt-<timestamp>` backup and leaves the store empty so the
-  next write can recreate it.
-- **Restore** is available only for backups that parse as a JSON object; a
-  malformed `.corrupt-*` file is shown but cannot be restored.
-- The page is read-only until the operator presses a confirm button. Recovery
-  does not silently reset or overwrite state.
+State is under the DSH home:
+
+```text
+~/.dsh/collab/
+  registry.json          collaboration session index
+  authorization.json     bilateral communication grants
+  relationships.json     supervisor↔worker offers and capability overrides
+  tasks.json             projects and tasks
+  requests.json          requester↔supervisor requests and deliveries
+  notices.json           durable protocol notice outbox
+```
+
+If a document is malformed, the plugin moves it to:
+
+```text
+<file>.corrupt-<timestamp>
+```
+
+That backup is the **bad** file, not a clean backup. Do not restore it blindly.
+
+### Procedure
+
+1. Quit DSH completely.
+2. Copy the whole `~/.dsh/collab/` directory to a safe location.
+3. Validate a file without modifying it:
+
+   ```sh
+   python3 -m json.tool ~/.dsh/collab/tasks.json >/dev/null
+   ```
+
+4. Move the malformed file aside:
+
+   ```sh
+   mv ~/.dsh/collab/tasks.json ~/.dsh/collab/tasks.json.broken
+   ```
+
+5. Either repair the JSON, or leave the file missing. A missing state document
+   is treated as an empty state and the next write recreates it.
+6. Restart DSH.
+
+### Effects of resetting each file
+
+| File | Reset effect |
+|---|---|
+| `registry.json` | Session index is rebuilt from the collaboration directories on disk; task/request data is not affected. |
+| `authorization.json` | All pair grants are lost; re-authorize pairs in **Collab access**. |
+| `relationships.json` | Supervisor↔worker offers/capability overrides are lost; re-offer workers. |
+| `tasks.json` | Projects/tasks and statuses are lost; delivery directories and manifests remain on disk. |
+| `requests.json` | Request history/status is lost; delivered artifacts remain, but the request workflow must be recreated. |
+| `notices.json` | Undelivered protocol notices are lost; this is the least destructive reset. |
+
+Per-session `session.json` and `comm/` credentials are separate from these six
+state documents; malformed session metadata is ignored by the layout reader
+and is not part of the global recovery inventory.
+
+Do not edit these files while DSH is running, do not place `~/.dsh/collab` on a
+cloud-synced/network filesystem, and do not run two DSH Hosts against the same
+profile.
 
 ## Real browser smoke test
 

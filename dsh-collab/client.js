@@ -68,27 +68,6 @@ window.__ModuleLoader__.load({
       'panel.authorizedNotice': '双方已授权。',
       'panel.revokedNotice': '已撤销双方授权。',
       'panel.error': '操作失败',
-      'recovery.label': '状态修复',
-      'recovery.title': '状态修复',
-      'recovery.description': '查看协作状态文件是否损坏，重置损坏文件，或从可解析的备份恢复。恢复只接受合法 JSON；损坏的 .corrupt-* 备份不会被自动恢复。',
-      'recovery.refresh': '刷新',
-      'recovery.loading': '加载中…',
-      'recovery.empty': '未发现状态文件。',
-      'recovery.healthy': '正常',
-      'recovery.corrupt': '损坏',
-      'recovery.missing': '不存在',
-      'recovery.backups': '备份',
-      'recovery.noBackups': '没有备份',
-      'recovery.reset': '重置',
-      'recovery.confirmReset': '确认重置',
-      'recovery.restore': '恢复',
-      'recovery.confirmRestore': '确认恢复',
-      'recovery.validBackup': '可恢复',
-      'recovery.invalidBackup': '不可恢复',
-      'recovery.error': '操作失败',
-      'recovery.resetNotice': '已重置，下一次写入会创建空状态。',
-      'recovery.restoreNotice': '已从备份恢复。',
-      'recovery.warning': '重置会把当前文件移到 .corrupt-* 备份；这是管理操作，请先确认。',
       'panel.running': '运行中',
       'auth.open': '打开协作授权',
       'base.menu': '设置基准提示词',
@@ -188,27 +167,6 @@ window.__ModuleLoader__.load({
       'panel.authorizedNotice': 'Both sides authorized.',
       'panel.revokedNotice': 'Both sides revoked.',
       'panel.error': 'Operation failed',
-      'recovery.label': 'State recovery',
-      'recovery.title': 'State recovery',
-      'recovery.description': 'Inspect collaboration state files, reset a malformed document, or restore a parseable backup. Restore accepts only valid JSON; a malformed .corrupt-* backup is never restored automatically.',
-      'recovery.refresh': 'Refresh',
-      'recovery.loading': 'Loading…',
-      'recovery.empty': 'No state files found.',
-      'recovery.healthy': 'Healthy',
-      'recovery.corrupt': 'Corrupt',
-      'recovery.missing': 'Missing',
-      'recovery.backups': 'Backups',
-      'recovery.noBackups': 'No backups',
-      'recovery.reset': 'Reset',
-      'recovery.confirmReset': 'Confirm reset',
-      'recovery.restore': 'Restore',
-      'recovery.confirmRestore': 'Confirm restore',
-      'recovery.validBackup': 'Restorable',
-      'recovery.invalidBackup': 'Not restorable',
-      'recovery.error': 'Operation failed',
-      'recovery.resetNotice': 'Reset; the next write recreates an empty state.',
-      'recovery.restoreNotice': 'Restored from backup.',
-      'recovery.warning': 'Reset moves the current file to a .corrupt-* backup; this is a management action, confirm first.',
       'panel.running': 'Running',
       'auth.open': 'Open Collab access',
       'base.menu': 'Set base prompt',
@@ -1383,160 +1341,6 @@ window.__ModuleLoader__.load({
       }
     }
 
-    const RECOVERY_CSS = [
-      '.dsh-collab-recovery-card{display:flex;flex-direction:column;gap:6px;border:0.5px solid var(--dsw-alias-border-l1);border-radius:10px;padding:10px;background:var(--dsw-alias-bg-layer-1)}',
-      '.dsh-collab-recovery-card[data-corrupt="true"]{border-color:var(--dsw-alias-state-error-primary)}',
-      '.dsh-collab-recovery-head{display:flex;align-items:center;gap:8px;min-width:0}',
-      '.dsh-collab-recovery-key{font-weight:600;font-size:13px}',
-      '.dsh-collab-recovery-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font-family:var(--dsh-font-mono,monospace);font-size:11px}',
-      '.dsh-collab-recovery-badge{padding:1px 7px;border-radius:999px;border:0.5px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px}',
-      '.dsh-collab-recovery-badge[data-state="ok"]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}',
-      '.dsh-collab-recovery-badge[data-state="bad"]{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}',
-      '.dsh-collab-recovery-backups{display:flex;flex-direction:column;gap:4px;border-top:0.5px solid var(--dsw-alias-border-l1);padding-top:6px}',
-      '.dsh-collab-recovery-backup{display:flex;align-items:center;gap:8px;min-width:0;font-size:11px;line-height:16px}',
-      '.dsh-collab-recovery-backup-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary);font-family:var(--dsh-font-mono,monospace)}',
-      '.dsh-collab-recovery-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}',
-    ].join('')
-
-    function CollabRecoveryIcon({ size }) {
-      return h('svg', {
-        viewBox: '0 0 36 36', width: size, height: size, 'aria-hidden': true,
-        style: { display: 'block', flex: 'none' },
-      },
-      h('path', {
-        d: 'M7 9.5h22v17H7z', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinejoin: 'round',
-      }),
-      h('path', { d: 'M11 9.5v17M25 9.5v17', stroke: 'currentColor', strokeWidth: 1.5, opacity: 0.45 }),
-      h('path', { d: 'M14 14.5h8M14 18h5', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' }))
-    }
-
-    function CollabRecoveryPanel(props) {
-      const t = typeof props.t === 'function' ? props.t : fallbackT
-      const [status, setStatus] = React.useState(null)
-      const [loading, setLoading] = React.useState(true)
-      const [busy, setBusy] = React.useState(false)
-      const [error, setError] = React.useState(null)
-      const [notice, setNotice] = React.useState(null)
-      const [confirm, setConfirm] = React.useState(null)
-
-      const load = async () => {
-        setLoading(true)
-        setError(null)
-        try {
-          setStatus(await props.auth.recoveryStatus())
-        } catch (failure) {
-          setError(`${t('recovery.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
-        } finally {
-          setLoading(false)
-        }
-      }
-
-      React.useEffect(() => { void load() }, [])
-
-      const reset = async (key) => {
-        if (confirm !== `reset:${key}`) {
-          setConfirm(`reset:${key}`)
-          setNotice(null)
-          return
-        }
-        setBusy(true)
-        setError(null)
-        setNotice(null)
-        try {
-          setStatus(await props.auth.recoveryReset(key))
-          setConfirm(null)
-          setNotice(t('recovery.resetNotice'))
-        } catch (failure) {
-          setError(`${t('recovery.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
-        } finally {
-          setBusy(false)
-        }
-      }
-
-      const restore = async (key, backup) => {
-        if (confirm !== `restore:${key}:${backup}`) {
-          setConfirm(`restore:${key}:${backup}`)
-          setNotice(null)
-          return
-        }
-        setBusy(true)
-        setError(null)
-        setNotice(null)
-        try {
-          setStatus(await props.auth.recoveryRestore(key, backup))
-          setConfirm(null)
-          setNotice(t('recovery.restoreNotice'))
-        } catch (failure) {
-          setError(`${t('recovery.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
-        } finally {
-          setBusy(false)
-        }
-      }
-
-      return h(React.Fragment, null,
-        h('style', null, AUTH_CSS + RECOVERY_CSS),
-        h('div', { className: 'dsh-collab-auth' },
-          h('div', { className: 'dsh-collab-auth-head' },
-            h('h1', { className: 'dsh-collab-auth-title' }, t('recovery.title')),
-            h('p', { className: 'dsh-collab-auth-desc' }, t('recovery.description')),
-            h('p', { className: 'dsh-collab-auth-muted' }, t('recovery.warning'))),
-          h('section', { className: 'dsh-collab-auth-card', 'data-grow': 'true' },
-            h('div', { className: 'dsh-collab-auth-tabs-row' },
-              h('div', { className: 'dsh-collab-auth-tabs' },
-                h('span', { className: 'dsh-collab-auth-muted' }, t('recovery.backups'))),
-              h('div', { className: 'dsh-collab-auth-tabs-actions' },
-                h('button', {
-                  type: 'button',
-                  className: 'dsh-collab-auth-button',
-                  disabled: loading || busy,
-                  onClick: () => { void load() },
-                }, t('recovery.refresh')))),
-            loading
-              ? h('p', { className: 'dsh-collab-auth-muted' }, t('recovery.loading'))
-              : (status?.files?.length ?? 0) === 0
-                ? h('p', { className: 'dsh-collab-auth-muted' }, t('recovery.empty'))
-                : h('div', { className: 'dsh-collab-auth-list' },
-                    status.files.map(file => h('div', {
-                      key: file.key,
-                      className: 'dsh-collab-recovery-card',
-                      'data-corrupt': file.corrupt ? 'true' : 'false',
-                    },
-                    h('div', { className: 'dsh-collab-recovery-head' },
-                      h('span', { className: 'dsh-collab-recovery-key' }, file.key),
-                      h('span', {
-                        className: 'dsh-collab-recovery-badge',
-                        'data-state': file.valid ? 'ok' : (file.corrupt ? 'bad' : 'missing'),
-                      }, file.valid ? t('recovery.healthy') : (file.corrupt ? t('recovery.corrupt') : t('recovery.missing'))),
-                      h('code', { className: 'dsh-collab-recovery-path' }, file.path)),
-                    h('div', { className: 'dsh-collab-recovery-actions' },
-                      file.corrupt
-                        ? h('button', {
-                            type: 'button',
-                            className: 'dsh-collab-auth-button',
-                            'data-danger': 'true',
-                            disabled: busy,
-                            onClick: () => { void reset(file.key) },
-                          }, confirm === `reset:${file.key}` ? t('recovery.confirmReset') : t('recovery.reset'))
-                        : null),
-                    (file.backups?.length ?? 0) === 0
-                      ? h('p', { className: 'dsh-collab-auth-muted' }, t('recovery.noBackups'))
-                      : h('div', { className: 'dsh-collab-recovery-backups' },
-                          file.backups.map(backup => h('div', { key: backup.name, className: 'dsh-collab-recovery-backup' },
-                            h('code', { className: 'dsh-collab-recovery-backup-name' }, backup.name),
-                            h('span', { className: 'dsh-collab-recovery-badge', 'data-state': backup.valid ? 'ok' : 'bad' },
-                              backup.valid ? t('recovery.validBackup') : t('recovery.invalidBackup')),
-                            backup.valid
-                              ? h('button', {
-                                  type: 'button',
-                                  className: 'dsh-collab-auth-button',
-                                  disabled: busy,
-                                  onClick: () => { void restore(file.key, backup.name) },
-                                }, confirm === `restore:${file.key}:${backup.name}` ? t('recovery.confirmRestore') : t('recovery.restore'))
-                              : null)))))),
-            error === null ? null : h('p', { className: 'dsh-collab-auth-error', role: 'alert' }, error),
-            notice === null ? null : h('p', { className: 'dsh-collab-auth-notice', role: 'status' }, notice)))) 
-    }
-
     function CollabBasePromptEditor(props) {
       const state = useBasePromptState()
       const dialogRef = React.useRef(null)
@@ -2033,17 +1837,6 @@ window.__ModuleLoader__.load({
           }
         }
 
-        const RECOVERY_TICKET = 'session-00000000-0000-4000-8000-000000000000'
-        const panelValue = (result) => {
-          if (result === undefined || result.ok !== true) {
-            throw new Error(result?.error?.message ?? 'collaboration panel is unavailable')
-          }
-          return JSON.parse(result.value)
-        }
-        authPanel.recoveryStatus = async () => panelValue(await callPanel(RECOVERY_TICKET, 'recoveryStatus', {}))
-        authPanel.recoveryReset = async (key) => panelValue(await callPanel(RECOVERY_TICKET, 'recoveryReset', { key }))
-        authPanel.recoveryRestore = async (key, backup) => panelValue(await callPanel(RECOVERY_TICKET, 'recoveryRestore', { key, backup }))
-
         const start = (preset = 'collab') => {
           try {
             // The navigation service targets the current Session's Workspace,
@@ -2099,20 +1892,6 @@ window.__ModuleLoader__.load({
           locale: NS,
           inject: () => ({ auth: authPanel }),
         }, CollabAuthPanel))
-
-        ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-          name: 'sidebar.panellist',
-          id: 'collab-recovery',
-          order: 21,
-          label: () => ctx.locale.bind(NS)('recovery.label'),
-        }, CollabRecoveryIcon))
-
-        ctx.slots.inject('main', () => ctx.slots.register({
-          name: 'main',
-          key: 'collab-recovery',
-          locale: NS,
-          inject: () => ({ auth: authPanel }),
-        }, CollabRecoveryPanel))
 
         ctx.effect(() => ctx.sidebarRightTabs.register({
           id: BOARD_TAB_ID,
