@@ -432,7 +432,7 @@ export function apply(ctx, config = {}) {
   )
   const requestTimers = new Map()
   const executionTimers = new Map()
-  const sandboxBindings = new Map()
+  const sandboxDeliveryRoots = new Map()
   const deliveryInFlight = new Set()
   let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
@@ -520,26 +520,49 @@ export function apply(ctx, config = {}) {
 
   const bindDeliverySandbox = (sessionId, directory) => {
     if (!perSessionSandbox) return
-    const agent = ctx.agents.get(sessionId)
-    const policy = ctx.get('sandboxPolicy')
-    if (agent?.session === undefined || typeof policy?.registerWritableRoot !== 'function') return
-    const resolved = path.resolve(directory)
-    const key = `${sessionId}\u0000${resolved}`
-    if (sandboxBindings.has(key)) return
-    try {
-      mkdirp(resolved, 0o755)
-      sandboxBindings.set(key, policy.registerWritableRoot(agent.session, resolved))
-    } catch (error) {
-      warn(`could not register sandbox delivery root ${resolved}: ${describeError(error)}`)
-    }
+    const roots = sandboxDeliveryRoots.get(sessionId) ?? new Set()
+    roots.add(path.resolve(directory))
+    sandboxDeliveryRoots.set(sessionId, roots)
+    try { mkdirp(directory, 0o755) } catch { /* the assignment will report a real mkdir failure */ }
   }
 
   const releaseDeliverySandbox = (sessionId, directory) => {
-    const key = `${sessionId}\u0000${path.resolve(directory)}`
-    const dispose = sandboxBindings.get(key)
-    if (dispose === undefined) return
-    sandboxBindings.delete(key)
-    try { dispose() } catch { /* runtime-only registration */ }
+    const roots = sandboxDeliveryRoots.get(sessionId)
+    if (roots === undefined) return
+    roots.delete(path.resolve(directory))
+    if (roots.size === 0) sandboxDeliveryRoots.delete(sessionId)
+  }
+
+  const installPerSessionSandbox = () => {
+    if (!perSessionSandbox) return
+    const policy = ctx.get('sandboxPolicy')
+    if (policy === undefined || typeof policy.resolve !== 'function') return
+    const original = policy.resolve.bind(policy)
+    const wrapped = (request = {}) => {
+      const resolved = original(request)
+      const session = request?.session
+      if (session === undefined || resolved.mode !== 'workspace-write') return resolved
+      const entry = registry.get(session.id)
+      if (entry === undefined) return resolved
+      const roots = sandboxDeliveryRoots.get(session.id)
+      const additional = roots === undefined
+        ? resolved.additionalWritableRoots
+        : [...new Set([...(resolved.additionalWritableRoots ?? []), ...roots])]
+      return {
+        ...resolved,
+        workspaceRoot: entry.workdir,
+        ...(additional === undefined || additional.length === 0 ? {} : { additionalWritableRoots: additional }),
+      }
+    }
+    try {
+      policy.resolve = wrapped
+    } catch (error) {
+      warn(`could not install per-session OS sandbox: ${describeError(error)}`)
+      return
+    }
+    ctx.effect(() => () => {
+      try { policy.resolve = original } catch { /* best effort */ }
+    }, 'collab:per-session-sandbox')
   }
 
   const setupAgent = async (agent, { force = false, preset } = {}) => {
@@ -590,16 +613,6 @@ export function apply(ctx, config = {}) {
       installPrompt(agent, layout, role)
       collabSessions.add(agent.id)
       sessionPresets.set(agent.id, effectivePreset)
-      if (perSessionSandbox && session.header !== undefined) {
-        try {
-          // The DSH sandbox derives its workspace-write boundary from header.cwd.
-          // Keep the original workspace in the registry and prompt, but narrow
-          // the OS sandbox to this session's collaboration layout.
-          session.header.cwd = layout.workdir
-        } catch (error) {
-          warn(`could not narrow the sandbox root for ${agent.id}: ${describeError(error)}`)
-        }
-      }
       for (const task of tasks.listForWorker(agent.id)) {
         bindDeliverySandbox(agent.id, deliveryRoot(task.projectId))
       }
@@ -2437,6 +2450,7 @@ export function apply(ctx, config = {}) {
     return () => clearInterval(timer)
   }, 'collab:notice-outbox')
 
+  installPerSessionSandbox()
   refreshRegistry()
   reconcileRequestProjectBindings()
   pruneDeliveryAliases()
