@@ -1420,7 +1420,7 @@ window.__ModuleLoader__.load({
 
     const BOARD_CSS = [
       '.dsh-collab-board{display:flex;flex-direction:column;gap:12px;height:100%;min-height:0;overflow-y:auto;padding:12px;box-sizing:border-box;color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px}',
-      '.dsh-collab-board-head{display:flex;align-items:center;justify-content:space-between;gap:8px}',
+      '.dsh-collab-board-head{display:flex;align-items:center;justify-content:flex-start;gap:10px}',
       '.dsh-collab-board-title{margin:0;font-size:14px;line-height:20px;font-weight:600}',
       '.dsh-collab-board-section{display:flex;flex-direction:column;gap:6px;border:0.5px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:10px}',
       '.dsh-collab-board-section-title{margin:0;font-size:12px;font-weight:600}',
@@ -1611,8 +1611,8 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dsh-collab-board' },
         h('style', null, BOARD_CSS),
         h('div', { className: 'dsh-collab-board-head' },
-          h('h2', { className: 'dsh-collab-board-title' }, mode === 'tasks' ? t('board.tasksTitle') : t('board.workersTitle'))),
-        h('div', { className: 'dsh-collab-board-actions', 'data-align': 'start' }, ...headerActions),
+          h('h2', { className: 'dsh-collab-board-title' }, mode === 'tasks' ? t('board.tasksTitle') : t('board.workersTitle')),
+          h('div', { className: 'dsh-collab-board-actions' }, ...headerActions)),
         error === null ? null : h('p', { className: 'dsh-collab-board-error', role: 'alert' }, error),
         notice === null ? null : h('p', { className: 'dsh-collab-board-notice', role: 'status' }, notice),
         loading ? h('p', { className: 'dsh-collab-board-muted' }, t('board.loading')) : null,
