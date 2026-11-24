@@ -80,7 +80,7 @@ let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value
 const _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value ??= z.string())
 
 const $remote = createTypertRemoteInfo({
-  package: '@local/dsh-collab-auth-api',
+  package: '@xmodelin/dsh-collab-auth-api',
   methods: {
     'collabAuth/authorize': {
       service: 'collabAuth',
@@ -93,13 +93,13 @@ const $remote = createTypertRemoteInfo({
           source: 'json',
           codec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/authorize:a',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:a',
             create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/authorize:a',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:a',
             create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema,
             jsonSchema: {"type":"string"},
           },
@@ -110,13 +110,13 @@ const $remote = createTypertRemoteInfo({
           source: 'json',
           codec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/authorize:b',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:b',
             create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/authorize:b',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:b',
             create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema,
             jsonSchema: {"type":"string"},
           },
@@ -124,7 +124,7 @@ const $remote = createTypertRemoteInfo({
       ],
       result: {
         mode: 'strict',
-        typeSymbol: '@local/dsh-collab-auth-api/types#AuthSnapshot',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
         create: _local_dsh_collab_auth_api_collabAuth_authorize_result$schema,
         description: 'the resulting authorization snapshot.',
         jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."}},"required":["pairs","pending"],"additionalProperties":true},
@@ -139,7 +139,7 @@ const $remote = createTypertRemoteInfo({
       ],
       result: {
         mode: 'strict',
-        typeSymbol: '@local/dsh-collab-auth-api/types#AuthSnapshot',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
         create: _local_dsh_collab_auth_api_collabAuth_list_result$schema,
         description: 'the current authorization snapshot.',
         jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."}},"required":["pairs","pending"],"additionalProperties":true},
@@ -157,13 +157,13 @@ const $remote = createTypertRemoteInfo({
           source: 'json',
           codec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:sessionId',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:sessionId',
             create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:sessionId',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:sessionId',
             create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema,
             jsonSchema: {"type":"string"},
           },
@@ -174,13 +174,13 @@ const $remote = createTypertRemoteInfo({
           source: 'json',
           codec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:operation',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:operation',
             create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:operation',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:operation',
             create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema,
             jsonSchema: {"type":"string"},
           },
@@ -190,13 +190,13 @@ const $remote = createTypertRemoteInfo({
           source: 'json',
           codec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:argsJson',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:argsJson',
             create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:argsJson',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:argsJson',
             create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema,
             jsonSchema: {"type":"string"},
           },
@@ -204,7 +204,7 @@ const $remote = createTypertRemoteInfo({
       ],
       result: {
         mode: 'strict',
-        typeSymbol: '@local/dsh-collab-auth-api#collabAuth/panel:result',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:result',
         create: _local_dsh_collab_auth_api_collabAuth_panel_result$schema,
         description: 'the operation result.',
         jsonSchema: {"type":"string"},
@@ -222,13 +222,13 @@ const $remote = createTypertRemoteInfo({
           source: 'json',
           codec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/revoke:a',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:a',
             create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/revoke:a',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:a',
             create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema,
             jsonSchema: {"type":"string"},
           },
@@ -239,13 +239,13 @@ const $remote = createTypertRemoteInfo({
           source: 'json',
           codec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/revoke:b',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:b',
             create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
-            typeSymbol: '@local/dsh-collab-auth-api#collabAuth/revoke:b',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:b',
             create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema,
             jsonSchema: {"type":"string"},
           },
@@ -253,7 +253,7 @@ const $remote = createTypertRemoteInfo({
       ],
       result: {
         mode: 'strict',
-        typeSymbol: '@local/dsh-collab-auth-api/types#AuthSnapshot',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
         create: _local_dsh_collab_auth_api_collabAuth_revoke_result$schema,
         description: 'the resulting authorization snapshot.',
         jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."}},"required":["pairs","pending"],"additionalProperties":true},
@@ -264,7 +264,7 @@ const $remote = createTypertRemoteInfo({
 }, z)
 
 export const TYPERT = {
-  package: '@local/dsh-collab-auth-api',
+  package: '@xmodelin/dsh-collab-auth-api',
   face: 'host',
   schemas: [
   ],

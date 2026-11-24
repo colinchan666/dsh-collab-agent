@@ -2,9 +2,8 @@
 # the Host plugin that prepares each collaboration session's working directory.
 - insert:
     - id: dsh-collab-sessions
-      name: '@local/dsh-collab-sessions'
+      name: '@xmodelin/dsh-collab-sessions'
       config:
-        sharedRoot: /Users/cc/dsh/collab/shared
         executionTimeoutMs: 86400000
         perSessionSandbox: true
         lockTimeoutMs: 1000

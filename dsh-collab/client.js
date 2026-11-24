@@ -12,14 +12,14 @@
  * the result instead of having to find the session manually.
  */
 window.__ModuleLoader__.load({
-  id: '@local/dsh-collab-sessions',
+  id: '@xmodelin/dsh-collab-sessions',
   factory(require) {
     const React = require('react')
     const h = React.createElement
     const NS = 'dsh-collab-sessions'
-    const BOARD_TAB_ID = '@local/dsh-collab-sessions/supervisor-tasks'
+    const BOARD_TAB_ID = '@xmodelin/dsh-collab-sessions/supervisor-tasks'
     const BOARD_TAB_KIND = 'collabSupervisorTasks'
-    const WORKERS_TAB_ID = '@local/dsh-collab-sessions/supervisor-workers'
+    const WORKERS_TAB_ID = '@xmodelin/dsh-collab-sessions/supervisor-workers'
     const WORKERS_TAB_KIND = 'collabSupervisorWorkers'
     let MenuItemButton
     let IconEditOutlineRegular

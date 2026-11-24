@@ -1,6 +1,6 @@
 {
-  "name": "@local/dsh-collab-sessions",
-  "version": "1.0.0",
+  "name": "@xmodelin/dsh-collab-sessions",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "description": "Left-sidebar entry that creates collaboration sessions with a private/communication workspace layout and session-to-session messaging.",
@@ -35,7 +35,7 @@
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-workspace",
         "@deepseek-ai/dsh-client-ui-sidebar-right",
-        "@local/dsh-collab-auth-api"
+        "@xmodelin/dsh-collab-auth-api"
       ]
     }
   },

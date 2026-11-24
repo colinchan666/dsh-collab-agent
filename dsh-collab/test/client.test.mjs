@@ -143,11 +143,11 @@ test('the client starts a collab session through the current-workspace navigatio
   }
   assert.ok(harness.calls.tabTypes.some(entry => entry.kind === 'collabSupervisorTasks'))
   assert.ok(harness.calls.tabTypes.some(entry => entry.kind === 'collabSupervisorWorkers'))
-  assert.ok(harness.registrations.some(entry => entry.options.name === 'sidebar.right.pane.tab' && entry.options.key === '@local/dsh-collab-sessions/supervisor-tasks'))
-  assert.ok(harness.registrations.some(entry => entry.options.name === 'sidebar.right.pane.tab' && entry.options.key === '@local/dsh-collab-sessions/supervisor-workers'))
+  assert.ok(harness.registrations.some(entry => entry.options.name === 'sidebar.right.pane.tab' && entry.options.key === '@xmodelin/dsh-collab-sessions/supervisor-tasks'))
+  assert.ok(harness.registrations.some(entry => entry.options.name === 'sidebar.right.pane.tab' && entry.options.key === '@xmodelin/dsh-collab-sessions/supervisor-workers'))
   const board = harness.registrations.find(entry => (
     entry.options.name === 'sidebar.right.pane.tab'
-    && entry.options.key === '@local/dsh-collab-sessions/supervisor-tasks'
+    && entry.options.key === '@xmodelin/dsh-collab-sessions/supervisor-tasks'
   ))
   const boardFace = board.options.inject()
   const boardResult = await boardFace.panel('session-supervisor', 'board', {})
