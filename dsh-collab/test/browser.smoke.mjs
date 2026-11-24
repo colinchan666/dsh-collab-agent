@@ -223,7 +223,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
       .find(element => element.getAttribute('aria-label') === '打开侧边栏')
     if (button !== undefined) button.click()
   })()`)
-  await waitFor(browser.evaluate, "document.body.innerText.includes('新建协作会话')", 15_000)
+  await waitFor(browser.evaluate, "document.body.innerText.includes('新建协同会话')", 15_000)
   assert.equal(await browser.evaluate('document.title'), 'DeepSeek Harness')
 
   // The sidebar entry must exist before the dropdown can be opened.
@@ -236,7 +236,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   const menuItems = await browser.evaluate(`Array.from(
     document.querySelectorAll('[role="menuitem"]'),
   ).map(element => element.textContent.trim()).filter(Boolean)`)
-  assert.ok(menuItems.includes('协作会话'), `menu items: ${menuItems.join(', ')}`)
+  assert.ok(menuItems.includes('协同会话'), `menu items: ${menuItems.join(', ')}`)
   assert.ok(menuItems.includes('超级会话'), `menu items: ${menuItems.join(', ')}`)
 
   // Escape closes the menu without creating a session.
@@ -253,19 +253,19 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   await waitFor(browser.evaluate, "document.body.innerText.includes('已授权会话对')")
   const authText = await browser.evaluate('document.body.innerText')
   assert.match(authText, /已授权会话对/u)
-  assert.match(authText, /协作会话/u)
+  assert.match(authText, /协同会话/u)
   assert.match(authText, /刷新/u)
 
   const authButtons = await browser.evaluate(`Array.from(document.querySelectorAll('button'))
     .map(element => element.textContent.trim())
     .filter(Boolean)`)
   assert.ok(authButtons.some(text => text.startsWith('已授权会话对')))
-  assert.ok(authButtons.some(text => text.startsWith('协作会话')))
+  assert.ok(authButtons.some(text => text.startsWith('协同会话')))
   assert.ok(authButtons.includes('刷新'))
 
   const clickedTab = await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))
-      .find(element => element.textContent.trim().startsWith('协作会话 ('))
+      .find(element => element.textContent.trim().startsWith('协同会话 ('))
     if (button === undefined) return false
     button.click()
     return true
@@ -338,7 +338,7 @@ test('real browser: supervisor tabs seed when the right sidebar opens', async t 
       .find(element => element.getAttribute('aria-label') === '打开侧边栏')
     if (button !== undefined) button.click()
   })()`)
-  await waitFor(browser.evaluate, "document.body.innerText.includes('新建协作会话')", 15_000)
+  await waitFor(browser.evaluate, "document.body.innerText.includes('新建协同会话')", 15_000)
 
   await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))
