@@ -526,6 +526,22 @@ export function apply(ctx, config = {}) {
     try { mkdirp(directory, 0o755) } catch { /* the assignment will report a real mkdir failure */ }
   }
 
+  const sharedCommandAllowed = (command, sessionId) => {
+    if (!isManagedWorker(sessionId)) return false
+    const roots = [...(sandboxDeliveryRoots.get(sessionId) ?? [])].map(root => canonicalPath(root))
+    if (roots.length === 0) return false
+    const text = String(command)
+    let cursor = 0
+    while (true) {
+      const index = text.indexOf(sharedRoot, cursor)
+      if (index < 0) return true
+      const token = text.slice(index).split(/[\s;&|"'`]+/u)[0]
+      const resolved = canonicalPath(token)
+      if (!roots.some(root => resolved === root || resolved.startsWith(`${root}${path.sep}`))) return false
+      cursor = index + sharedRoot.length
+    }
+  }
+
   const releaseDeliverySandbox = (sessionId, directory) => {
     const roots = sandboxDeliveryRoots.get(sessionId)
     if (roots === undefined) return
@@ -533,9 +549,8 @@ export function apply(ctx, config = {}) {
     if (roots.size === 0) sandboxDeliveryRoots.delete(sessionId)
   }
 
-  const installPerSessionSandbox = () => {
+  const installSandboxWrapper = (policy) => {
     if (!perSessionSandbox) return
-    const policy = ctx.get('sandboxPolicy')
     if (policy === undefined || typeof policy.resolve !== 'function') return
     const original = policy.resolve.bind(policy)
     const wrapped = (request = {}) => {
@@ -563,6 +578,17 @@ export function apply(ctx, config = {}) {
     ctx.effect(() => () => {
       try { policy.resolve = original } catch { /* best effort */ }
     }, 'collab:per-session-sandbox')
+  }
+
+  const installPerSessionSandbox = () => {
+    if (!perSessionSandbox) return
+    if (typeof ctx.inject === 'function') {
+      ctx.inject(['sandboxPolicy'], (scope) => {
+        installSandboxWrapper(scope.sandboxPolicy)
+      })
+      return
+    }
+    installSandboxWrapper(ctx.get('sandboxPolicy'))
   }
 
   const setupAgent = async (agent, { force = false, preset } = {}) => {
@@ -2403,11 +2429,12 @@ export function apply(ctx, config = {}) {
           ? path.resolve(selfWorkdir, args.workdir)
           : selfWorkdir
         if (command.includes(sharedRoot)) {
-          hit = { shared: sharedRoot }
+          if (!sharedCommandAllowed(command, sessionId)) hit = { shared: sharedRoot }
         } else if (isManagedWorker(sessionId)) {
           hit = sharedAccessDenied([bashWorkdir], true)
         }
-        if (hit === undefined && command.split(/\s+/u).some(token => token.includes('shared/'))) {
+        if (hit === undefined && !sharedCommandAllowed(command, sessionId)
+          && command.split(/\s+/u).some(token => token.includes('shared/'))) {
           hit = { shared: path.join(sharedRoot, 'shared') }
         }
       }
@@ -2463,11 +2490,7 @@ export function apply(ctx, config = {}) {
   for (const agent of ctx.agents.list()) void setupAgent(agent)
   ctx.on('agent/created', async ({ agent }) => { await setupAgent(agent) })
   ctx.on('agent/disposed', ({ agent }) => {
-    for (const [key, dispose] of sandboxBindings) {
-      if (!key.startsWith(`${agent.id} `)) continue
-      sandboxBindings.delete(key)
-      try { dispose() } catch { /* runtime-only registration */ }
-    }
+    sandboxDeliveryRoots.delete(agent.id)
     collabSessions.delete(agent.id)
     sessionPresets.delete(agent.id)
     disposePrompt(agent.id)
