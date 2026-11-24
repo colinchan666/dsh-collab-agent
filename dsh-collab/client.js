@@ -1847,6 +1847,7 @@ window.__ModuleLoader__.load({
             if (!/(协同会话|超级会话|Collab session|Supervisor session)/u.test(text)) continue
             node.hidden = true
             node.setAttribute('aria-hidden', 'true')
+            node.style.setProperty('display', 'none', 'important')
           }
         }
         hideLockedPresets()
@@ -2032,10 +2033,10 @@ window.__ModuleLoader__.load({
           }, CollabBoardTabTitle))
         }
 
-        ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-          name: 'conversation.session.header.utilities',
+        ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
+          name: 'conversation.hero.options',
           id: 'collab-preset-lock',
-          order: 12,
+          order: 100,
         }, CollabPresetLockProbe))
 
         ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
