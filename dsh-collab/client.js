@@ -124,6 +124,10 @@ window.__ModuleLoader__.load({
       'board.noLinkedTask': '该请求尚未创建任务。',
       'board.prevPage': '上一页',
       'board.nextPage': '下一页',
+      'preset.collabName': '协同会话',
+      'preset.collabDescription': '拥有独立的 .dsh-collab 工作目录、共享的 comm/ 目录和仅本会话可访问的 private/ 目录，并提供经过身份验证的会话间通信工具。',
+      'preset.supervisorName': '超级会话',
+      'preset.supervisorDescription': '负责拆解需求、把子任务分派给已登记的功能会话、核验结果并完成交付；不提供任何实现类工具。',
       'board.taskDetail': '子任务详情',
       'board.close': '关闭',
       'board.noResult': '暂无结果。',
@@ -247,6 +251,10 @@ window.__ModuleLoader__.load({
       'board.noLinkedTask': 'No task has been created for this request yet.',
       'board.prevPage': 'Previous',
       'board.nextPage': 'Next',
+      'preset.collabName': 'Collab session',
+      'preset.collabDescription': 'A session with its own .dsh-collab working directory, a shared comm/ directory, a session-only private/ directory, and authenticated session-to-session messaging.',
+      'preset.supervisorName': 'Supervisor session',
+      'preset.supervisorDescription': 'Coordinates requirements, assigns subtasks to registered functional sessions, verifies results, and delivers. It has no implementation tools.',
       'board.taskDetail': 'Subtask details',
       'board.close': 'Close',
       'board.noResult': 'No result yet.',
@@ -1844,9 +1852,25 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
-    function CollabPresetMenuFilter() {
+    function CollabPresetMenuFilter(props) {
+      const t = typeof props.t === 'function' ? props.t : fallbackT
       React.useEffect(() => {
+        const translatePresetCopy = () => {
+          const pairs = [
+            ['协同会话', t('preset.collabName')],
+            ['超级会话', t('preset.supervisorName')],
+            ['拥有独立的 .dsh-collab 工作目录、共享的 comm/ 目录和仅本会话可访问的 private/ 目录，并提供经过身份验证的会话间通信工具。', t('preset.collabDescription')],
+            ['负责拆解需求、把子任务分派给已登记的功能会话、核验结果并完成交付；不提供任何实现类工具。', t('preset.supervisorDescription')],
+          ]
+          for (const node of document.querySelectorAll('span, div, p, button')) {
+            if (node.children.length !== 0) continue
+            const text = node.textContent ?? ''
+            const pair = pairs.find(([source]) => text === source)
+            if (pair !== undefined && pair[1] !== source) node.textContent = pair[1]
+          }
+        }
         const hideLockedPresets = () => {
+          translatePresetCopy()
           for (const node of document.querySelectorAll('[role="menuitem"]')) {
             // The collab entry's own dropdown also uses role=menuitem.
             if (node.closest('.dsh-collab-new-menu') !== null) continue
@@ -1861,7 +1885,7 @@ window.__ModuleLoader__.load({
         const observer = new MutationObserver(hideLockedPresets)
         observer.observe(document.body, { childList: true, subtree: true })
         return () => observer.disconnect()
-      }, [])
+      }, [t])
       return null
     }
 
@@ -2095,6 +2119,7 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',
           id: 'collab-preset-menu-filter',
+          locale: NS,
         }, CollabPresetMenuFilter))
 
         setLinkExecutor((sessionId, line) => {
