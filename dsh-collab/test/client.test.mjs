@@ -133,8 +133,10 @@ test('the client starts a collab session through the current-workspace navigatio
   )))
   for (const [name, id] of [
     ['shell.overlay', 'collab-base-prompt'],
+    ['shell.overlay', 'collab-preset-menu-filter'],
     ['sidebar.workspaces.session.menu.item', 'collab-base-prompt'],
     ['conversation.session.header.utilities', 'collab-supervisor-tabs-on-open'],
+    ['conversation.session.header.utilities', 'collab-preset-lock'],
   ]) {
     assert.ok(harness.registrations.some(entry => entry.options.name === name && entry.options.id === id), `${name}:${id}`)
   }

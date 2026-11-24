@@ -13,11 +13,10 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: collab
-        name: Collab session
+        name: 协同会话
         description: >-
-          A session with its own `.dsh-collab` working directory, a shared
-          `comm/` directory, a session-only `private/` directory, and tools for
-          authenticated session-to-session messages.
+          拥有独立的 `.dsh-collab` 工作目录、共享的 `comm/` 目录和仅本会话可访问的
+          `private/` 目录，并提供经过身份验证的会话间通信工具。
         order: 10
         plugins:
           - id: persona
@@ -151,11 +150,10 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: supervisor
-        name: Supervisor session
+        name: 超级会话
         description: >-
-          A coordinator session that decomposes requirements, assigns tasks to
-          registered functional sessions, verifies results, and delivers. It has
-          no implementation tools.
+          负责拆解需求、把子任务分派给已登记的功能会话、核验结果并完成交付；
+          不提供任何实现类工具。
         order: 20
         plugins:
           - id: persona

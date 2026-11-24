@@ -1837,6 +1837,42 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
+    function CollabPresetMenuFilter() {
+      React.useEffect(() => {
+        const hideLockedPresets = () => {
+          for (const node of document.querySelectorAll('[role="menuitem"]')) {
+            // The collab entry's own dropdown also uses role=menuitem.
+            if (node.closest('.dsh-collab-new-menu') !== null) continue
+            const text = node.textContent ?? ''
+            if (!/(协同会话|超级会话|Collab session|Supervisor session)/u.test(text)) continue
+            node.hidden = true
+            node.setAttribute('aria-hidden', 'true')
+          }
+        }
+        hideLockedPresets()
+        const observer = new MutationObserver(hideLockedPresets)
+        observer.observe(document.body, { childList: true, subtree: true })
+        return () => observer.disconnect()
+      }, [])
+      return null
+    }
+
+    function CollabPresetLockProbe(props) {
+      const sessions = props.useSessions(selectSnapshot)
+      const values = sessions.byId[props.sessionId]?.projectionValues
+        ?? sessions.projectionsBySession?.[props.sessionId]?.values
+      const locked = values?.agentPreset === 'collab' || values?.agentPreset === 'supervisor'
+      React.useEffect(() => {
+        if (!locked) return undefined
+        const root = document.documentElement
+        root.setAttribute('data-collab-preset-lock', 'true')
+        return () => root.removeAttribute('data-collab-preset-lock')
+      }, [locked])
+      return h('style', null,
+        'html[data-collab-preset-lock="true"] button[aria-haspopup="menu"][title*="Agent 预设"],'
+        + 'html[data-collab-preset-lock="true"] button[aria-haspopup="menu"][title*="Agent preset"]{display:none!important}')
+    }
+
     function CollabSupervisorTabsOnOpen(props) {
       const sessions = props.useSessions(selectSnapshot)
       const summary = sessions.byId[props.sessionId]
@@ -1998,6 +2034,12 @@ window.__ModuleLoader__.load({
 
         ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
           name: 'conversation.session.header.utilities',
+          id: 'collab-preset-lock',
+          order: 12,
+        }, CollabPresetLockProbe))
+
+        ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
+          name: 'conversation.session.header.utilities',
           id: 'collab-supervisor-tabs-on-open',
           order: 11,
           inject: () => ({
@@ -2041,6 +2083,11 @@ window.__ModuleLoader__.load({
           id: 'collab-base-prompt',
           locale: NS,
         }, CollabBasePromptEditor))
+
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay',
+          id: 'collab-preset-menu-filter',
+        }, CollabPresetMenuFilter))
 
         setLinkExecutor((sessionId, line) => {
           const match = /^\/collab-link (pin|live|unlink) ([^\s]+)$/u.exec(line)
