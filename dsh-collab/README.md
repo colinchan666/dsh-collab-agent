@@ -183,7 +183,7 @@ edit files; answer in Chinese"). It is per session and persists in the session's
 
 The only UI entry point is the collaboration session row's **更多 / More**
 menu in the left sidebar (also available by right-clicking the row) →
-**设置基准提示词**. The session-header More menu and the new-session hero chip
+**设置会话提示词**. The session-header More menu and the new-session hero chip
 do not expose this editor.
 
 The editor loads the current text, saves it, and the next turn picks it up.
