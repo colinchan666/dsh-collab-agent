@@ -1775,7 +1775,10 @@ window.__ModuleLoader__.load({
         className: 'dsh-collab-board-open',
         title: t('board.openTitle'),
         'aria-label': t('board.openTitle'),
-        onClick: () => props.openBoard(props.sessionId),
+        onClick: () => {
+          props.openBoard(props.sessionId)
+          props.openWorkers(props.sessionId)
+        },
       }, t('board.open'))
     }
 
@@ -1921,6 +1924,10 @@ window.__ModuleLoader__.load({
             openBoard: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, {
               params: { sessionId },
               revealIfOpened: true,
+            }),
+            openWorkers: (sessionId) => ctx.sidebarRight.openTab(WORKERS_TAB_KIND, {
+              params: { sessionId },
+              revealIfOpened: false,
             }),
           }),
         }, CollabOpenBoardButton))

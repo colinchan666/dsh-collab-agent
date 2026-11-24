@@ -208,9 +208,13 @@ test('the supervisor header exposes an on-demand board action', async () => {
   assert.ok(registration)
   const face = registration.options.inject()
   face.openBoard('session-supervisor')
+  face.openWorkers('session-supervisor')
   assert.deepEqual(harness.calls.tabs, [{
     kind: 'collabSupervisorTasks',
     options: { params: { sessionId: 'session-supervisor' }, revealIfOpened: true },
+  }, {
+    kind: 'collabSupervisorWorkers',
+    options: { params: { sessionId: 'session-supervisor' }, revealIfOpened: false },
   }])
 })
 
