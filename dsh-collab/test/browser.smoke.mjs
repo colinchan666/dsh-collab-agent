@@ -246,7 +246,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   // Open the authorization Remote page.
   await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))
-      .find(element => element.textContent.trim() === '协作授权')
+      .find(element => element.textContent.trim() === '协同授权')
     if (button === undefined) throw new Error('authorization entry not found')
     button.click()
   })()`)

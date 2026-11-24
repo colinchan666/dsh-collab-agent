@@ -169,13 +169,13 @@ test('the auth-refusal turn projection records a collab_send refusal', () => {
         message: {
           source: { callId: 'call-1' },
           isError: true,
-          content: [{ type: 'text', text: '未授权：请在“协作授权”页授权双方。' }],
+          content: [{ type: 'text', text: '未授权：请在“协同授权”页授权双方。' }],
         },
       },
     },
   })
   const location = definition.buildLocationData({ state }, 'turn')
-  assert.equal(location.value.message, '未授权：请在“协作授权”页授权双方。')
+  assert.equal(location.value.message, '未授权：请在“协同授权”页授权双方。')
 })
 
 test('the client does not auto-open a collab session when it starts running', async () => {
