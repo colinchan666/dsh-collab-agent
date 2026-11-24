@@ -198,7 +198,7 @@ const REQUEST_SUBMIT_PARAMETERS = {
   properties: {
     supervisor: { type: 'string', description: 'Target supervisor id. Required when more than one authorized supervisor is available.' },
     title: { type: 'string', description: 'Short request title.' },
-    requirement: { type: 'string', description: 'What the requester needs, with enough detail to evaluate and decompose.' },
+    requirement: { type: 'string', description: 'Outcome-focused requirement and acceptance criteria. Do not name workers, projects, tasks, delivery paths, or internal scheduling.' },
   },
   required: ['title', 'requirement'],
   additionalProperties: false,
@@ -351,6 +351,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
     '- collab_send sends an authenticated chat message to one authorized peer session id, including a supervisor or worker.',
     '- collab_inbox reads and acknowledges messages queued for this session. Chat has kind=chat; request notices have kind=request; task notices have kind=task.',
     '- To request work, use collab_request_submit with a supervisor id; no offer relationship is required, only bilateral authorization.',
+    '- Describe only the desired outcome and acceptance criteria; never name or choose workers, projects, tasks, delivery paths, or internal scheduling.',
     '- collab_request_cancel cancels your own pending or accepted request; accepted cancellation notifies the supervisor and ends delivery eligibility.',
     '- Chat never creates, accepts, or completes a task. Task state belongs to the task store and task tools.',
     'A live peer receives a notification in its next step; a cold peer is resumed first. The body is read with collab_inbox.',

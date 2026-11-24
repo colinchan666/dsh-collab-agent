@@ -183,7 +183,9 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **Requests do not require offer**: any collaboration session with bilateral
   authorization to a supervisor can call `collab_request_submit`; it does not
   need to be an offered worker. The request is a normal structured message and
-  has no fixed requester role.
+  has no fixed requester role. The requirement is outcome-focused: requester
+  text must not choose workers, projects, tasks, delivery paths, or internal
+  scheduling.
 - **Supervisor accept**: evaluate `collab_capabilities`, create a project and
   tasks, assign at least one task to an offered worker, then call
   `collab_request_accept` with the `projectId`. The request becomes `accepted`;
