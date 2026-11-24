@@ -181,13 +181,10 @@ turn. Use it for a role ("you are the reviewer") and hard constraints ("never
 edit files; answer in Chinese"). It is per session and persists in the session's
 `session.json` across resumes.
 
-Three entry points open the same editor:
-
-- **New collab session** — the **设置提示词** button in the workspace / mode
-  row, styled like those chips. It opens the same editor; the button disappears
-  after the first message.
-- **Right-click** the session row in the left sidebar → **设置基准提示词**.
-- The session header's **更多 / More** menu → **设置基准提示词**.
+The only UI entry point is the collaboration session row's **更多 / More**
+menu in the left sidebar (also available by right-clicking the row) →
+**设置基准提示词**. The session-header More menu and the new-session hero chip
+do not expose this editor.
 
 The editor loads the current text, saves it, and the next turn picks it up.
 The Host command is also available:

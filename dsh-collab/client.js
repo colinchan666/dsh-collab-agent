@@ -22,18 +22,15 @@ window.__ModuleLoader__.load({
     const WORKERS_TAB_ID = '@xmodelin/dsh-collab-sessions/supervisor-workers'
     const WORKERS_TAB_KIND = 'collabSupervisorWorkers'
     let MenuItemButton
-    let IconEditOutlineRegular
     let Button
     let IconCopyOutlineRegular
     try {
       const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
       MenuItemButton = primitives.MenuItemButton
-      IconEditOutlineRegular = primitives.IconEditOutlineRegular
       Button = primitives.Button
       IconCopyOutlineRegular = primitives.IconCopyOutlineRegular
     } catch {
       MenuItemButton = undefined
-      IconEditOutlineRegular = undefined
       Button = undefined
       IconCopyOutlineRegular = undefined
     }
@@ -956,7 +953,6 @@ window.__ModuleLoader__.load({
       listeners: new Set(),
     }
     let executeBasePromptCommand = null
-    let activeCollabSessionId = null
 
     const BASE_CSS = [
       '.dsh-collab-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:18px;text-align:left;cursor:pointer}',
@@ -1416,65 +1412,6 @@ window.__ModuleLoader__.load({
             className: 'dsh-collab-menu-item',
             onClick: select,
           }, props.t('base.menu'))
-    }
-
-    function CollabActiveSessionProbe(props) {
-      // The View More menu is root-scoped; record the session whose header is
-      // on screen so its row can address the right session immediately.
-      activeCollabSessionId = props.sessionId
-      return null
-    }
-
-    function CollabBasePromptViewAction(props) {
-      const sessions = props.useSessions(selectSnapshot)
-      const summary = activeCollabSessionId === null ? undefined : sessions.byId[activeCollabSessionId]
-      if (!isCollabSummary(summary, sessions)) return null
-      const select = () => {
-        if (typeof props.onDismiss === 'function') props.onDismiss()
-        void openBasePromptEditor(activeCollabSessionId, summary?.displayTitle ?? activeCollabSessionId)
-      }
-      return typeof MenuItemButton === 'function'
-        ? h(MenuItemButton, { onSelect: select }, h('span', null, props.t('base.menu')))
-        : h('button', {
-            type: 'button',
-            role: 'menuitem',
-            className: 'dsh-collab-menu-item',
-            onClick: select,
-          }, props.t('base.menu'))
-    }
-
-    const HERO_BUTTON_CSS = [
-      '.dsh-collab-hero-option{display:inline-flex;align-items:center;gap:4px;min-height:28px;max-width:200px;padding:0 8px;border:0;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;font-weight:500;white-space:nowrap;cursor:pointer}',
-      '.dsh-collab-hero-option:hover{background:var(--dsw-alias-interactive-bg-hover)}',
-      '.dsh-collab-hero-option-icon{flex:none;color:var(--dsw-alias-label-primary)}',
-      '.dsh-collab-hero-option-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
-    ].join('')
-
-    function CollabBasePromptHeroButton(props) {
-      const sessions = props.useSessions(selectSnapshot)
-      const summary = sessions.byId[props.sessionId]
-      const chat = props.useChat(snapshot => snapshot)
-      const blank = (chat?.timeline?.turnOrder?.length ?? 0) === 0
-      if (!isCollabSummary(summary, sessions) || !blank) return null
-      const icon = typeof IconEditOutlineRegular === 'function'
-        ? h(IconEditOutlineRegular, { size: 14, className: 'dsh-collab-hero-option-icon' })
-        : h('svg', {
-            viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true,
-            className: 'dsh-collab-hero-option-icon',
-          },
-          h('path', {
-            d: 'M3 11.5V13h1.5l7.3-7.3-1.5-1.5L3 11.5Z',
-            fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinejoin: 'round',
-          }))
-      return h(React.Fragment, null,
-        h('style', null, HERO_BUTTON_CSS),
-        h('button', {
-          type: 'button',
-          className: 'dsh-collab-hero-option',
-          onClick: () => { void openBasePromptEditor(props.sessionId, summary?.displayTitle ?? props.sessionId) },
-        },
-        icon,
-        h('span', { className: 'dsh-collab-hero-option-label' }, props.t('base.heroButton'))))
     }
 
     const BOARD_CSS = [
@@ -2004,28 +1941,6 @@ window.__ModuleLoader__.load({
           order: 40,
           locale: NS,
         }, CollabBasePromptMenuItem))
-
-        // The View More menu is root-scoped, so a session-scoped probe records
-        // the session whose header is on screen for that row.
-        ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-          name: 'conversation.session.header.utilities',
-          id: 'collab-active-session-probe',
-          order: 999,
-        }, CollabActiveSessionProbe))
-
-        ctx.slots.inject('conversation.session.header.views.actions', () => ctx.slots.register({
-          name: 'conversation.session.header.views.actions',
-          id: 'collab-base-prompt',
-          order: 10,
-          locale: NS,
-        }, CollabBasePromptViewAction))
-
-        ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
-          name: 'conversation.hero.options',
-          id: 'collab-base-prompt',
-          order: 0,
-          locale: NS,
-        }, CollabBasePromptHeroButton))
 
       },
     }
