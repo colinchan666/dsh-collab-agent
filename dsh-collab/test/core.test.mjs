@@ -294,6 +294,63 @@ test('cd into the sessions parent cannot escape through relative paths', () => {
   }
 })
 
+test('legacy projects and tasks migrate to tasks and subtasks', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-task-migration-'))
+  try {
+    const tasksFile = path.join(root, 'tasks.json')
+    fs.writeFileSync(tasksFile, JSON.stringify({
+      version: 1,
+      projects: {
+        'project-legacy': {
+          id: 'project-legacy', supervisor: SELF, title: 'Legacy task', status: 'open',
+          requestId: null, createdAt: 1, closedAt: null,
+        },
+      },
+      tasks: {
+        'task-legacy': {
+          id: 'task-legacy', supervisor: SELF, worker: PEER, projectId: 'project-legacy',
+          title: 'Legacy subtask', instruction: 'do it', inputs: {}, acceptance: 'done',
+          status: 'done', attempts: 1, createdAt: 1, updatedAt: 2,
+          createdTurn: null, assignedTurn: null, capabilityVersion: null,
+          result: null, failure: null, history: [],
+        },
+      },
+    }))
+    const store = new TaskStore(tasksFile)
+    assert.equal(store.read().tasks['project-legacy'].title, 'Legacy task')
+    assert.equal(store.read().subtasks['task-legacy'].taskId, 'project-legacy')
+    assert.equal(store.migrate(), true)
+    const migrated = JSON.parse(fs.readFileSync(tasksFile, 'utf8'))
+    assert.equal(migrated.version, 2)
+    assert.ok(migrated.subtasks['task-legacy'])
+    assert.ok(fs.existsSync(`${tasksFile}.v1.bak`))
+
+    const requestsFile = path.join(root, 'requests.json')
+    fs.writeFileSync(requestsFile, JSON.stringify({
+      version: 1,
+      requests: {
+        'request-legacy': {
+          id: 'request-legacy', requester: SELF, supervisor: PEER,
+          title: 'Legacy request', requirement: 'do it', status: 'accepted',
+          reason: null, projectId: 'project-legacy', taskIds: ['task-legacy'],
+          response: null, createdAt: 1, updatedAt: 2, resolvedAt: null,
+          delivery: null, expiresAt: null, executionDeadlineAt: null,
+          lastHeartbeatAt: null, heartbeatNote: null, overdue: false, overdueAt: null,
+        },
+      },
+    }))
+    const requestStore = new RequestStore(requestsFile)
+    assert.equal(requestStore.read().requests['request-legacy'].taskId, 'project-legacy')
+    assert.deepEqual(requestStore.read().requests['request-legacy'].subtaskIds, ['task-legacy'])
+    assert.equal(requestStore.migrate(), true)
+    const migratedRequests = JSON.parse(fs.readFileSync(requestsFile, 'utf8'))
+    assert.equal(migratedRequests.version, 2)
+    assert.equal(migratedRequests.requests['request-legacy'].projectId, undefined)
+  } finally {
+    cleanup(root)
+  }
+})
+
 test('a project can be bound to only one request', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-binding-'))
   try {
@@ -408,7 +465,7 @@ test('an accepted request can be cancelled and loses its execution deadline', ()
   try {
     const store = new RequestStore(path.join(root, 'requests.json'))
     const request = store.create({ requester: SELF, supervisor: PEER, title: 'cancel', requirement: 'cancel me' })
-    store.accept(request.id, { projectId: 'project-1', executionDeadlineAt: Date.now() + 10000 })
+    store.accept(request.id, { taskId: 'task-1', executionDeadlineAt: Date.now() + 10000 })
     const cancelled = store.cancel(request.id, SELF)
     assert.equal(cancelled.status, 'cancelled')
     assert.equal(cancelled.executionDeadlineAt, null)

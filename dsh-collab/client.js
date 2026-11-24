@@ -124,6 +124,9 @@ window.__ModuleLoader__.load({
       'board.noLinkedTask': '该请求尚未创建任务。',
       'board.prevPage': '上一页',
       'board.nextPage': '下一页',
+      'board.taskDetail': '子任务详情',
+      'board.close': '关闭',
+      'board.noResult': '暂无结果。',
       'status.pending': '待处理',
       'status.accepted': '已受理',
       'status.rejected': '已拒绝',
@@ -244,6 +247,9 @@ window.__ModuleLoader__.load({
       'board.noLinkedTask': 'No task has been created for this request yet.',
       'board.prevPage': 'Previous',
       'board.nextPage': 'Next',
+      'board.taskDetail': 'Subtask details',
+      'board.close': 'Close',
+      'board.noResult': 'No result yet.',
       'status.pending': 'Pending',
       'status.accepted': 'Accepted',
       'status.rejected': 'Rejected',
@@ -1592,7 +1598,7 @@ window.__ModuleLoader__.load({
       const linked = (data?.relationships ?? []).filter(rel => rel.offer === true)
       const available = workers.filter(entry => !linked.some(rel => rel.worker === entry.sessionId))
       const subtasks = data?.tasks ?? []
-      const parentTasks = data?.projects ?? []
+      const parentTasks = data?.tasks ?? []
       const requests = data?.requests ?? []
       const statusText = (status) => {
         const key = `status.${String(status)}`
@@ -1605,17 +1611,18 @@ window.__ModuleLoader__.load({
         safeRequestPage * 5,
         safeRequestPage * 5 + 5,
       )
+      const pageRequestIds = pageRequests.map(request => request.id).join('\u0000')
       const selectedRequest = requests.find(request => request.id === selectedRequestId)
         ?? pageRequests[0]
         ?? null
       const selectedParentTask = selectedRequest === null
         ? null
-        : (parentTasks.find(project => project.id === selectedRequest.projectId)
-          ?? parentTasks.find(project => project.requestId === selectedRequest.id)
+        : (parentTasks.find(task => task.id === (selectedRequest.taskId ?? selectedRequest.projectId))
+          ?? parentTasks.find(task => task.requestId === selectedRequest.id)
           ?? null)
       const selectedSubtasks = selectedParentTask === null
         ? []
-        : subtasks.filter(task => task.projectId === selectedParentTask.id)
+        : subtasks.filter(task => (task.taskId ?? task.projectId) === selectedParentTask.id)
       React.useEffect(() => {
         if (requestPage !== safeRequestPage) setRequestPage(safeRequestPage)
       }, [requestPage, safeRequestPage])
@@ -1627,7 +1634,7 @@ window.__ModuleLoader__.load({
         if (!pageRequests.some(request => request.id === selectedRequestId)) {
           setSelectedRequestId(pageRequests[0].id)
         }
-      }, [safeRequestPage, requests.length, selectedRequestId])
+      }, [safeRequestPage, pageRequestIds, selectedRequestId])
 
       const focusTask = (task) => {
         let turn = Number.isInteger(task.assignedTurn)
@@ -1826,8 +1833,8 @@ window.__ModuleLoader__.load({
                                 h('span', { className: 'dsh-collab-board-status' }, t('board.subtask')),
                                 h('code', { className: 'dsh-collab-board-id' }, ` ${t('board.worker')}: ${task.workerTitle ?? shortId(task.worker ?? '-')}`),
                                 h('span', { className: 'dsh-collab-board-locate', 'aria-hidden': 'true' }, '↗'),
-                                h('span', { className: 'dsh-collab-board-status' }, statusText(task.status))))))
-        ))
+                                h('span', { className: 'dsh-collab-board-status' }, statusText(task.status))))),
+        )))
     }
 
     function CollabBoardTabTitle(props) {

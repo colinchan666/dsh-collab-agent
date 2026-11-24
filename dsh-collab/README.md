@@ -202,9 +202,9 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 
 - **Open the boards**: use DSH’s original right-sidebar expand button. For a
   supervisor session the right sidebar is seeded with three tabs: **start**
-  (DSH’s default guide), **任务** (tasks grouped by project/status), and
-  **注册** (offered workers on top, collaboration sessions not offered on the
-  bottom). Other session types keep only the default start tab.
+  (DSH’s default guide), **任务列表** (received requests, tasks, and subtasks),
+  and **注册中心** (offered workers on top, collaboration sessions not offered
+  on the bottom). Other session types keep only the default start tab.
 - **Registering** a worker is an **Offer** action in the 注册 tab; it writes the
   `offer` relationship and authorizes the supervisor↔worker pair.
 - **Capabilities are live**: name/description are derived from the worker’s
@@ -226,20 +226,20 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   cannot assign work directly; they submit a request to the supervisor. Task
   results still route to the task’s supervisor.
 - **Shared delivery**: workers write final artifacts directly to
-  `shared/<projectId>/artifacts/`; the worker can write while the project is
-  open, and read after close. A project is bound to exactly one accepted
-  request. The requester can read the project artifacts only after a successful
+  `shared/<taskId>/artifacts/`; the worker can write while the task is
+  open, and read after close. A task is bound to exactly one accepted
+  request. The requester can read the task artifacts only after a successful
   delivery, and cannot write. The supervisor lists them with
   `collab_delivery_list`, generates `manifest.json` with
   `collab_delivery_manifest` (path, bytes, sha256, mode), and sends the
-  sanitized manifest with `collab_request_deliver` only after the project is
-  closed and every task is done or cancelled. Empty deliveries are refused.
+  sanitized manifest with `collab_request_deliver` only after the task is
+  closed and every subtask is done or cancelled. Empty deliveries are refused.
   The notice's `root` is an opaque `.deliveries/<deliveryId>/artifacts` alias,
-  not the project path, so the requester does not receive a project id. The
+  not the task path, so the requester does not receive a task id. The
   auth API client bundle is minified but remains self-contained (`zod` is
   bundled) for compatibility with module-loader configurations that do not
   expose `zod` as an external module.
-- **No copy-out**: do not create a copy project or copy artifacts to an
+- **No copy-out**: do not create a copy task or copy artifacts to an
   ad-hoc shared directory. The canonical `deliveryDir` is returned by the task
   assignment; ad-hoc shared writes are denied by the guard.
 - **Message hygiene**: opened inbox messages are recorded in a per-session
@@ -262,7 +262,7 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   silently replaced by an empty store.
 - **Per-session OS sandbox**: `perSessionSandbox` (default true on macOS/Linux,
   forced off on Windows) narrows the DSH sandbox workspace boundary to each
-  collab session's own workdir and registers its project delivery dirs as
+  collab session's own workdir and registers its task delivery dirs as
   writable roots. The original workspace remains the prompt/registry value.
   Windows keeps the original workspace root and relies on the guard.
 - **Managed-worker write scope**: `write`, `edit`, `apply_patch`, and ordinary
@@ -276,11 +276,11 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   authorization to a supervisor can call `collab_request_submit`; it does not
   need to be an offered worker. The request is a normal structured message and
   has no fixed requester role. The requirement is outcome-focused: requester
-  text must not choose workers, projects, tasks, delivery paths, or internal
+  text must not choose workers, tasks, subtasks, delivery paths, or internal
   scheduling.
-- **Supervisor accept**: evaluate `collab_capabilities`, create a project and
-  tasks, assign at least one task to an offered worker, then call
-  `collab_request_accept` with the `projectId`. The request becomes `accepted`;
+- **Supervisor accept**: evaluate `collab_capabilities`, create a task and
+  subtasks, assign at least one subtask to an offered worker, then call
+  `collab_request_accept` with the `taskId`. The request becomes `accepted`;
   the requester is notified.
 - **Supervisor reject**: call `collab_request_reject` with a concrete reason,
   naming the missing capability. The request becomes `rejected`.
@@ -299,8 +299,8 @@ tools. It uses task tools to plan/assign/verify; workers execute.
 - **Request tools**: `collab_request_submit`, `collab_request_cancel`,
   `collab_requests`, `collab_request_accept`, `collab_request_reject`.
   Requests are stored in `requests.json` next to the other collaboration state.
-- **The task tab** shows the supervisor's work requests above project groups,
-  including pending/accepted/rejected status and rejection reasons.
+- **The task tab** shows the supervisor's received requests above the selected task and its
+  subtasks, including pending/accepted/rejected status and rejection reasons.
 
 ## Supervisor panel
 
@@ -334,7 +334,7 @@ State is under the DSH home:
   registry.json          collaboration session index
   authorization.json     bilateral communication grants
   relationships.json     supervisor↔worker offers and capability overrides
-  tasks.json             projects and tasks
+  tasks.json             tasks and subtasks
   requests.json          requester↔supervisor requests and deliveries
   notices.json           durable protocol notice outbox
 ```
@@ -403,7 +403,7 @@ That backup is the **bad** file, not a clean backup. Do not restore it blindly.
    | `registry.json` | Collaboration sessions reappear; if not, the plugin rescans the workspace `.dsh-collab` directories. |
    | `authorization.json` | Re-authorize pairs in **Collab access** if grants are gone. |
    | `relationships.json` | Re-offer workers in the supervisor's **注册** tab. |
-   | `tasks.json` | Task board shows the desired projects/tasks; delivery artifacts remain on disk. |
+   | `tasks.json` | Task board shows the desired tasks/subtasks; delivery artifacts remain on disk. |
    | `requests.json` | Requester and supervisor can list the requests that still exist. |
    | `notices.json` | Pending wake-ups may be gone; the task/request stores remain authoritative. |
 
@@ -425,11 +425,11 @@ store's data. All are valid JSON and match the current versions.
 ```
 
 ```json
-{"version":1,"projects":{},"tasks":{}}
+{"version":2,"tasks":{},"subtasks":{}}
 ```
 
 ```json
-{"version":1,"requests":{}}
+{"version":2,"requests":{}}
 ```
 
 ```json
@@ -524,24 +524,26 @@ timestamps, and hashes; keep the field names and JSON types.
 
 ```json
 {
-  "version": 1,
-  "projects": {
-    "project-11111111-1111-4111-8111-111111111111": {
-      "id": "project-11111111-1111-4111-8111-111111111111",
+  "version": 2,
+  "tasks": {
+    "task-11111111-1111-4111-8111-111111111111": {
+      "id": "task-11111111-1111-4111-8111-111111111111",
+      "taskId": "task-11111111-1111-4111-8111-111111111111",
       "supervisor": "session-11111111-1111-4111-8111-111111111111",
-      "title": "Delivery project",
+      "title": "Delivery task",
       "status": "open",
       "requestId": null,
       "createdAt": 1760000000000,
       "closedAt": null
     }
   },
-  "tasks": {
-    "task-22222222-2222-4222-8222-222222222222": {
-      "id": "task-22222222-2222-4222-8222-222222222222",
+  "subtasks": {
+    "subtask-22222222-2222-4222-8222-222222222222": {
+      "id": "subtask-22222222-2222-4222-8222-222222222222",
+      "subtaskId": "subtask-22222222-2222-4222-8222-222222222222",
+      "taskId": "task-11111111-1111-4111-8111-111111111111",
       "supervisor": "session-11111111-1111-4111-8111-111111111111",
       "worker": "session-22222222-2222-4222-8222-222222222222",
-      "projectId": "project-11111111-1111-4111-8111-111111111111",
       "title": "Write result.txt",
       "instruction": "Write result.txt with the requested content.",
       "inputs": {},
@@ -569,10 +571,10 @@ timestamps, and hashes; keep the field names and JSON types.
 }
 ```
 
-- Task/project keys must match their `id`.
-- `status` is one of `created`, `assigned`, `accepted`, `running`, `done`,
-  `failed`, `cancelled`.
-- Keep `projectId` pointing at an existing project.
+- Task and subtask keys must match their `id`.
+- A subtask's `taskId` points at its parent task.
+- Subtask status is one of `created`, `assigned`, `accepted`, `running`,
+  `done`, `failed`, `cancelled`.
 - `history[].at` is an ISO timestamp; `createdAt`/`updatedAt` are epoch
   milliseconds.
 - Do not invent `result` or delivery files that do not exist.
@@ -581,7 +583,7 @@ timestamps, and hashes; keep the field names and JSON types.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "requests": {
     "request-33333333-3333-4333-8333-333333333333": {
       "id": "request-33333333-3333-4333-8333-333333333333",
@@ -591,8 +593,8 @@ timestamps, and hashes; keep the field names and JSON types.
       "requirement": "Deliver result.txt containing hello.",
       "status": "delivered",
       "reason": null,
-      "projectId": "project-11111111-1111-4111-8111-111111111111",
-      "taskIds": ["task-22222222-2222-4222-8222-222222222222"],
+      "taskId": "task-11111111-1111-4111-8111-111111111111",
+      "subtaskIds": ["subtask-22222222-2222-4222-8222-222222222222"],
       "response": null,
       "createdTurn": null,
       "createdAt": 1760000000000,
@@ -619,7 +621,7 @@ timestamps, and hashes; keep the field names and JSON types.
   `expired`.
 - `delivery` is `null` until delivered; a fake `manifestSha256` makes the
   request look delivered without a valid delivery. Do not fabricate it.
-- If only the request record is needed, keeping `delivery: null` is safer.
+- `taskId` is the parent task; `subtaskIds` are the worker-assigned subtasks.
 
 #### notices.json
 
