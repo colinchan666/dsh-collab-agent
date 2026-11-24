@@ -273,10 +273,6 @@ display name to the clipboard and briefly marks the button as copied.
 
 ## Manual state recovery
 
-There is intentionally no state-recovery page. These files are small, local,
-owner-only JSON documents; inspect and repair them manually while DSH is
-stopped.
-
 State is under the DSH home:
 
 ```text
@@ -289,7 +285,7 @@ State is under the DSH home:
   notices.json           durable protocol notice outbox
 ```
 
-If a document is malformed, the plugin moves it to:
+A malformed document is moved aside as:
 
 ```text
 <file>.corrupt-<timestamp>
@@ -297,44 +293,318 @@ If a document is malformed, the plugin moves it to:
 
 That backup is the **bad** file, not a clean backup. Do not restore it blindly.
 
-### Procedure
+### Repair SOP
 
-1. Quit DSH completely.
-2. Copy the whole `~/.dsh/collab/` directory to a safe location.
-3. Validate a file without modifying it:
+1. **Locate the file.** The error names the exact path:
 
-   ```sh
-   python3 -m json.tool ~/.dsh/collab/tasks.json >/dev/null
+   ```text
+   collaboration state is corrupted: /home/me/.dsh/collab/tasks.json;
+   backup: /home/me/.dsh/collab/tasks.json.corrupt-1760000000000
    ```
 
-4. Move the malformed file aside:
+2. **Quit DSH completely.** Do not edit state while the Host is running.
+
+3. **Back up the whole state directory.**
 
    ```sh
-   mv ~/.dsh/collab/tasks.json ~/.dsh/collab/tasks.json.broken
+   stamp=$(date +%Y%m%d-%H%M%S)
+   cp -R ~/.dsh/collab ~/.dsh/collab.manual-backup-$stamp
    ```
 
-5. Either repair the JSON, or leave the file missing. A missing state document
-   is treated as an empty state and the next write recreates it.
-6. Restart DSH.
+4. **Validate every document** (read-only):
 
-### Effects of resetting each file
+   ```sh
+   for name in registry authorization relationships tasks requests notices; do
+     printf '%s: ' "$name"
+     if python3 -m json.tool "$HOME/.dsh/collab/$name.json" >/dev/null 2>&1; then
+       echo OK
+     else
+       echo BAD
+     fi
+   done
+   ```
 
-| File | Reset effect |
-|---|---|
-| `registry.json` | Session index is rebuilt from the collaboration directories on disk; task/request data is not affected. |
-| `authorization.json` | All pair grants are lost; re-authorize pairs in **Collab access**. |
-| `relationships.json` | Supervisor↔worker offers/capability overrides are lost; re-offer workers. |
-| `tasks.json` | Projects/tasks and statuses are lost; delivery directories and manifests remain on disk. |
-| `requests.json` | Request history/status is lost; delivered artifacts remain, but the request workflow must be recreated. |
-| `notices.json` | Undelivered protocol notices are lost; this is the least destructive reset. |
+5. **Choose the least destructive repair:**
 
-Per-session `session.json` and `comm/` credentials are separate from these six
-state documents; malformed session metadata is ignored by the layout reader
-and is not part of the global recovery inventory.
+   - **Syntax error only, data still present:** fix quotes, commas, braces,
+     brackets, or truncation in a copy, then validate with
+     `python3 -m json.tool`.
+   - **Schema is broken beyond repair:** replace the file with the empty
+     skeleton below. The next write recreates the store.
+   - **Known-good backup exists:** restore that copy, not a `.corrupt-*` file.
+   - **File is missing:** do nothing; missing means empty and is recreated on
+     the next write.
 
-Do not edit these files while DSH is running, do not place `~/.dsh/collab` on a
-cloud-synced/network filesystem, and do not run two DSH Hosts against the same
-profile.
+6. **Preserve permissions.**
+
+   ```sh
+   chmod 700 ~/.dsh/collab
+   chmod 600 ~/.dsh/collab/*.json
+   ```
+
+7. **Restart DSH** and verify the affected surface:
+
+   | File | Verify after restart |
+   |---|---|
+   | `registry.json` | Collaboration sessions reappear; if not, the plugin rescans the workspace `.dsh-collab` directories. |
+   | `authorization.json` | Re-authorize pairs in **Collab access** if grants are gone. |
+   | `relationships.json` | Re-offer workers in the supervisor's **注册** tab. |
+   | `tasks.json` | Task board shows the desired projects/tasks; delivery artifacts remain on disk. |
+   | `requests.json` | Requester and supervisor can list the requests that still exist. |
+   | `notices.json` | Pending wake-ups may be gone; the task/request stores remain authoritative. |
+
+### Empty skeletons
+
+Use these when the file is syntactically broken and you accept losing that
+store's data. All are valid JSON and match the current versions.
+
+```json
+{"version":1,"sessions":{}}
+```
+
+```json
+{"version":2,"grants":[]}
+```
+
+```json
+{"version":1,"relationships":[]}
+```
+
+```json
+{"version":1,"projects":{},"tasks":{}}
+```
+
+```json
+{"version":1,"requests":{}}
+```
+
+```json
+{"version":1,"notices":{}}
+```
+
+### Format examples
+
+The examples below are intentionally complete. Replace the ids, paths,
+timestamps, and hashes; keep the field names and JSON types.
+
+#### registry.json
+
+```json
+{
+  "version": 1,
+  "sessions": {
+    "session-11111111-1111-4111-8111-111111111111": {
+      "sessionId": "session-11111111-1111-4111-8111-111111111111",
+      "preset": "collab",
+      "originalCwd": "/Users/me/project",
+      "workdir": "/Users/me/project/.dsh-collab/sessions/session-11111111-1111-4111-8111-111111111111",
+      "title": "Worker A",
+      "createdAt": 1760000000000,
+      "updatedAt": 1760000000000
+    }
+  }
+}
+```
+
+- `preset` is `collab` or `supervisor`.
+- `sessionId` must be a real `session-<uuid>` id.
+- This file is a derived index. Resetting it is usually safe; sessions are
+  rediscovered from `<workspace>/.dsh-collab/sessions/`.
+
+#### authorization.json
+
+```json
+{
+  "version": 2,
+  "grants": [
+    {
+      "from": "session-11111111-1111-4111-8111-111111111111",
+      "to": "session-22222222-2222-4222-8222-222222222222",
+      "createdAt": 1760000000000,
+      "updatedAt": 1760000000000,
+      "authorizedBy": "ui"
+    },
+    {
+      "from": "session-22222222-2222-4222-8222-222222222222",
+      "to": "session-11111111-1111-4111-8111-111111111111",
+      "createdAt": 1760000000000,
+      "updatedAt": 1760000000000,
+      "authorizedBy": "ui"
+    }
+  ]
+}
+```
+
+- One object is one direction. Communication requires **both** directions.
+- A single direction is a pending grant and does not authorize messaging.
+- Prefer re-authorizing in the UI instead of hand-writing this file.
+
+#### relationships.json
+
+```json
+{
+  "version": 1,
+  "relationships": [
+    {
+      "supervisor": "session-11111111-1111-4111-8111-111111111111",
+      "worker": "session-22222222-2222-4222-8222-222222222222",
+      "capabilityOverride": null,
+      "offer": true,
+      "request": false,
+      "createdAt": 1760000000000,
+      "updatedAt": 1760000000000,
+      "createdBy": "human"
+    }
+  ]
+}
+```
+
+- `offer: true` makes the worker eligible for assignment.
+- `capabilityOverride` may be `null` or:
+  ```json
+  {"name":"reviewer","description":"Reviews changes","tags":["review"]}
+  ```
+- Prefer re-offering workers in the UI after a reset.
+
+#### tasks.json
+
+```json
+{
+  "version": 1,
+  "projects": {
+    "project-11111111-1111-4111-8111-111111111111": {
+      "id": "project-11111111-1111-4111-8111-111111111111",
+      "supervisor": "session-11111111-1111-4111-8111-111111111111",
+      "title": "Delivery project",
+      "status": "open",
+      "requestId": null,
+      "createdAt": 1760000000000,
+      "closedAt": null
+    }
+  },
+  "tasks": {
+    "task-22222222-2222-4222-8222-222222222222": {
+      "id": "task-22222222-2222-4222-8222-222222222222",
+      "supervisor": "session-11111111-1111-4111-8111-111111111111",
+      "worker": "session-22222222-2222-4222-8222-222222222222",
+      "projectId": "project-11111111-1111-4111-8111-111111111111",
+      "title": "Write result.txt",
+      "instruction": "Write result.txt with the requested content.",
+      "inputs": {},
+      "acceptance": "result.txt exists and contains the requested content.",
+      "status": "done",
+      "attempts": 1,
+      "createdAt": 1760000000000,
+      "updatedAt": 1760000000000,
+      "createdTurn": null,
+      "assignedTurn": null,
+      "capabilityVersion": null,
+      "result": {
+        "summary": "Created result.txt",
+        "details": "6 bytes",
+        "artifacts": ["result.txt"],
+        "completedAt": "2026-11-24T00:00:00.000Z"
+      },
+      "failure": null,
+      "history": [
+        {"at":"2026-11-24T00:00:00.000Z","status":"assigned","note":"attempt 1"},
+        {"at":"2026-11-24T00:01:00.000Z","status":"done","note":"completed by worker"}
+      ]
+    }
+  }
+}
+```
+
+- Task/project keys must match their `id`.
+- `status` is one of `created`, `assigned`, `accepted`, `running`, `done`,
+  `failed`, `cancelled`.
+- Keep `projectId` pointing at an existing project.
+- `history[].at` is an ISO timestamp; `createdAt`/`updatedAt` are epoch
+  milliseconds.
+- Do not invent `result` or delivery files that do not exist.
+
+#### requests.json
+
+```json
+{
+  "version": 1,
+  "requests": {
+    "request-33333333-3333-4333-8333-333333333333": {
+      "id": "request-33333333-3333-4333-8333-333333333333",
+      "requester": "session-33333333-3333-4333-8333-333333333333",
+      "supervisor": "session-11111111-1111-4111-8111-111111111111",
+      "title": "Deliver result.txt",
+      "requirement": "Deliver result.txt containing hello.",
+      "status": "delivered",
+      "reason": null,
+      "projectId": "project-11111111-1111-4111-8111-111111111111",
+      "taskIds": ["task-22222222-2222-4222-8222-222222222222"],
+      "response": null,
+      "createdTurn": null,
+      "createdAt": 1760000000000,
+      "updatedAt": 1760000000000,
+      "resolvedAt": 1760000000000,
+      "delivery": {
+        "deliveryId": "delivery-44444444-4444-4444-8444-444444444444",
+        "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "deliveredAt": 1760000000000
+      },
+      "expiresAt": null,
+      "executionDeadlineAt": null,
+      "lastHeartbeatAt": null,
+      "heartbeatNote": null,
+      "overdue": false,
+      "overdueAt": null
+    }
+  }
+}
+```
+
+- `requester` must be a real session id and must differ from `supervisor`.
+- `status` is `pending`, `accepted`, `delivered`, `rejected`, `cancelled`, or
+  `expired`.
+- `delivery` is `null` until delivered; a fake `manifestSha256` makes the
+  request look delivered without a valid delivery. Do not fabricate it.
+- If only the request record is needed, keeping `delivery: null` is safer.
+
+#### notices.json
+
+```json
+{
+  "version": 1,
+  "notices": {
+    "notice-55555555-5555-4555-8555-555555555555": {
+      "id": "notice-55555555-5555-4555-8555-555555555555",
+      "from": "session-11111111-1111-4111-8111-111111111111",
+      "to": "session-22222222-2222-4222-8222-222222222222",
+      "payload": {
+        "type": "collab-task/assign",
+        "version": 1,
+        "taskId": "task-22222222-2222-4222-8222-222222222222"
+      },
+      "createdAt": 1760000000000,
+      "updatedAt": 1760000000000,
+      "attempts": 0,
+      "lastError": null
+    }
+  }
+}
+```
+
+- `payload` is an opaque protocol object; preserve existing payloads rather
+  than inventing them.
+- Notices are a wake-up outbox, not the source of truth. Deleting this file is
+  the least destructive reset; the next write recreates it.
+
+### Important
+
+- Do not put `~/.dsh/collab` on a cloud-synced or network filesystem.
+- Do not run two DSH Hosts against one profile.
+- Do not edit these files while DSH is running.
+- Per-session `session.json`, `comm/` credentials, and delivery files are
+  separate from these six state documents.
+- If JSON is valid but the schema is wrong, the plugin does not create a
+  `.corrupt-*` backup; repair or reset it using the same SOP.
 
 ## Real browser smoke test
 
