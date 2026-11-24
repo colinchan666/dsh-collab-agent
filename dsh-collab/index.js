@@ -2185,9 +2185,15 @@ export function apply(ctx, config = {}) {
           capability: effectiveCapability(relationship),
         })),
         workers: workerCandidates(sessionId),
-        tasks: tasks.listForSupervisor(sessionId).map(task => TaskStore.summary(task)),
+        tasks: tasks.listForSupervisor(sessionId).map(task => ({
+          ...TaskStore.summary(task),
+          workerTitle: registry.get(task.worker)?.title ?? null,
+        })),
         projects: tasks.listProjects(sessionId),
-        requests: requests.listForSupervisor(sessionId).map(request => RequestStore.summary(request)),
+        requests: requests.listForSupervisor(sessionId).map(request => ({
+          ...RequestStore.summary(request),
+          requesterTitle: registry.get(request.requester)?.title ?? null,
+        })),
       }
     }
     if (op === 'baseGet' || op === 'baseSet') {

@@ -117,7 +117,26 @@ window.__ModuleLoader__.load({
       'board.close': '关闭',
       'board.pinnedNotice': '已固定当前能力。',
       'board.liveNotice': '已切换为实时能力。',
-      'board.requests': '派活请求',
+      'board.requests': '已接收请求',
+      'board.emptyRequests': '还没有已接收请求。',
+      'board.requester': '请求方',
+      'board.worker': '处理方',
+      'board.noLinkedTask': '该请求尚未创建任务。',
+      'board.prevPage': '上一页',
+      'board.nextPage': '下一页',
+      'status.pending': '待处理',
+      'status.accepted': '已受理',
+      'status.rejected': '已拒绝',
+      'status.expired': '已过期',
+      'status.cancelled': '已取消',
+      'status.delivered': '已交付',
+      'status.created': '待分配',
+      'status.assigned': '已分配',
+      'status.running': '执行中',
+      'status.done': '已完成',
+      'status.failed': '失败',
+      'status.open': '进行中',
+      'status.closed': '已关闭',
       'board.search': '搜索能力描述',
       'board.searchEmpty': '无匹配内容。',
       'board.expand': '展开',
@@ -218,7 +237,26 @@ window.__ModuleLoader__.load({
       'board.close': 'Close',
       'board.pinnedNotice': 'Capability pinned.',
       'board.liveNotice': 'Switched to live capability.',
-      'board.requests': 'Work requests',
+      'board.requests': 'Received requests',
+      'board.emptyRequests': 'No received requests yet.',
+      'board.requester': 'Requester',
+      'board.worker': 'Worker',
+      'board.noLinkedTask': 'No task has been created for this request yet.',
+      'board.prevPage': 'Previous',
+      'board.nextPage': 'Next',
+      'status.pending': 'Pending',
+      'status.accepted': 'Accepted',
+      'status.rejected': 'Rejected',
+      'status.expired': 'Expired',
+      'status.cancelled': 'Cancelled',
+      'status.delivered': 'Delivered',
+      'status.created': 'Unassigned',
+      'status.assigned': 'Assigned',
+      'status.running': 'Running',
+      'status.done': 'Done',
+      'status.failed': 'Failed',
+      'status.open': 'Open',
+      'status.closed': 'Closed',
       'board.search': 'Search capability description',
       'board.searchEmpty': 'No matching content.',
       'board.expand': 'Expand',
@@ -1427,6 +1465,7 @@ window.__ModuleLoader__.load({
       '.dsh-collab-board-muted{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;margin:0}',
       '.dsh-collab-board-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;min-width:0}',
       '.dsh-collab-board-row:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}',
+      '.dsh-collab-board-row[data-selected="true"]{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2));box-shadow:inset 2px 0 0 var(--dsw-alias-brand-primary)}',
       '.dsh-collab-board-row[data-clickable="true"]{cursor:pointer}',
       '.dsh-collab-board-locate{flex:none;color:var(--dsw-alias-label-tertiary);font-size:11px}',
       '[data-collab-focus="true"]{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:3px;border-radius:8px;transition:outline-color .2s ease}',
@@ -1483,7 +1522,8 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const noticeTimerRef = React.useRef(null)
-      const [projectFilter, setProjectFilter] = React.useState('all')
+      const [requestPage, setRequestPage] = React.useState(0)
+      const [selectedRequestId, setSelectedRequestId] = React.useState(null)
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
 
       const load = async () => {
@@ -1551,24 +1591,43 @@ window.__ModuleLoader__.load({
       const workers = data?.workers ?? []
       const linked = (data?.relationships ?? []).filter(rel => rel.offer === true)
       const available = workers.filter(entry => !linked.some(rel => rel.worker === entry.sessionId))
-      const tasks = data?.tasks ?? []
-      const projects = data?.projects ?? []
+      const subtasks = data?.tasks ?? []
+      const parentTasks = data?.projects ?? []
       const requests = data?.requests ?? []
-
-      const groups = new Map()
-      for (const project of projects) groups.set(project.id, { project, tasks: [] })
-      for (const task of tasks) {
-        let group = groups.get(task.projectId)
-        if (group === undefined) {
-          group = { project: { id: 'unknown', title: t('board.projects'), status: 'open' }, tasks: [] }
-          groups.set('unknown', group)
-        }
-        group.tasks.push(task)
+      const statusText = (status) => {
+        const key = `status.${String(status)}`
+        const localized = t(key)
+        return localized === key ? String(status) : localized
       }
-      const taskSections = [...groups.values()].filter(group => group.tasks.length > 0 || group.project.status === 'open')
-      const visibleSections = projectFilter === 'all'
-        ? taskSections
-        : taskSections.filter(group => group.project.id === projectFilter)
+      const requestPageCount = Math.max(1, Math.ceil(requests.length / 5))
+      const safeRequestPage = Math.min(requestPage, requestPageCount - 1)
+      const pageRequests = requests.slice(
+        safeRequestPage * 5,
+        safeRequestPage * 5 + 5,
+      )
+      const selectedRequest = requests.find(request => request.id === selectedRequestId)
+        ?? pageRequests[0]
+        ?? null
+      const selectedParentTask = selectedRequest === null
+        ? null
+        : (parentTasks.find(project => project.id === selectedRequest.projectId)
+          ?? parentTasks.find(project => project.requestId === selectedRequest.id)
+          ?? null)
+      const selectedSubtasks = selectedParentTask === null
+        ? []
+        : subtasks.filter(task => task.projectId === selectedParentTask.id)
+      React.useEffect(() => {
+        if (requestPage !== safeRequestPage) setRequestPage(safeRequestPage)
+      }, [requestPage, safeRequestPage])
+      React.useEffect(() => {
+        if (pageRequests.length === 0) {
+          if (selectedRequestId !== null) setSelectedRequestId(null)
+          return
+        }
+        if (!pageRequests.some(request => request.id === selectedRequestId)) {
+          setSelectedRequestId(pageRequests[0].id)
+        }
+      }, [safeRequestPage, requests.length, selectedRequestId])
 
       const focusTask = (task) => {
         let turn = Number.isInteger(task.assignedTurn)
@@ -1637,16 +1696,6 @@ window.__ModuleLoader__.load({
         error === null ? null : h('p', { className: 'dsh-collab-board-error', role: 'alert' }, error),
         notice === null ? null : h('p', { className: 'dsh-collab-board-notice', role: 'status' }, notice),
         loading ? h('p', { className: 'dsh-collab-board-muted' }, t('board.loading')) : null,
-        mode === 'tasks'
-          ? h('div', { className: 'dsh-collab-board-actions' },
-              h('select', {
-                className: 'dsh-collab-board-select',
-                value: projectFilter,
-                onChange: (event) => setProjectFilter(event.target.value),
-              },
-              h('option', { value: 'all' }, t('board.allProjects')),
-              ...projects.map(project => h('option', { key: project.id, value: project.id }, `${project.title} (${project.status})`))))
-          : null,
         mode === 'workers'
           ? h(React.Fragment, null,
               h('section', { className: 'dsh-collab-board-section' },
@@ -1699,43 +1748,85 @@ window.__ModuleLoader__.load({
                         onClick: () => { void offer(entry) },
                       }, t('board.offer'))))))
           : h(React.Fragment, null,
-              requests.length === 0 ? null : h('section', { className: 'dsh-collab-board-section' },
-                h('h3', { className: 'dsh-collab-board-section-title' }, t('board.requests')),
-                requests.map(request => h('div', { key: request.id, className: 'dsh-collab-board-row' },
-                  h('span', { className: 'dsh-collab-board-row-main' },
-                    request.title,
-                    request.reason === undefined ? null : h('span', { className: 'dsh-collab-board-muted' }, ` · ${request.reason}`)),
-                  h('code', { className: 'dsh-collab-board-id' }, shortId(request.requester)),
-                  h('span', { className: 'dsh-collab-board-status' }, `${request.status}${request.overdue === true ? ` · ${t('board.overdue')}` : ''}`)))),
-              visibleSections.length === 0
-                ? h('section', { className: 'dsh-collab-board-section' },
-                    h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyTasks')))
-                : visibleSections.map(group => h('section', { key: group.project.id, className: 'dsh-collab-board-section' },
-                    h('div', { className: 'dsh-collab-board-head' },
-                      h('h3', { className: 'dsh-collab-board-section-title' }, group.project.title),
-                      h('span', { className: 'dsh-collab-board-status' }, t('board.parentTask')),
-                      h('span', { className: 'dsh-collab-board-status' }, group.project.status)),
-                    group.tasks.length === 0
-                      ? h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyTasks'))
-                      : group.tasks.map(task => h('div', {
-                          key: task.id,
+              h('section', { className: 'dsh-collab-board-section' },
+                h('div', { className: 'dsh-collab-board-head' },
+                  h('h3', { className: 'dsh-collab-board-section-title' }, t('board.requests')),
+                  h('span', { className: 'dsh-collab-board-status' }, String(requests.length))),
+                requests.length === 0
+                  ? h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyRequests'))
+                  : h(React.Fragment, null,
+                      h('div', { className: 'dsh-collab-auth-list' },
+                        pageRequests.map(request => h('div', {
+                          key: request.id,
                           className: 'dsh-collab-board-row',
+                          'data-selected': selectedRequest?.id === request.id ? 'true' : undefined,
                           'data-clickable': 'true',
                           role: 'button',
                           tabIndex: 0,
-                          title: t('board.locate'),
-                          onClick: () => focusTask(task),
+                          onClick: () => setSelectedRequestId(request.id),
                           onKeyDown: (event) => {
                             if (event.key !== 'Enter' && event.key !== ' ') return
                             event.preventDefault()
-                            focusTask(task)
+                            setSelectedRequestId(request.id)
                           },
                         },
-                          h('span', { className: 'dsh-collab-board-row-main' }, task.title),
-                          h('span', { className: 'dsh-collab-board-status' }, t('board.subtask')),
-                          h('code', { className: 'dsh-collab-board-id' }, shortId(task.worker ?? '-')),
-                          h('span', { className: 'dsh-collab-board-locate', 'aria-hidden': 'true' }, '↗'),
-                          h('span', { className: 'dsh-collab-board-status' }, task.status))))),
+                          h('span', { className: 'dsh-collab-board-row-main' },
+                            request.title,
+                            request.reason === undefined ? null : h('span', { className: 'dsh-collab-board-muted' }, ` · ${request.reason}`)),
+                          h('code', { className: 'dsh-collab-board-id' }, request.requesterTitle ?? shortId(request.requester)),
+                          h('span', { className: 'dsh-collab-board-status' }, statusText(request.status))))),
+                      requestPageCount > 1
+                        ? h('div', { className: 'dsh-collab-board-actions', 'data-align': 'start' },
+                            h('button', {
+                              type: 'button',
+                              className: 'dsh-collab-board-button',
+                              disabled: safeRequestPage === 0,
+                              onClick: () => setRequestPage(page => Math.max(0, page - 1)),
+                            }, t('board.prevPage')),
+                            h('span', { className: 'dsh-collab-board-muted' }, `${safeRequestPage + 1} / ${requestPageCount}`),
+                            h('button', {
+                              type: 'button',
+                              className: 'dsh-collab-board-button',
+                              disabled: safeRequestPage >= requestPageCount - 1,
+                              onClick: () => setRequestPage(page => Math.min(requestPageCount - 1, page + 1)),
+                            }, t('board.nextPage')))
+                        : null)),
+              selectedRequest === null
+                ? null
+                : h('section', { className: 'dsh-collab-board-section' },
+                    h('div', { className: 'dsh-collab-board-head' },
+                      h('h3', { className: 'dsh-collab-board-section-title' }, selectedRequest.title),
+                      h('span', { className: 'dsh-collab-board-status' }, statusText(selectedRequest.status))),
+                    h('p', { className: 'dsh-collab-board-muted' },
+                      `${t('board.requester')}: ${selectedRequest.requesterTitle ?? shortId(selectedRequest.requester)}`),
+                    selectedParentTask === null
+                      ? h('p', { className: 'dsh-collab-board-muted' }, t('board.noLinkedTask'))
+                      : h(React.Fragment, null,
+                          h('div', { className: 'dsh-collab-board-head' },
+                            h('h4', { className: 'dsh-collab-board-section-title' }, selectedParentTask.title),
+                            h('span', { className: 'dsh-collab-board-status' }, t('board.parentTask')),
+                            h('span', { className: 'dsh-collab-board-status' }, statusText(selectedParentTask.status))),
+                          selectedSubtasks.length === 0
+                            ? h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyTasks'))
+                            : selectedSubtasks.map(task => h('div', {
+                                key: task.id,
+                                className: 'dsh-collab-board-row',
+                                'data-clickable': 'true',
+                                role: 'button',
+                                tabIndex: 0,
+                                title: t('board.locate'),
+                                onClick: () => focusTask(task),
+                                onKeyDown: (event) => {
+                                  if (event.key !== 'Enter' && event.key !== ' ') return
+                                  event.preventDefault()
+                                  focusTask(task)
+                                },
+                              },
+                                h('span', { className: 'dsh-collab-board-row-main' }, task.title),
+                                h('span', { className: 'dsh-collab-board-status' }, t('board.subtask')),
+                                h('code', { className: 'dsh-collab-board-id' }, ` ${t('board.worker')}: ${task.workerTitle ?? shortId(task.worker ?? '-')}`),
+                                h('span', { className: 'dsh-collab-board-locate', 'aria-hidden': 'true' }, '↗'),
+                                h('span', { className: 'dsh-collab-board-status' }, statusText(task.status))))))
         ))
     }
 
