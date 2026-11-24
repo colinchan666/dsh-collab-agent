@@ -120,6 +120,7 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
   fs.mkdirSync(workspace, { recursive: true })
   try {
     const harness = fakeHarness(workspace)
+    harness.ctx.provide('sandboxPolicy', { registerWritableRoot: () => () => {} })
     apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
     const a = harness.makeAgent(A, PRESET)
     const b = harness.makeAgent(B, PRESET)
@@ -136,6 +137,8 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     assert.equal(a.session.currentCwd, workdirA)
     assert.equal(b.session.currentCwd, workdirB)
     assert.equal(plain.session.currentCwd, workspace)
+    assert.equal(a.session.header.cwd, workdirA)
+    assert.equal(b.session.header.cwd, workdirB)
 
     assert.equal(harness.tools.length, 26)
     for (const name of ['collab_info', 'collab_peers', 'collab_send', 'collab_inbox']) {

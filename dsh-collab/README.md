@@ -177,6 +177,11 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   Parsed state caches invalidate on file identity changes, and a malformed
   state document is moved to a `.corrupt-<timestamp>` backup instead of being
   silently replaced by an empty store.
+- **Per-session OS sandbox**: `perSessionSandbox` (default true) narrows the
+  DSH sandbox workspace boundary to each collab session's own workdir and
+  registers its project delivery dirs as writable roots. The original
+  workspace remains the prompt/registry value; disable it only if the host's
+  sandbox policy or workspace grouping requires the original workspace root.
 - **Managed-worker write scope**: `write`, `edit`, `apply_patch`, and ordinary
   shell write targets are limited to the assigned deliveryDir, `private/`, and
   `comm/`. Shell target extraction is conservative; it is not an OS sandbox.

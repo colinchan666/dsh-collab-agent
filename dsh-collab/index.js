@@ -403,6 +403,7 @@ export function apply(ctx, config = {}) {
   const executionTimeoutMs = Number.isFinite(Number(config.executionTimeoutMs))
     ? Math.max(100, Number(config.executionTimeoutMs))
     : 24 * 60 * 60 * 1000
+  const perSessionSandbox = config.perSessionSandbox !== false
   const registry = new SessionRegistry(registryPath)
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -431,6 +432,7 @@ export function apply(ctx, config = {}) {
   )
   const requestTimers = new Map()
   const executionTimers = new Map()
+  const sandboxBindings = new Map()
   const deliveryInFlight = new Set()
   let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
@@ -516,6 +518,30 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  const bindDeliverySandbox = (sessionId, directory) => {
+    if (!perSessionSandbox) return
+    const agent = ctx.agents.get(sessionId)
+    const policy = ctx.get('sandboxPolicy')
+    if (agent?.session === undefined || typeof policy?.registerWritableRoot !== 'function') return
+    const resolved = path.resolve(directory)
+    const key = `${sessionId}\u0000${resolved}`
+    if (sandboxBindings.has(key)) return
+    try {
+      mkdirp(resolved, 0o755)
+      sandboxBindings.set(key, policy.registerWritableRoot(agent.session, resolved))
+    } catch (error) {
+      warn(`could not register sandbox delivery root ${resolved}: ${describeError(error)}`)
+    }
+  }
+
+  const releaseDeliverySandbox = (sessionId, directory) => {
+    const key = `${sessionId}\u0000${path.resolve(directory)}`
+    const dispose = sandboxBindings.get(key)
+    if (dispose === undefined) return
+    sandboxBindings.delete(key)
+    try { dispose() } catch { /* runtime-only registration */ }
+  }
+
   const setupAgent = async (agent, { force = false, preset } = {}) => {
     try {
       const session = agent.session
@@ -529,7 +555,10 @@ export function apply(ctx, config = {}) {
       const role = effectivePreset === SUPERVISOR ? SUPERVISOR : PRESET
       // The Session belongs to the Workspace it was created in; the plugin
       // gives it a per-session working directory inside that Workspace.
-      const originalCwd = resolveOriginalCwd(ctx, session)
+      const registeredOriginal = registry.get(agent.id)?.originalCwd
+      const originalCwd = typeof registeredOriginal === 'string'
+        ? registeredOriginal
+        : resolveOriginalCwd(ctx, session)
       const layout = ensureSessionLayout({ originalCwd, sessionId: agent.id, preset: effectivePreset })
       try {
         registry.upsert({
@@ -561,6 +590,19 @@ export function apply(ctx, config = {}) {
       installPrompt(agent, layout, role)
       collabSessions.add(agent.id)
       sessionPresets.set(agent.id, effectivePreset)
+      if (perSessionSandbox && session.header !== undefined) {
+        try {
+          // The DSH sandbox derives its workspace-write boundary from header.cwd.
+          // Keep the original workspace in the registry and prompt, but narrow
+          // the OS sandbox to this session's collaboration layout.
+          session.header.cwd = layout.workdir
+        } catch (error) {
+          warn(`could not narrow the sandbox root for ${agent.id}: ${describeError(error)}`)
+        }
+      }
+      for (const task of tasks.listForWorker(agent.id)) {
+        bindDeliverySandbox(agent.id, deliveryRoot(task.projectId))
+      }
       return true
     } catch (error) {
       warn(`session setup failed for ${agent?.id}: ${describeError(error)}`)
@@ -1276,6 +1318,7 @@ export function apply(ctx, config = {}) {
         if (otherActive >= 1) throw new Error('worker already has an active task; capacity is 1')
         const deliveryDir = deliveryRoot(task.projectId)
         mkdirp(deliveryDir, 0o755)
+        bindDeliverySandbox(worker, deliveryDir)
         const assigned = tasks.assign(taskId, worker, Date.now(), turnForCall(exec), effectiveCapability(relationship)?.version ?? null)
         const payload = {
           type: 'collab-task/assign',
@@ -1530,7 +1573,11 @@ export function apply(ctx, config = {}) {
         const projectId = String(args?.projectId ?? '')
         const project = tasks.project(projectId)
         if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
+        const owned = tasks.listForSupervisor(self.sessionId).filter(task => task.projectId === projectId)
         const closed = tasks.closeProject(projectId)
+        for (const task of owned) {
+          if (task.worker !== null) releaseDeliverySandbox(task.worker, deliveryRoot(projectId))
+        }
         return `closed: ${closed.id}\nstatus: ${closed.status}`
       },
     },
@@ -1653,7 +1700,9 @@ export function apply(ctx, config = {}) {
         const task = tasks.get(String(args?.taskId ?? ''))
         if (task === undefined || task.worker !== self.sessionId) throw new Error('unknown task for this worker')
         const accepted = tasks.accept(task.id, self.sessionId)
-        return JSON.stringify({ ...taskDetail(accepted), deliveryDir: deliveryDirFor(accepted) })
+        const deliveryDir = deliveryDirFor(accepted)
+        bindDeliverySandbox(self.sessionId, deliveryDir)
+        return JSON.stringify({ ...taskDetail(accepted), deliveryDir })
       },
     },
     {
@@ -2400,6 +2449,11 @@ export function apply(ctx, config = {}) {
   for (const agent of ctx.agents.list()) void setupAgent(agent)
   ctx.on('agent/created', async ({ agent }) => { await setupAgent(agent) })
   ctx.on('agent/disposed', ({ agent }) => {
+    for (const [key, dispose] of sandboxBindings) {
+      if (!key.startsWith(`${agent.id} `)) continue
+      sandboxBindings.delete(key)
+      try { dispose() } catch { /* runtime-only registration */ }
+    }
     collabSessions.delete(agent.id)
     sessionPresets.delete(agent.id)
     disposePrompt(agent.id)
