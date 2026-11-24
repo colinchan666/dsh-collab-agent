@@ -1765,21 +1765,30 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
-    function CollabOpenBoardButton(props) {
-      const t = typeof props.t === 'function' ? props.t : fallbackT
+    function CollabSupervisorTabsOnOpen(props) {
       const sessions = props.useSessions(selectSnapshot)
       const summary = sessions.byId[props.sessionId]
-      if (!isSupervisorSessionSummary(summary, sessions)) return null
-      return h('button', {
-        type: 'button',
-        className: 'dsh-collab-board-open',
-        title: t('board.openTitle'),
-        'aria-label': t('board.openTitle'),
-        onClick: () => {
-          props.openBoard(props.sessionId)
+      const supervisor = isSupervisorSessionSummary(summary, sessions)
+      React.useEffect(() => {
+        if (!supervisor) return undefined
+        let wasExpanded = false
+        const seed = () => {
+          const expanded = props.isExpanded()
+          if (!expanded) {
+            wasExpanded = false
+            return
+          }
+          if (wasExpanded) return
+          wasExpanded = true
+          props.openGuide(props.sessionId)
+          props.openTasks(props.sessionId)
           props.openWorkers(props.sessionId)
-        },
-      }, t('board.open'))
+        }
+        seed()
+        const timer = setInterval(seed, 200)
+        return () => clearInterval(timer)
+      }, [supervisor, props.sessionId])
+      return null
     }
 
     return {
@@ -1917,20 +1926,21 @@ window.__ModuleLoader__.load({
 
         ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
           name: 'conversation.session.header.utilities',
-          id: 'collab-supervisor-board',
+          id: 'collab-supervisor-tabs-on-open',
           order: 11,
-          locale: NS,
           inject: () => ({
-            openBoard: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, {
+            isExpanded: () => ctx.sidebarRight.isExpanded(),
+            openGuide: () => ctx.sidebarRight.openTab('guide', { revealIfOpened: true }),
+            openTasks: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, {
               params: { sessionId },
-              revealIfOpened: true,
+              revealIfOpened: false,
             }),
             openWorkers: (sessionId) => ctx.sidebarRight.openTab(WORKERS_TAB_KIND, {
               params: { sessionId },
               revealIfOpened: false,
             }),
           }),
-        }, CollabOpenBoardButton))
+        }, CollabSupervisorTabsOnOpen))
 
         ctx.effect(
           () => ctx.uiConversation.events.register(collabAuthRefusedDefinition),

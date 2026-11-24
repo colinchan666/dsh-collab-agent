@@ -46,7 +46,7 @@ function fakeClientHarness() {
       async delete(id) { calls.deleted.push(id) },
     },
     layout: { selectPanel(id) { calls.panels.push(id) } },
-    sidebarRight: { openTab(kind, options) { calls.tabs.push({ kind, options }) } },
+    sidebarRight: { isExpanded: () => false, openTab(kind, options) { calls.tabs.push({ kind, options }) } },
     sidebarRightTabs: { register(definition) { calls.tabTypes.push(definition); return () => {} } },
     uiConversation: { events: { register(definition) { calls.registered.push(definition); return () => {} } } },
     remote: {
@@ -137,7 +137,7 @@ test('the client starts a collab session through the current-workspace navigatio
     ['conversation.session.header.views.actions', 'collab-base-prompt'],
     ['conversation.hero.options', 'collab-base-prompt'],
     ['conversation.session.header.utilities', 'collab-active-session-probe'],
-    ['conversation.session.header.utilities', 'collab-supervisor-board'],
+    ['conversation.session.header.utilities', 'collab-supervisor-tabs-on-open'],
   ]) {
     assert.ok(harness.registrations.some(entry => entry.options.name === name && entry.options.id === id), `${name}:${id}`)
   }
@@ -197,24 +197,14 @@ test('the client does not auto-open a collab session when it starts running', as
   assert.deepEqual(harness.calls.opened, [])
 })
 
-test('the supervisor header exposes an on-demand board action', async () => {
-  const plugin = pluginFor()
+test('the supervisor header registers the on-open tab scheduler', () => {
   const harness = fakeClientHarness()
-  plugin.apply(harness.ctx)
+  pluginFor().apply(harness.ctx)
   const registration = harness.registrations.find(entry => (
     entry.options.name === 'conversation.session.header.utilities'
-    && entry.options.id === 'collab-supervisor-board'
+    && entry.options.id === 'collab-supervisor-tabs-on-open'
   ))
   assert.ok(registration)
-  const face = registration.options.inject()
-  face.openBoard('session-supervisor')
-  face.openWorkers('session-supervisor')
-  assert.deepEqual(harness.calls.tabs, [{
-    kind: 'collabSupervisorTasks',
-    options: { params: { sessionId: 'session-supervisor' }, revealIfOpened: true },
-  }, {
-    kind: 'collabSupervisorWorkers',
-    options: { params: { sessionId: 'session-supervisor' }, revealIfOpened: false },
-  }])
 })
+
 
