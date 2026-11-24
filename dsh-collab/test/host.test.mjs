@@ -606,6 +606,9 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     const assigned = await assign.definition.execute({ taskId, worker: B }, { agent: supervisor })
     const deliveryDir = /deliveryDir: (.+)/.exec(assigned)?.[1]
     assert.ok(deliveryDir)
+    const listTasks = harness.tools.find(entry => entry.definition.name === 'collab_tasks')
+    assert.match(listTasks.definition.execute({}, { agent: worker }), new RegExp(taskId, 'u'))
+    assert.match(listTasks.definition.execute({ status: 'assigned' }, { agent: supervisor }), new RegExp(taskId, 'u'))
     const guard = harness.guards[0]
     assert.equal(guard({ agent: worker, name: 'write', arguments: { path: path.join(deliveryDir, 'result.md') } }), undefined)
     fs.mkdirSync(deliveryDir, { recursive: true })

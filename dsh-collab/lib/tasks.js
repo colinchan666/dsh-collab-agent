@@ -80,9 +80,9 @@ export class TaskStore {
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 
-  listForWorker(worker) {
+  listForWorker(worker, status) {
     return Object.values(this.read().tasks)
-      .filter(task => task.worker === worker)
+      .filter(task => task.worker === worker && (status === undefined || task.status === status))
       .sort((left, right) => left.createdAt - right.createdAt)
   }
 

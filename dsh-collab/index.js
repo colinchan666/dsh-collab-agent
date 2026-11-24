@@ -1440,9 +1440,9 @@ export function apply(ctx, config = {}) {
         const status = typeof args?.status === 'string' && args.status.trim().length > 0 ? args.status.trim() : undefined
         const list = isSupervisorSession(self.sessionId)
           ? tasks.listForSupervisor(self.sessionId, status)
-          : tasks.listForWorker(self.sessionId)
+          : tasks.listForWorker(self.sessionId, status)
         if (list.length === 0) return 'No tasks.'
-        return [taskLine(task)].concat(list.slice(1).map(taskLine)).join('\n')
+        return list.map(taskLine).join('\n')
       },
     },
     {
