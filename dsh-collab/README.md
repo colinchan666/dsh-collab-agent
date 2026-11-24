@@ -17,21 +17,74 @@ This repository contains two bundles that must both be installed and enabled:
 
 Steps:
 
-1. Put both packages under the target profile's `node_modules/@local/`
-   (or install them with the profile's package manager), then enable both
-   bundles and restart DSH completely.
-2. Edit `cordis.patch.yml`: replace or remove the absolute
+1. Clone this repository and install the API workspace dependencies (the
+   generated `lib/` is already committed; a build is not normally needed):
+
+   ```sh
+   git clone https://github.com/colinchan666/dsh-collab-agent.git
+   cd dsh-collab-agent/dsh-collab-api
+   pnpm install
+   ```
+
+2. Link both package directories into the target DSH profile. The profile is
+   normally `~/.dsh/profiles/desktop` for Desktop. The package names are already
+   `@local/...`, so use these exact directory names.
+
+   macOS/Linux:
+
+   ```sh
+   PROFILE="$HOME/.dsh/profiles/desktop"
+   REPO="$HOME/src/dsh-collab-agent"
+   mkdir -p "$PROFILE/node_modules/@local"
+   ln -s "$REPO/dsh-collab" "$PROFILE/node_modules/@local/dsh-collab-sessions"
+   ln -s "$REPO/dsh-collab-api/packages/dsh-collab-auth-api" \
+     "$PROFILE/node_modules/@local/dsh-collab-auth-api"
+   ```
+
+   Windows PowerShell (junctions work without Developer Mode):
+
+   ```powershell
+   $ProfileDir = "$env:USERPROFILE\.dsh\profiles\desktop"
+   $Repo = "C:\src\dsh-collab-agent"
+   New-Item -ItemType Directory -Force "$ProfileDir\node_modules\@local" | Out-Null
+   New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@local\dsh-collab-sessions" `
+     -Target "$Repo\dsh-collab"
+   New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@local\dsh-collab-auth-api" `
+     -Target "$Repo\dsh-collab-api\packages\dsh-collab-auth-api"
+   ```
+
+3. Edit `dsh-collab/cordis.patch.yml`: replace or remove the absolute
    `sharedRoot: /Users/cc/dsh/collab/shared`. Removing it uses
    `<dsh home>/collab/shared`; a custom path must be writable by the DSH process.
-3. `perSessionSandbox` is active on macOS/Linux only when the profile provides
+   For Windows use a native absolute path, for example
+   `C:/Users/me/.dsh/collab/shared`.
+
+4. `perSessionSandbox` is active on macOS/Linux only when the profile provides
    DSH's `sandboxPolicy` and OS sandbox provider. On Windows it is forced off:
    DSH's extra writable roots apply to file tools but not to sandboxed shell
    processes, so the worker's delivery writes would fail. Windows relies on the
    collaboration guard for PowerShell writes instead.
-4. Rebuild the API only if its generated `lib/` is absent or its source changed:
-   `cd ../dsh-collab-api && pnpm install && pnpm build`.
-5. After restart, create a collab session, open its right sidebar once, confirm
+
+5. Enable both bundles in the DSH plugin manager, in this order:
+
+   ```text
+   @local/dsh-collab-auth-api
+   @local/dsh-collab-sessions
+   ```
+
+   Then completely quit and reopen DSH. A page refresh or bundle reload is not
+   enough for client code.
+
+6. After restart, create a collab session, open its right sidebar once, confirm
    the start/tasks/registration tabs, and authorize a pair in **Collab access**.
+
+7. Rebuild the API only if its generated `lib/` is absent or its source changed:
+
+   ```sh
+   cd dsh-collab-api
+   pnpm install
+   pnpm build
+   ```
 
 The `collab` preset is a copy of the shipped `standard` preset; when upgrading
 DSH, re-sync `cordis.patch.yml` from the installed
