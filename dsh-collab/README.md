@@ -264,6 +264,37 @@ Every named session row has a copy action in its hover strip, and the session
 right-click menu has **复制会话名 / Copy session name**. The action copies the
 display name to the clipboard and briefly marks the button as copied.
 
+## Real browser smoke test
+
+The client unit tests render with a React stub. An opt-in CDP test launches
+headless Chrome against the running DSH Web app, authenticates with the local
+browser-session credential, and checks the collab sidebar entry, new-session
+menu, and authorization Remote page:
+
+```sh
+DSH_BROWSER_TEST=1 npm run test:browser
+```
+
+Requirements:
+
+- a running DSH Web server (`DSH_WEB_URL` is exported by DSH);
+- Chrome/Chromium, or `DSH_CHROME_PATH` pointing at it;
+- a readable local profile (`DSH_HOME`, default `~/.dsh`) so the test can mint
+  the browser-session cookie;
+- `--no-sandbox` is used only for this local headless test.
+
+Without these, the test skips instead of failing. An existing supervisor can
+also be checked when its sidebar title is visible:
+
+```sh
+DSH_BROWSER_TEST=1 \
+DSH_BROWSER_SUPERVISOR_TITLE='my supervisor' \
+npm run test:browser
+```
+
+The optional scenario opens that session, expands the right sidebar once, and
+asserts that the tasks and registration tabs are seeded.
+
 ## Usage
 
 1. Open the Workspace you want the collab session in.
