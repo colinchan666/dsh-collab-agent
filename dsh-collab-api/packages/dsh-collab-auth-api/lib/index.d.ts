@@ -17,6 +17,12 @@ export declare class CollabAuthService extends TypertRemoteService {
      */
     constructor(ctx: Context);
     /**
+     * Preserve the management surface's owner-only policy. The generated
+     * resource readers still describe the sessions each call touches; a future
+     * non-owner grant cannot bypass this check accidentally.
+     */
+    private assertOwner;
+    /**
      * Resolve the collaborator admin face at call time so a later Host reload
      * can replace it without re-mounting this Remote service.
      * @returns the live admin face.

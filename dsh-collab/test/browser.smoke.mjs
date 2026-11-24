@@ -263,12 +263,14 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   assert.ok(authButtons.some(text => text.startsWith('协作会话')))
   assert.ok(authButtons.includes('刷新'))
 
-  await browser.evaluate(`(() => {
+  const clickedTab = await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))
-      .find(element => element.textContent.trim().startsWith('协作会话'))
-    if (button === undefined) throw new Error('collab tab not found')
+      .find(element => element.textContent.trim().startsWith('协作会话 ('))
+    if (button === undefined) return false
     button.click()
+    return true
   })()`)
+  assert.equal(clickedTab, true)
   await waitFor(browser.evaluate, "document.body.innerText.includes('勾选两个会话')")
 
   const exceptions = browser.events

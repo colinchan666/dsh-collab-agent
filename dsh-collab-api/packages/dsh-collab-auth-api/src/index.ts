@@ -35,6 +35,21 @@ export class CollabAuthService extends TypertRemoteService {
   }
 
   /**
+   * Preserve the management surface's owner-only policy. The generated
+   * resource readers still describe the sessions each call touches; a future
+   * non-owner grant cannot bypass this check accidentally.
+   */
+  private assertOwner(): void {
+    const invocation = (this.ctx as unknown as {
+      invocation?: { peer?: { principal?: { kind?: string } } }
+    }).invocation
+    const principal = invocation?.peer?.principal
+    if (principal !== undefined && principal.kind !== 'owner') {
+      throw new Error('collaboration management is owner-only')
+    }
+  }
+
+  /**
    * Resolve the collaborator admin face at call time so a later Host reload
    * can replace it without re-mounting this Remote service.
    * @returns the live admin face.
@@ -51,6 +66,7 @@ export class CollabAuthService extends TypertRemoteService {
    */
   @Remote('list')
   list(): AuthSnapshot {
+    this.assertOwner()
     return this.admin().listAuth()
   }
 
@@ -62,6 +78,7 @@ export class CollabAuthService extends TypertRemoteService {
    */
   @Remote({ name: 'authorize', resources: { session: (a: string, b: string) => [a, b] } } as never)
   authorize(a: string, b: string): AuthSnapshot {
+    this.assertOwner()
     return this.admin().authorize(sessionId(a, 'a'), sessionId(b, 'b'))
   }
 
@@ -73,6 +90,7 @@ export class CollabAuthService extends TypertRemoteService {
    */
   @Remote({ name: 'revoke', resources: { session: (a: string, b: string) => [a, b] } } as never)
   revoke(a: string, b: string): AuthSnapshot {
+    this.assertOwner()
     return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'))
   }
 
@@ -86,13 +104,16 @@ export class CollabAuthService extends TypertRemoteService {
    */
   @Remote({ name: 'panel', resources: { session: (sessionId: string) => sessionId } } as never)
   panel(sessionId: string, operation: string, argsJson: string): string {
+    this.assertOwner()
+    const checkedSessionId = sessionId === undefined ? '' : sessionId
+    if (!SESSION_ID.test(checkedSessionId)) throw new Error(`Invalid sessionId: ${checkedSessionId}`)
     let args: Record<string, unknown> = {}
     if (argsJson.trim().length > 0) {
       const parsed: unknown = JSON.parse(argsJson)
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('panel args must be a JSON object')
       args = parsed as Record<string, unknown>
     }
-    return JSON.stringify(this.admin().panel(sessionId, operation, args))
+    return JSON.stringify(this.admin().panel(checkedSessionId, operation, args))
   }
 }
 

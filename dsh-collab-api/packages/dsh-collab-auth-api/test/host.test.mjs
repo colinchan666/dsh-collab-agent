@@ -48,11 +48,14 @@ test('panel args are parsed and malformed data is rejected', () => {
 })
 
 
-test('the packaged runtime is host.js and the bundled client carries the panel endpoint', () => {
+test('the packaged runtime describes session resources and the client carries panel', () => {
   const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-  assert.equal(manifest.main, 'lib/host.js')
-  assert.equal(manifest.files.includes('lib/index.js'), false)
+  assert.equal(manifest.main, 'lib/index.js')
+  assert.equal(manifest.files.includes('lib/index.js'), true)
+  const host = fs.readFileSync(path.join(root, 'lib/index.js'), 'utf8')
+  assert.match(host, /resources: \{ session:/u)
+  assert.match(host, /assertOwner\(\)/u)
   const bundle = fs.readFileSync(path.join(root, 'lib/client.js'), 'utf8')
   assert.match(bundle, /collabAuth\/panel/u)
   assert.ok(bundle.length < 600_000)

@@ -79,6 +79,18 @@ let CollabAuthService = (() => {
             __runInitializers(this, _instanceExtraInitializers);
         }
         /**
+         * Preserve the management surface's owner-only policy. The generated
+         * resource readers still describe the sessions each call touches; a future
+         * non-owner grant cannot bypass this check accidentally.
+         */
+        assertOwner() {
+            const invocation = this.ctx.invocation;
+            const principal = invocation?.peer?.principal;
+            if (principal !== undefined && principal.kind !== 'owner') {
+                throw new Error('collaboration management is owner-only');
+            }
+        }
+        /**
          * Resolve the collaborator admin face at call time so a later Host reload
          * can replace it without re-mounting this Remote service.
          * @returns the live admin face.
@@ -94,6 +106,7 @@ let CollabAuthService = (() => {
          * @returns the current authorization snapshot.
          */
         list() {
+            this.assertOwner();
             return this.admin().listAuth();
         }
         /**
@@ -103,6 +116,7 @@ let CollabAuthService = (() => {
          * @returns the resulting authorization snapshot.
          */
         authorize(a, b) {
+            this.assertOwner();
             return this.admin().authorize(sessionId(a, 'a'), sessionId(b, 'b'));
         }
         /**
@@ -112,6 +126,7 @@ let CollabAuthService = (() => {
          * @returns the resulting authorization snapshot.
          */
         revoke(a, b) {
+            this.assertOwner();
             return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'));
         }
         /**
@@ -123,6 +138,10 @@ let CollabAuthService = (() => {
          * @returns the operation result.
          */
         panel(sessionId, operation, argsJson) {
+            this.assertOwner();
+            const checkedSessionId = sessionId === undefined ? '' : sessionId;
+            if (!SESSION_ID.test(checkedSessionId))
+                throw new Error(`Invalid sessionId: ${checkedSessionId}`);
             let args = {};
             if (argsJson.trim().length > 0) {
                 const parsed = JSON.parse(argsJson);
@@ -130,7 +149,7 @@ let CollabAuthService = (() => {
                     throw new Error('panel args must be a JSON object');
                 args = parsed;
             }
-            return JSON.stringify(this.admin().panel(sessionId, operation, args));
+            return JSON.stringify(this.admin().panel(checkedSessionId, operation, args));
         }
     };
 })();
