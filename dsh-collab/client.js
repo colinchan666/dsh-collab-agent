@@ -1765,24 +1765,6 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
-    function CollabSupervisorBoardRowAction(props) {
-      const t = typeof props.t === 'function' ? props.t : fallbackT
-      const sessions = props.useSessions(selectSnapshot)
-      const summary = sessions.byId[props.sessionId]
-      if (!isSupervisorSessionSummary(summary, sessions)) return null
-      return h('button', {
-        type: 'button',
-        className: 'dsh-collab-copy-session',
-        title: t('board.openTitle'),
-        'aria-label': t('board.openTitle'),
-        onClick: (event) => {
-          event.stopPropagation()
-          props.openBoard(props.sessionId)
-        },
-        onPointerDown: (event) => event.stopPropagation(),
-      }, '▦')
-    }
-
     function CollabOpenBoardButton(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       const sessions = props.useSessions(selectSnapshot)
@@ -1858,19 +1840,6 @@ window.__ModuleLoader__.load({
           order: 50,
           locale: NS,
         }, CollabCopySessionAction))
-
-        ctx.slots.inject('sidebar.workspaces.session.row.action', () => ctx.slots.register({
-          name: 'sidebar.workspaces.session.row.action',
-          id: 'collab-supervisor-board-row',
-          order: 60,
-          locale: NS,
-          inject: () => ({
-            openBoard: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, {
-              params: { sessionId },
-              revealIfOpened: true,
-            }),
-          }),
-        }, CollabSupervisorBoardRowAction))
 
         ctx.slots.inject('sidebar.workspaces.session.menu.item', () => ctx.slots.register({
           name: 'sidebar.workspaces.session.menu.item',

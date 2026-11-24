@@ -138,7 +138,6 @@ test('the client starts a collab session through the current-workspace navigatio
     ['conversation.hero.options', 'collab-base-prompt'],
     ['conversation.session.header.utilities', 'collab-active-session-probe'],
     ['conversation.session.header.utilities', 'collab-supervisor-board'],
-    ['sidebar.workspaces.session.row.action', 'collab-supervisor-board-row'],
   ]) {
     assert.ok(harness.registrations.some(entry => entry.options.name === name && entry.options.id === id), `${name}:${id}`)
   }
