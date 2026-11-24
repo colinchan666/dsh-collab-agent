@@ -243,6 +243,27 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
 
+  // Standard new-session preset menu must not offer collab presets.
+  await browser.evaluate(`(() => {
+    const resume = Array.from(document.querySelectorAll('button'))
+      .find(element => element.textContent.trim() === '继续')
+    if (resume !== undefined) resume.click()
+  })()`)
+  await browser.evaluate(`(() => {
+    const chip = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
+      .find(element => /标准模式|Standard mode/.test(element.textContent))
+    if (chip === undefined) throw new Error('standard mode chip not found')
+    chip.click()
+  })()`)
+  await waitFor(browser.evaluate, `document.querySelector('[role="menu"]') !== null`)
+  const visiblePresetNames = await browser.evaluate(`Array.from(
+    document.querySelectorAll('[role="menuitem"]'),
+  ).filter(element => element.getClientRects().length > 0)
+    .map(element => element.textContent.trim())`)
+  assert.equal(visiblePresetNames.some(text => /协同会话|超级会话|Collab session|Supervisor session/u.test(text)), false)
+  await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+
   // Open the authorization Remote page.
   await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))
@@ -275,7 +296,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
 
   const exceptions = browser.events
     .filter(event => event.method === 'Runtime.exceptionThrown')
-    .map(event => event.params?.exceptionDetails?.text ?? 'unknown exception')
+    .map(event => JSON.stringify(event.params?.exceptionDetails ?? {}))
   assert.deepEqual(exceptions, [])
 })
 
