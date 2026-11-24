@@ -433,6 +433,7 @@ export function apply(ctx, config = {}) {
   const requestTimers = new Map()
   const executionTimers = new Map()
   const sandboxDeliveryRoots = new Map()
+  const sandboxReadRoots = new Map()
   const deliveryInFlight = new Set()
   let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
@@ -518,17 +519,23 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  const bindDeliverySandbox = (sessionId, directory) => {
+  const bindDeliverySandbox = (sessionId, directory, writable = true) => {
     if (!perSessionSandbox) return
-    const roots = sandboxDeliveryRoots.get(sessionId) ?? new Set()
-    roots.add(path.resolve(directory))
-    sandboxDeliveryRoots.set(sessionId, roots)
+    const resolved = path.resolve(directory)
+    const reads = sandboxReadRoots.get(sessionId) ?? new Set()
+    reads.add(resolved)
+    sandboxReadRoots.set(sessionId, reads)
+    if (writable) {
+      const writes = sandboxDeliveryRoots.get(sessionId) ?? new Set()
+      writes.add(resolved)
+      sandboxDeliveryRoots.set(sessionId, writes)
+    }
     try { mkdirp(directory, 0o755) } catch { /* the assignment will report a real mkdir failure */ }
   }
 
   const sharedCommandAllowed = (command, sessionId) => {
     if (!isManagedWorker(sessionId)) return false
-    const roots = [...(sandboxDeliveryRoots.get(sessionId) ?? [])].map(root => canonicalPath(root))
+    const roots = [...(sandboxReadRoots.get(sessionId) ?? [])].map(root => canonicalPath(root))
     if (roots.length === 0) return false
     const text = String(command)
     let cursor = 0
@@ -640,7 +647,8 @@ export function apply(ctx, config = {}) {
       collabSessions.add(agent.id)
       sessionPresets.set(agent.id, effectivePreset)
       for (const task of tasks.listForWorker(agent.id)) {
-        bindDeliverySandbox(agent.id, deliveryRoot(task.projectId))
+        const project = tasks.project(task.projectId)
+        bindDeliverySandbox(agent.id, deliveryRoot(task.projectId), project?.status === 'open')
       }
       return true
     } catch (error) {
@@ -2491,6 +2499,7 @@ export function apply(ctx, config = {}) {
   ctx.on('agent/created', async ({ agent }) => { await setupAgent(agent) })
   ctx.on('agent/disposed', ({ agent }) => {
     sandboxDeliveryRoots.delete(agent.id)
+    sandboxReadRoots.delete(agent.id)
     collabSessions.delete(agent.id)
     sessionPresets.delete(agent.id)
     disposePrompt(agent.id)
