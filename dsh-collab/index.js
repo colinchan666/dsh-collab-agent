@@ -441,6 +441,95 @@ export function apply(ctx, config = {}) {
   const deliveryInFlight = new Set()
   let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
+  const recoveryTargets = () => [
+    { key: 'registry', path: registry.file, invalidate: () => { registry.state = undefined } },
+    { key: 'authorization', path: auth.file, invalidate: () => { auth.state = undefined } },
+    { key: 'relationships', path: relationships.file, invalidate: () => { relationships.state = undefined } },
+    { key: 'tasks', path: tasks.file, invalidate: () => { tasks.state = undefined } },
+    { key: 'requests', path: requests.file, invalidate: () => { requests.state = undefined } },
+    { key: 'notices', path: notices.file, invalidate: () => { notices.state = undefined } },
+  ]
+  const recoveryTarget = (key) => {
+    const target = recoveryTargets().find(entry => entry.key === key)
+    if (target === undefined) throw new Error(`unknown state file: ${key}`)
+    return target
+  }
+  const recoveryBackups = (file) => {
+    const directory = path.dirname(file)
+    const prefix = `${path.basename(file)}.corrupt-`
+    let names
+    try { names = fs.readdirSync(directory) } catch { return [] }
+    return names.filter(name => name.startsWith(prefix)).sort().reverse().map(name => {
+      const backup = path.join(directory, name)
+      let bytes
+      let valid = false
+      try {
+        bytes = fs.statSync(backup).size
+        JSON.parse(fs.readFileSync(backup, 'utf8'))
+        valid = true
+      } catch { /* invalid backup: expose it, but do not restore it */ }
+      return { name, bytes, valid }
+    })
+  }
+  const recoveryStatus = () => ({
+    files: recoveryTargets().map(target => {
+      let exists = false
+      let bytes
+      let valid = false
+      try {
+        exists = fs.statSync(target.path).isFile()
+        if (exists) {
+          bytes = fs.statSync(target.path).size
+          JSON.parse(fs.readFileSync(target.path, 'utf8'))
+          valid = true
+        }
+      } catch { /* malformed or unreadable */ }
+      return {
+        key: target.key,
+        path: target.path,
+        exists,
+        bytes,
+        valid,
+        corrupt: exists && !valid,
+        backups: recoveryBackups(target.path),
+      }
+    }),
+    generatedAt: Date.now(),
+  })
+  const recoveryReset = (key) => {
+    const target = recoveryTarget(key)
+    try { fs.statSync(target.path) } catch {
+      target.invalidate()
+      return recoveryStatus()
+    }
+    const backup = `${target.path}.corrupt-${Date.now()}`
+    try { fs.renameSync(target.path, backup) } catch (error) {
+      throw new Error(`could not move ${key} aside: ${describeError(error)}`)
+    }
+    target.invalidate()
+    return recoveryStatus()
+  }
+  const recoveryRestore = (key, backupName) => {
+    const target = recoveryTarget(key)
+    const name = String(backupName ?? '')
+    if (name.length === 0 || name.includes('/') || name.includes('\\') || path.basename(name) !== name) {
+      throw new Error('invalid backup name')
+    }
+    const backup = path.join(path.dirname(target.path), name)
+    if (!name.startsWith(`${path.basename(target.path)}.corrupt-`)) throw new Error('invalid backup name')
+    let parsed
+    try { parsed = JSON.parse(fs.readFileSync(backup, 'utf8')) } catch (error) {
+      throw new Error(`backup is not valid JSON: ${describeError(error)}`)
+    }
+    if (parsed === null || typeof parsed !== 'object') throw new Error('backup is not a state object')
+    try { fs.statSync(target.path); fs.renameSync(target.path, `${target.path}.corrupt-${Date.now()}`) } catch { /* no current file */ }
+    const temporary = `${target.path}.restore-${Date.now()}`
+    fs.writeFileSync(temporary, `${JSON.stringify(parsed, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+    fs.renameSync(temporary, target.path)
+    target.invalidate()
+    return recoveryStatus()
+  }
+
   const collabAdmin = {
     listAuth: () => ({
       pairs: auth.listPairs(),
@@ -457,6 +546,9 @@ export function apply(ctx, config = {}) {
       auth.revoke(a, b)
       return collabAdmin.listAuth()
     },
+    recoveryStatus,
+    recoveryReset,
+    recoveryRestore,
   }
   ctx.effect(() => {
     const dispose = ctx.provide('collabAdmin', collabAdmin)
@@ -2157,10 +2249,13 @@ export function apply(ctx, config = {}) {
 
   /** Management operations used by the UI Remote instead of slash commands. */
   const panel = (sessionId, operation, args) => {
+    const op = String(operation ?? '')
+    if (op === 'recoveryStatus') return recoveryStatus()
+    if (op === 'recoveryReset') return recoveryReset(String(args?.key ?? ''))
+    if (op === 'recoveryRestore') return recoveryRestore(String(args?.key ?? ''), String(args?.backup ?? ''))
     if (!isSessionId(sessionId) || !collabSessions.has(sessionId)) {
       throw new Error('not an initialized collaboration session')
     }
-    const op = String(operation ?? '')
     const supervisor = isSupervisorSession(sessionId)
     if (op === 'board') {
       if (!supervisor) throw new Error('not a supervisor session')

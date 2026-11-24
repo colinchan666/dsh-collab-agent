@@ -7,7 +7,7 @@
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Context } from '@deepseek-ai/cordis'
 
-import type { AuthSnapshot, CollabAdminFace } from './types.js'
+import type { AuthSnapshot, CollabAdminFace, RecoveryStatus } from './types.js'
 
 export type * from './types.js'
 
@@ -92,6 +92,27 @@ export class CollabAuthService extends TypertRemoteService {
   revoke(a: string, b: string): AuthSnapshot {
     this.assertOwner()
     return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'))
+  }
+
+  /** List state documents, corruption, and recoverable backups. */
+  @Remote('recoveryStatus')
+  recoveryStatus(): RecoveryStatus {
+    this.assertOwner()
+    return this.admin().recoveryStatus()
+  }
+
+  /** Move one malformed or unwanted state document aside. */
+  @Remote('recoveryReset')
+  recoveryReset(key: string): RecoveryStatus {
+    this.assertOwner()
+    return this.admin().recoveryReset(String(key))
+  }
+
+  /** Restore one valid backup over the current state document. */
+  @Remote('recoveryRestore')
+  recoveryRestore(key: string, backup: string): RecoveryStatus {
+    this.assertOwner()
+    return this.admin().recoveryRestore(String(key), String(backup))
   }
 
   /**

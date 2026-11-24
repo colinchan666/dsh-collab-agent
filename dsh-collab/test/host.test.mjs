@@ -894,3 +894,32 @@ test('the guard denies foreign workdir access through every supported tool shape
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('recovery lists, resets, and restores corrupt state files', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-recovery-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  const registryPath = path.join(root, 'registry.json')
+  const harness = fakeHarness(workspace)
+  apply(harness.ctx, { registryPath })
+  const admin = harness.ctx.get('collabAdmin')
+  assert.ok(admin)
+
+  fs.writeFileSync(registryPath, '{broken')
+  const corrupt = admin.recoveryStatus().files.find(file => file.key === 'registry')
+  assert.equal(corrupt.corrupt, true)
+  assert.equal(corrupt.valid, false)
+
+  const reset = admin.recoveryReset('registry')
+  assert.equal(reset.files.find(file => file.key === 'registry').exists, false)
+  const backups = reset.files.find(file => file.key === 'registry').backups
+  assert.ok(backups.length >= 1)
+  assert.equal(backups[0].valid, false)
+
+  const validBackup = `${registryPath}.corrupt-1`
+  fs.writeFileSync(validBackup, JSON.stringify({ version: 1, sessions: {} }))
+  const restored = admin.recoveryRestore('registry', path.basename(validBackup))
+  const entry = restored.files.find(file => file.key === 'registry')
+  assert.equal(entry.exists, true)
+  assert.equal(entry.valid, true)
+})

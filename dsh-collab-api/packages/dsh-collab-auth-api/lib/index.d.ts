@@ -5,7 +5,7 @@
  */
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { Context } from '@deepseek-ai/cordis';
-import type { AuthSnapshot, CollabAdminFace } from './types.js';
+import type { AuthSnapshot, CollabAdminFace, RecoveryStatus } from './types.js';
 export type * from './types.js';
 /** Host service backing the generated `ctx.remote.collabAuth` namespace. */
 export declare class CollabAuthService extends TypertRemoteService {
@@ -47,6 +47,12 @@ export declare class CollabAuthService extends TypertRemoteService {
      * @returns the resulting authorization snapshot.
      */
     revoke(a: string, b: string): AuthSnapshot;
+    /** List state documents, corruption, and recoverable backups. */
+    recoveryStatus(): RecoveryStatus;
+    /** Move one malformed or unwanted state document aside. */
+    recoveryReset(key: string): RecoveryStatus;
+    /** Restore one valid backup over the current state document. */
+    recoveryRestore(key: string, backup: string): RecoveryStatus;
     /**
      * Read or mutate the supervisor board/base-prompt surface without writing a
      * slash-command lifecycle into the conversation.

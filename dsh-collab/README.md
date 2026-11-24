@@ -271,6 +271,20 @@ Every named session row has a copy action in its hover strip, and the session
 right-click menu has **复制会话名 / Copy session name**. The action copies the
 display name to the clipboard and briefly marks the button as copied.
 
+## State recovery
+
+The left-sidebar **状态修复 / State recovery** page lists the collaboration
+state documents (`registry`, `authorization`, `relationships`, `tasks`,
+`requests`, and `notices`) and any `.corrupt-*` backups beside them.
+
+- **Reset** is available for a malformed current document. It moves the current
+  file to a new `.corrupt-<timestamp>` backup and leaves the store empty so the
+  next write can recreate it.
+- **Restore** is available only for backups that parse as a JSON object; a
+  malformed `.corrupt-*` file is shown but cannot be restored.
+- The page is read-only until the operator presses a confirm button. Recovery
+  does not silently reset or overwrite state.
+
 ## Real browser smoke test
 
 The client unit tests render with a React stub. An opt-in CDP test launches

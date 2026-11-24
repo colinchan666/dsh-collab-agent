@@ -54,6 +54,9 @@ let CollabAuthService = (() => {
     let _list_decorators;
     let _authorize_decorators;
     let _revoke_decorators;
+    let _recoveryStatus_decorators;
+    let _recoveryReset_decorators;
+    let _recoveryRestore_decorators;
     let _panel_decorators;
     return class CollabAuthService extends _classSuper {
         static {
@@ -61,10 +64,16 @@ let CollabAuthService = (() => {
             _list_decorators = [Remote('list')];
             _authorize_decorators = [Remote({ name: 'authorize', resources: { session: (a, b) => [a, b] } })];
             _revoke_decorators = [Remote({ name: 'revoke', resources: { session: (a, b) => [a, b] } })];
+            _recoveryStatus_decorators = [Remote('recoveryStatus')];
+            _recoveryReset_decorators = [Remote('recoveryReset')];
+            _recoveryRestore_decorators = [Remote('recoveryRestore')];
             _panel_decorators = [Remote({ name: 'panel', resources: { session: (sessionId) => sessionId } })];
             __esDecorate(this, null, _list_decorators, { kind: "method", name: "list", static: false, private: false, access: { has: obj => "list" in obj, get: obj => obj.list }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _authorize_decorators, { kind: "method", name: "authorize", static: false, private: false, access: { has: obj => "authorize" in obj, get: obj => obj.authorize }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _revoke_decorators, { kind: "method", name: "revoke", static: false, private: false, access: { has: obj => "revoke" in obj, get: obj => obj.revoke }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _recoveryStatus_decorators, { kind: "method", name: "recoveryStatus", static: false, private: false, access: { has: obj => "recoveryStatus" in obj, get: obj => obj.recoveryStatus }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _recoveryReset_decorators, { kind: "method", name: "recoveryReset", static: false, private: false, access: { has: obj => "recoveryReset" in obj, get: obj => obj.recoveryReset }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _recoveryRestore_decorators, { kind: "method", name: "recoveryRestore", static: false, private: false, access: { has: obj => "recoveryRestore" in obj, get: obj => obj.recoveryRestore }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _panel_decorators, { kind: "method", name: "panel", static: false, private: false, access: { has: obj => "panel" in obj, get: obj => obj.panel }, metadata: _metadata }, null, _instanceExtraInitializers);
             if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         }
@@ -128,6 +137,21 @@ let CollabAuthService = (() => {
         revoke(a, b) {
             this.assertOwner();
             return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'));
+        }
+        /** List state documents, corruption, and recoverable backups. */
+        recoveryStatus() {
+            this.assertOwner();
+            return this.admin().recoveryStatus();
+        }
+        /** Move one malformed or unwanted state document aside. */
+        recoveryReset(key) {
+            this.assertOwner();
+            return this.admin().recoveryReset(String(key));
+        }
+        /** Restore one valid backup over the current state document. */
+        recoveryRestore(key, backup) {
+            this.assertOwner();
+            return this.admin().recoveryRestore(String(key), String(backup));
         }
         /**
          * Read or mutate the supervisor board/base-prompt surface without writing a

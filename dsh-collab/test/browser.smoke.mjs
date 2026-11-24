@@ -273,6 +273,18 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   assert.equal(clickedTab, true)
   await waitFor(browser.evaluate, "document.body.innerText.includes('勾选两个会话')")
 
+  // The recovery page also uses the panel Remote, with a non-session ticket.
+  await browser.evaluate(`(() => {
+    const button = Array.from(document.querySelectorAll('button'))
+      .find(element => element.textContent.trim() === '状态修复')
+    if (button === undefined) throw new Error('recovery entry not found')
+    button.click()
+  })()`)
+  await waitFor(browser.evaluate, "document.body.innerText.includes('查看协作状态文件是否损坏')")
+  const recoveryText = await browser.evaluate('document.body.innerText')
+  assert.match(recoveryText, /状态修复/u)
+  assert.match(recoveryText, /刷新/u)
+
   const exceptions = browser.events
     .filter(event => event.method === 'Runtime.exceptionThrown')
     .map(event => event.params?.exceptionDetails?.text ?? 'unknown exception')
