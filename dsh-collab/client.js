@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
     }
 
     const ZH = {
-      'entry.short': '协作',
+      'entry.short': '协同',
       'entry.label': '新建协同会话',
       'entry.hint': '新建协同会话或超级会话；超级会话只做协调调度',
       'entry.noWorkspace': '请先打开一个工作区。',
@@ -52,7 +52,7 @@ window.__ModuleLoader__.load({
       'panel.sessionsTab': '协同会话',
       'panel.sessions': '协同会话',
       'panel.emptyPairs': '还没有双方都授权的会话对。',
-      'panel.emptySessions': '还没有协同会话。先点“协作”创建一个。',
+      'panel.emptySessions': '还没有协同会话。先点“协同”创建一个。',
       'panel.pending': '单方已授权（通信仍被拒绝）',
       'panel.oneSided': '单方已授权',
       'panel.complete': '补齐双方',
