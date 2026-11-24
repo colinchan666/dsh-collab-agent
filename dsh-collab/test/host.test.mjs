@@ -265,8 +265,8 @@ test('a supervisor links a worker, assigns a task, and the worker completes it',
       { title: 'Test task', instruction: 'Do the test', acceptance: 'Done' },
       { agent: supervisor, callId: 'call-create' },
     ))
-    const taskId = created.task.id
-    assert.equal(created.task.createdTurn, 4)
+    const taskId = created.subtask.id
+    assert.equal(created.subtask.createdTurn, 4)
     await harness.emit('session/event', supervisor.session, {
       type: 'tool/call',
       data: { callId: 'call-assign', turn: 5 },
@@ -344,15 +344,15 @@ test('a requester asks a supervisor and gets decomposed work', async () => {
       { agent: supervisor },
     ))
     await assign.definition.execute(
-      { projectId: created.projectId, taskId: created.task.id, worker: B },
+      { taskId: created.taskId, subtaskId: created.subtask.id, worker: B },
       { agent: supervisor },
     )
     const accepted = JSON.parse(await accept.definition.execute(
-      { requestId, projectId: created.projectId, response: 'Accepted' },
+      { requestId, taskId: created.taskId, response: 'Accepted' },
       { agent: supervisor },
     ))
     assert.equal(accepted.request.status, 'accepted')
-    assert.equal(accepted.request.projectId, created.projectId)
+    assert.equal(accepted.request.taskId, created.taskId)
     assert.equal(accepted.tasks.length, 1)
     const own = JSON.parse(requests.definition.execute({}, { agent: worker }))
     assert.equal(own[0].status, 'accepted')
@@ -417,9 +417,9 @@ test('an ordinary authorized peer can submit a request without an offer', async 
       { title: 'Task from ordinary request', instruction: 'Do it' },
       { agent: supervisor },
     ))
-    await assign.definition.execute({ taskId: created.task.id, worker: B }, { agent: supervisor })
+    await assign.definition.execute({ taskId: created.subtask.id, worker: B }, { agent: supervisor })
     const accepted = JSON.parse(await accept.definition.execute(
-      { requestId: submitted.request.id, projectId: created.projectId },
+      { requestId: submitted.request.id, taskId: created.taskId },
       { agent: supervisor },
     ))
     assert.equal(accepted.request.status, 'accepted')
@@ -449,15 +449,15 @@ test('an ordinary authorized peer can submit a request without an offer', async 
       .definition.execute({}, { agent: requester })
     assert.match(progressInbox, /request-progress/u)
     const completeTask = harness.tools.find(entry => entry.definition.name === 'collab_task_complete')
-    await completeTask.definition.execute({ taskId: created.task.id, summary: 'done' }, { agent: worker })
-    const closeProject = harness.tools.find(entry => entry.definition.name === 'collab_project_close')
-    closeProject.definition.execute({ projectId: created.projectId }, { agent: supervisor })
+    await completeTask.definition.execute({ taskId: created.subtask.id, summary: 'done' }, { agent: worker })
+    const closeTask = harness.tools.find(entry => entry.definition.name === 'collab_task_close')
+    closeTask.definition.execute({ taskId: created.taskId }, { agent: supervisor })
     const deliver = harness.tools.find(entry => entry.definition.name === 'collab_request_deliver')
     await assert.rejects(
       deliver.definition.execute({ requestId: submitted.request.id }, { agent: supervisor }),
       /no artifacts/u,
     )
-    const deliveryDir = path.join(root, 'shared', created.projectId, 'artifacts')
+    const deliveryDir = path.join(root, 'shared', created.taskId, 'artifacts')
     fs.mkdirSync(deliveryDir, { recursive: true })
     fs.writeFileSync(path.join(deliveryDir, 'artifact.md'), 'artifact')
     const guard = harness.guards[0]
@@ -516,7 +516,7 @@ test('a pending request expires and notifies the requester', async () => {
     assert.match(inbox, /request-expired/u)
     const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
     await assert.rejects(
-      accept.definition.execute({ requestId: submitted.request.id, projectId: 'project-timeout' }, { agent: supervisor }),
+      accept.definition.execute({ requestId: submitted.request.id, taskId: 'task-timeout' }, { agent: supervisor }),
       /expired/u,
     )
   } finally {
@@ -604,12 +604,12 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     await link.handler({ agent: supervisor, rawInput: `link ${B} ${payload}`, attachments: [], signal: new AbortController().signal })
     const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
     const assign = harness.tools.find(entry => entry.definition.name === 'collab_task_assign')
-    const close = harness.tools.find(entry => entry.definition.name === 'collab_project_close')
+    const close = harness.tools.find(entry => entry.definition.name === 'collab_task_close')
     const created = JSON.parse(create.definition.execute(
       { title: 'Delivery task', instruction: 'write a file', acceptance: 'file exists' },
       { agent: supervisor },
     ))
-    const taskId = created.task.id
+    const taskId = created.subtask.id
     const assigned = await assign.definition.execute({ taskId, worker: B }, { agent: supervisor })
     const deliveryDir = /deliveryDir: (.+)/.exec(assigned)?.[1]
     assert.ok(deliveryDir)
@@ -652,7 +652,7 @@ test('a worker can write only its delivery subdirectory, and only while the proj
       { title: 'Copy out', instruction: `复制到 ${path.join(root, 'shared', 'adhoc')}` },
       { agent: supervisor },
     ), /copy-out/u)
-    const manifest = JSON.parse(manifestTool.definition.execute({ projectId: created.projectId }, { agent: supervisor }))
+    const manifest = JSON.parse(manifestTool.definition.execute({ taskId: created.taskId }, { agent: supervisor }))
     assert.equal(manifest.files.length, 1)
     assert.equal(manifest.files[0].bytes, 9)
     assert.match(manifest.files[0].sha256, /^[0-9a-f]{64}$/)
@@ -660,7 +660,7 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     assert.ok(guard({ agent: worker, name: 'write', arguments: { path: path.join(workspace, '.dsh-collab', 'sessions', A, 'private', 'x.md') } }))
     const complete = harness.tools.find(entry => entry.definition.name === 'collab_task_complete')
     await complete.definition.execute({ taskId, summary: 'written' }, { agent: worker })
-    await close.definition.execute({ projectId: created.projectId }, { agent: supervisor })
+    await close.definition.execute({ taskId: created.taskId }, { agent: supervisor })
     assert.ok(guard({ agent: worker, name: 'write', arguments: { path: path.join(deliveryDir, 'result.md') } }))
     assert.equal(guard({ agent: worker, name: 'read', arguments: { path: path.join(deliveryDir, 'result.md') } }), undefined)
   } finally {

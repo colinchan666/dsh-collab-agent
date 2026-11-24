@@ -5,6 +5,7 @@
  * only the durable request lifecycle and result.
  */
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 
 import { fileStamp, isSessionId, readStateJson, withFileLock, writeJson } from './layout.js'
 
@@ -23,8 +24,8 @@ function requestSummary(request) {
     requirement: request.requirement,
     status: request.status,
     ...(request.reason === null ? {} : { reason: request.reason }),
-    ...(request.projectId === null ? {} : { projectId: request.projectId }),
-    ...(request.taskIds.length === 0 ? {} : { taskIds: [...request.taskIds] }),
+    ...(request.taskId === null ? {} : { taskId: request.taskId }),
+    ...(request.subtaskIds.length === 0 ? {} : { subtaskIds: [...request.subtaskIds] }),
     ...(request.response === null ? {} : { response: request.response }),
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
@@ -86,21 +87,41 @@ export class RequestStore {
       if (normalized.heartbeatNote === undefined) normalized.heartbeatNote = null
       if (normalized.overdue === undefined) normalized.overdue = false
       if (normalized.overdueAt === undefined) normalized.overdueAt = null
-      if (!Array.isArray(normalized.taskIds)) normalized.taskIds = []
+      normalized.taskId = typeof normalized.taskId === 'string'
+        ? normalized.taskId
+        : (typeof normalized.projectId === 'string' ? normalized.projectId : null)
+      normalized.subtaskIds = Array.isArray(normalized.subtaskIds)
+        ? normalized.subtaskIds.filter(value => typeof value === 'string')
+        : (Array.isArray(normalized.taskIds) ? normalized.taskIds.filter(value => typeof value === 'string') : [])
+      delete normalized.projectId
+      delete normalized.taskIds
       if (normalized.response === undefined) normalized.response = null
       if (normalized.reason === undefined) normalized.reason = null
-      if (normalized.projectId === undefined) normalized.projectId = null
       requests[id] = normalized
     }
-    this.state = { version: 1, requests }
+    this.state = { version: 2, requests }
     this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
-    writeJson(this.file, { version: 1, requests: state.requests })
+    writeJson(this.file, { version: 2, requests: state.requests })
     this.stamp = fileStamp(this.file)
+  }
+
+  /** Persist a legacy document as the current task-centric schema once. */
+  migrate() {
+    if (!fs.existsSync(this.file)) return false
+    const raw = readStateJson(this.file)
+    if (raw?.version === 2) return false
+    return withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      fs.copyFileSync(this.file, `${this.file}.v1.bak`)
+      this.write(state)
+      return true
+    })
   }
 
   get(id) {
@@ -140,8 +161,8 @@ export class RequestStore {
       requirement: normalizedRequirement,
       status: 'pending',
       reason: null,
-      projectId: null,
-      taskIds: [],
+      taskId: null,
+      subtaskIds: [],
       response: null,
       createdTurn: Number.isInteger(createdTurn) ? createdTurn : null,
       createdAt: now,
@@ -177,15 +198,15 @@ export class RequestStore {
     })
   }
 
-  accept(id, { projectId, taskIds = [], response = null, executionDeadlineAt = null }, now = Date.now()) {
-    const normalizedProjectId = normalizeText(projectId)
-    if (normalizedProjectId.length === 0) throw new Error('accept requires a project id')
+  accept(id, { taskId, subtaskIds = [], response = null, executionDeadlineAt = null }, now = Date.now()) {
+    const normalizedTaskId = normalizeText(taskId)
+    if (normalizedTaskId.length === 0) throw new Error('accept requires a task id')
     return this.update(id, (request) => {
       if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
       if (Number.isFinite(request.expiresAt) && request.expiresAt <= now) throw new Error('request has expired')
       request.status = 'accepted'
-      request.projectId = normalizedProjectId
-      request.taskIds = Array.isArray(taskIds) ? taskIds.filter(value => typeof value === 'string') : []
+      request.taskId = normalizedTaskId
+      request.subtaskIds = Array.isArray(subtaskIds) ? subtaskIds.filter(value => typeof value === 'string') : []
       request.response = response === null ? null : String(response)
       request.reason = null
       request.resolvedAt = now
@@ -202,8 +223,8 @@ export class RequestStore {
     return this.update(id, (request) => {
       if (request.status !== 'accepted') throw new Error(`request is ${request.status}`)
       request.status = 'pending'
-      request.projectId = null
-      request.taskIds = []
+      request.taskId = null
+      request.subtaskIds = []
       request.response = null
       request.reason = null
       request.resolvedAt = null

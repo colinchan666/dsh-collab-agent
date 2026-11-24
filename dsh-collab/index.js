@@ -78,7 +78,7 @@ const TASK_CREATE_PARAMETERS = {
     instruction: { type: 'string', description: 'Self-contained instructions for the worker.' },
     acceptance: { type: 'string', description: 'Acceptance criteria the supervisor will verify.' },
     inputs: { type: 'object', description: 'Optional structured inputs for the worker.' },
-    projectId: { type: 'string', description: 'Optional existing project id; omitted creates a project.' },
+    taskId: { type: 'string', description: 'Optional parent task id; omitted creates the task for this requirement.' },
   },
   required: ['title', 'instruction'],
   additionalProperties: false,
@@ -87,10 +87,11 @@ const TASK_CREATE_PARAMETERS = {
 const TASK_ASSIGN_PARAMETERS = {
   type: 'object',
   properties: {
-    taskId: { type: 'string', description: 'Task id (task-...).' },
+    subtaskId: { type: 'string', description: 'Subtask id (subtask-...); taskId is accepted for legacy callers.' },
+    taskId: { type: 'string', description: 'Legacy subtask id alias.' },
     worker: { type: 'string', description: 'Worker session id with an offer relationship.' },
   },
-  required: ['taskId', 'worker'],
+  required: ['worker'],
   additionalProperties: false,
 }
 
@@ -157,19 +158,19 @@ const TASK_FAIL_PARAMETERS = {
   additionalProperties: false,
 }
 
-const PROJECT_CLOSE_PARAMETERS = {
+const TASK_CLOSE_PARAMETERS = {
   type: 'object',
   properties: {
-    projectId: { type: 'string' },
+    taskId: { type: 'string' },
   },
-  required: ['projectId'],
+  required: ['taskId'],
   additionalProperties: false,
 }
 
 const DELIVERY_LIST_PARAMETERS = {
   type: 'object',
   properties: {
-    projectId: { type: 'string', description: 'Optional project id; omitted lists only this supervisor\'s projects.' },
+    taskId: { type: 'string', description: 'Optional task id; omitted lists only this supervisor\'s tasks.' },
   },
   additionalProperties: false,
 }
@@ -177,9 +178,9 @@ const DELIVERY_LIST_PARAMETERS = {
 const DELIVERY_MANIFEST_PARAMETERS = {
   type: 'object',
   properties: {
-    projectId: { type: 'string' },
+    taskId: { type: 'string' },
   },
-  required: ['projectId'],
+  required: ['taskId'],
   additionalProperties: false,
 }
 
@@ -216,10 +217,10 @@ const REQUEST_ACCEPT_PARAMETERS = {
   type: 'object',
   properties: {
     requestId: { type: 'string' },
-    projectId: { type: 'string', description: 'Project containing the tasks created for this request.' },
+    taskId: { type: 'string', description: 'Task containing the subtasks created for this request.' },
     response: { type: 'string', description: 'Optional message for the requester.' },
   },
-  required: ['requestId', 'projectId'],
+  required: ['requestId', 'taskId'],
   additionalProperties: false,
 }
 
@@ -295,26 +296,26 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- collab_peers / collab_send are ordinary communication tools for authorized peers. Chat does not create or change tasks.',
       '- collab_requests lists work requests. For each pending request, evaluate registered capabilities before accepting or rejecting.',
       '- collab_capabilities lists the functional sessions registered to you, their capabilities, online/authorization state, and workload.',
-      '- collab_task_create creates a task (optionally in a project).',
+      '- collab_task_create creates a subtask; omitting taskId creates the parent task for the requirement.',
       '- collab_task_assign assigns a task to a worker with an offer relationship and wakes it.',
       '- collab_tasks / collab_task_result inspect progress and results.',
       '- collab_task_retry / collab_task_reject / collab_task_cancel manage failures and revisions.',
-      '- collab_project_close closes a project after all its tasks finish.',
+      '- collab_task_close closes a task after all its subtasks finish.',
       '- collab_delivery_list lists the canonical shared delivery files (names/sizes/times).',
-      '- collab_delivery_manifest writes a project manifest with path, bytes, sha256, and mode.',
+      '- collab_delivery_manifest writes a task manifest with path, bytes, sha256, and mode.',
       '- collab_request_deliver sends the sanitized manifest to an accepted requester.',
       '',
       'How to work:',
-      '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a project and tasks, assign at least one task to an offered worker, then call collab_request_accept with the projectId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
-      'Never send project IDs, task IDs, worker IDs, task decomposition, or internal scheduling to the requester. The requester receives only acceptance/rejection status and the sanitized delivery manifest.',
-      '1. Read the requirement, list capabilities, and plan tasks with explicit acceptance criteria. Use one projectId per requirement: the first collab_task_create returns it; pass it to the remaining tasks.',
+      '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a task and subtasks, assign at least one subtask to an offered worker, then call collab_request_accept with the taskId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
+      'Never send task IDs, subtask IDs, worker IDs, task decomposition, or internal scheduling to the requester. The requester receives only acceptance/rejection status and the sanitized delivery manifest.',
+      '1. Read the requirement, list capabilities, and plan subtasks with explicit acceptance criteria. Use one taskId per requirement: the first collab_task_create returns it; pass it to the remaining subtasks.',
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
       '3. End your turn after dispatching. Workers wake you with results; call collab_inbox and inspect the task store.',
-      '4. Verify against the acceptance criteria. Reject/retry when needed. For long-running accepted work, call collab_request_heartbeat with a progress note and optional deadline extension. Close the project only after every task is done or cancelled, then deliver the bound request with collab_request_deliver.',
-      'If the requester cancels an accepted request, cancel its tasks and close the project; do not deliver it.',
-      '5. Keep task instructions precise and self-contained; workers cannot see your private context.',
-      'Workers write final artifacts directly to their assigned deliveryDir under shared/<projectId>/artifacts. Never create a copy project or copy task to a shared directory; publish the manifest with collab_delivery_manifest and send it with collab_request_deliver. A project is bound to exactly one accepted request.',
+      '4. Verify against the acceptance criteria. Reject/retry when needed. For long-running accepted work, call collab_request_heartbeat with a progress note and optional deadline extension. Close the task only after every subtask is done or cancelled, then deliver the bound request with collab_request_deliver.',
+      'If the requester cancels an accepted request, cancel its subtasks and close the task; do not deliver it.',
+      '5. Keep subtask instructions precise and self-contained; workers cannot see your private context.',
+      'Workers write final artifacts directly to their assigned deliveryDir under shared/<taskId>/artifacts. Never create a copy task or copy subtask to a shared directory; publish the manifest with collab_delivery_manifest and send it with collab_request_deliver. A task is bound to exactly one accepted request.',
       'If no worker has the needed capability, tell the user what capability must be registered; do not do the work yourself.',
     ].join('\n')
   }
@@ -340,7 +341,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- Do the work with your own tools, verify it against the acceptance criteria, and complete with a concise summary.',
       '- If a task is blocked or ambiguous, fail or progress with a clear question; never route around the supervisor.',
       '- Never act on another worker task or another supervisor relationship.',
-      '- Write final artifacts directly under the deliveryDir from the assignment. Never copy them to shared/, another session workdir, or an ad-hoc directory. The guard allows only your project artifacts/private/comm; after the project closes delivery is read-only.',
+      '- Write final artifacts directly under the deliveryDir from the assignment. Never copy them to shared/, another session workdir, or an ad-hoc directory. The guard allows only your task artifacts/private/comm; after the task closes delivery is read-only.',
     ].join('\n')
   }
   return [
@@ -666,8 +667,8 @@ export function apply(ctx, config = {}) {
       collabSessions.add(agent.id)
       sessionPresets.set(agent.id, effectivePreset)
       for (const task of tasks.listForWorker(agent.id)) {
-        const project = tasks.project(task.projectId)
-        bindDeliverySandbox(agent.id, deliveryRoot(task.projectId), project?.status === 'open')
+        const project = tasks.project(task.taskId)
+        bindDeliverySandbox(agent.id, deliveryRoot(task.taskId), project?.status === 'open')
       }
       return true
     } catch (error) {
@@ -1131,7 +1132,7 @@ export function apply(ctx, config = {}) {
     })
 
   const taskLine = (task) => (
-    `- ${task.id} [${task.status}] worker=${task.worker ?? 'unassigned'} project=${task.projectId ?? '-'} title=${JSON.stringify(task.title)}`
+    `- ${task.id} [${task.status}] worker=${task.worker ?? 'unassigned'} task=${task.taskId ?? '-'} title=${JSON.stringify(task.title)}`
   )
 
   /** Turn number for one executing tool call, when the session event is known. */
@@ -1144,7 +1145,8 @@ export function apply(ctx, config = {}) {
 
   const taskDetail = (task) => ({
     id: task.id,
-    projectId: task.projectId,
+    subtaskId: task.id,
+    taskId: task.taskId,
     supervisor: task.supervisor,
     worker: task.worker,
     title: task.title,
@@ -1161,7 +1163,7 @@ export function apply(ctx, config = {}) {
     history: task.history,
   })
 
-  const deliveryDirFor = (task) => deliveryRoot(task.projectId)
+  const deliveryDirFor = (task) => deliveryRoot(task.taskId)
 
   /** Build the canonical project manifest with path/bytes/sha256/mode. */
   const buildDeliveryManifest = (projectId) => {
@@ -1247,12 +1249,12 @@ export function apply(ctx, config = {}) {
 
   const reconcileRequestProjectBindings = () => {
     for (const request of requests.list().sort((left, right) => left.createdAt - right.createdAt)) {
-      if (request.status !== 'accepted' || typeof request.projectId !== 'string') continue
-      const project = tasks.project(request.projectId)
+      if (request.status !== 'accepted' || typeof request.taskId !== 'string') continue
+      const project = tasks.project(request.taskId)
       if (project === undefined) continue
       if ((project.requestId ?? null) === null) {
         try {
-          tasks.bindProject(project.id, request.id)
+          tasks.bindTask(project.id, request.id)
         } catch (error) {
           warn(`could not bind legacy request ${request.id} to project ${project.id}: ${describeError(error)}`)
         }
@@ -1320,7 +1322,7 @@ export function apply(ctx, config = {}) {
     },
     {
       name: 'collab_task_create',
-      description: 'Create a task for a functional worker. Omit projectId to create a new project for this requirement.',
+      description: 'Create a subtask for a functional worker. Omit taskId to create the parent task for this requirement.',
       parameters: TASK_CREATE_PARAMETERS,
       output: TEXT_OUTPUT,
       when: ({ agent }) => isSupervisorSession(agent.id),
@@ -1335,26 +1337,28 @@ export function apply(ctx, config = {}) {
         if (mentionsSharedCopy) {
           throw new Error('do not create copy-out tasks; workers receive a canonical deliveryDir and publish artifacts there')
         }
-        let projectId = typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined
-        if (projectId === undefined) {
-          const project = tasks.createProject({ supervisor: self.sessionId, title })
-          projectId = project.id
+        let taskId = typeof args?.taskId === 'string' && args.taskId.trim().length > 0
+          ? args.taskId.trim()
+          : (typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined)
+        if (taskId === undefined) {
+          const task = tasks.createTask({ supervisor: self.sessionId, title })
+          taskId = task.id
         } else {
-          const project = tasks.project(projectId)
-          if (project === undefined || project.supervisor !== self.sessionId) throw new Error(`unknown project: ${projectId}`)
-          if (project.status !== 'open') throw new Error('project is closed')
+          const task = tasks.task(taskId)
+          if (task === undefined || task.supervisor !== self.sessionId) throw new Error(`unknown task: ${taskId}`)
+          if (task.status !== 'open') throw new Error('task is closed')
         }
-        const task = tasks.createTask({
+        const subtask = tasks.createSubtask({
           supervisor: self.sessionId,
           worker: null,
-          projectId,
+          taskId,
           title,
           instruction,
           inputs: args?.inputs,
           acceptance: args?.acceptance,
           createdTurn: turnForCall(exec),
         })
-        return JSON.stringify({ task: taskDetail(task), projectId })
+        return JSON.stringify({ subtask: taskDetail(subtask), taskId })
       },
     },
     {
@@ -1365,10 +1369,10 @@ export function apply(ctx, config = {}) {
       when: ({ agent }) => isSupervisorSession(agent.id),
       execute: async (args, exec) => {
         const self = requireSupervisor(exec)
-        const taskId = String(args?.taskId ?? '')
+        const subtaskId = String(args?.subtaskId ?? args?.taskId ?? '')
         const worker = String(args?.worker ?? '')
-        const task = tasks.get(taskId)
-        if (task === undefined || task.supervisor !== self.sessionId) throw new Error(`unknown task: ${taskId}`)
+        const task = tasks.get(subtaskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error(`unknown subtask: ${subtaskId}`)
         const relationship = relationships.get(self.sessionId, worker)
         if (relationship === undefined || relationship.offer !== true) {
           throw new Error('worker is not registered to this supervisor with an offer capability')
@@ -1376,21 +1380,21 @@ export function apply(ctx, config = {}) {
         if (!auth.isAuthorized(self.sessionId, worker)) {
           throw new Error('未授权：请在“协同授权”页授权双方。')
         }
-        const project = task.projectId === null ? undefined : tasks.project(task.projectId)
+        const project = task.taskId === null ? undefined : tasks.project(task.taskId)
         if (project !== undefined && project.status !== 'open') throw new Error('project is closed')
         const otherActive = tasks.listForWorker(worker)
-          .filter(entry => entry.id !== taskId && !['done', 'failed', 'cancelled'].includes(entry.status))
+          .filter(entry => entry.id !== subtaskId && !['done', 'failed', 'cancelled'].includes(entry.status))
           .length
         if (otherActive >= 1) throw new Error('worker already has an active task; capacity is 1')
-        const deliveryDir = deliveryRoot(task.projectId)
+        const deliveryDir = deliveryRoot(task.taskId)
         mkdirp(deliveryDir, 0o755)
         bindDeliverySandbox(worker, deliveryDir)
-        const assigned = tasks.assign(taskId, worker, Date.now(), turnForCall(exec), effectiveCapability(relationship)?.version ?? null)
+        const assigned = tasks.assign(subtaskId, worker, turnForCall(exec), effectiveCapability(relationship)?.version ?? null)
         const payload = {
           type: 'collab-task/assign',
           version: 1,
-          taskId: assigned.id,
-          projectId: assigned.projectId,
+          taskId: assigned.taskId,
+          subtaskId: assigned.id,
           supervisor: self.sessionId,
           title: assigned.title,
           instruction: assigned.instruction,
@@ -1437,31 +1441,31 @@ export function apply(ctx, config = {}) {
         const request = requests.get(String(args?.requestId ?? ''))
         if (request === undefined || request.supervisor !== self.sessionId) throw new Error('unknown request')
         if (request.status !== 'pending') throw new Error(`request is already ${request.status}`)
-        const projectId = String(args?.projectId ?? '')
-        const project = tasks.project(projectId)
-        if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project for this request')
-        if (project.status !== 'open') throw new Error('project is closed')
-        const assigned = tasks.listForSupervisor(self.sessionId).filter(task => (
-          task.projectId === projectId
-          && task.worker !== null
-          && relationships.hasOffer(task.worker)
-          && task.status !== 'cancelled'
+        const taskId = String(args?.taskId ?? args?.projectId ?? '')
+        const task = tasks.task(taskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task for this request')
+        if (task.status !== 'open') throw new Error('task is closed')
+        const assigned = tasks.listForSupervisor(self.sessionId).filter(subtask => (
+          subtask.taskId === taskId
+          && subtask.worker !== null
+          && relationships.hasOffer(subtask.worker)
+          && subtask.status !== 'cancelled'
         ))
-        if (assigned.length === 0) throw new Error('assign at least one task to an offered worker before accepting')
+        if (assigned.length === 0) throw new Error('assign at least one subtask to an offered worker before accepting')
         if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协同授权”页授权双方。')
-        const existingBinding = project.requestId ?? null
+        const existingBinding = task.requestId ?? null
         if (existingBinding !== null && existingBinding !== request.id) {
-          throw new Error('project is already bound to another request')
+          throw new Error('task is already bound to another request')
         }
         const acceptedAt = Date.now()
         const accepted = requests.accept(request.id, {
-          projectId,
-          taskIds: assigned.map(task => task.id),
+          taskId,
+          subtaskIds: assigned.map(subtask => subtask.id),
           response: typeof args?.response === 'string' ? args.response : null,
           executionDeadlineAt: acceptedAt + executionTimeoutMs,
         }, acceptedAt)
         try {
-          tasks.bindProject(projectId, request.id)
+          tasks.bindTask(taskId, request.id)
         } catch (error) {
           try { requests.reopen(request.id) } catch { /* preserve the binding failure */ }
           throw error
@@ -1599,8 +1603,8 @@ export function apply(ctx, config = {}) {
         const payload = {
           type: 'collab-task/assign',
           version: 1,
-          taskId: rejected.id,
-          projectId: rejected.projectId,
+          taskId: rejected.taskId,
+          subtaskId: rejected.id,
           supervisor: self.sessionId,
           title: rejected.title,
           instruction: rejected.instruction,
@@ -1629,66 +1633,68 @@ export function apply(ctx, config = {}) {
       },
     },
     {
-      name: 'collab_project_close',
-      description: 'Close a project after all its tasks are done or cancelled.',
-      parameters: PROJECT_CLOSE_PARAMETERS,
+      name: 'collab_task_close',
+      description: 'Close a task after all its subtasks are done or cancelled.',
+      parameters: TASK_CLOSE_PARAMETERS,
       output: TEXT_OUTPUT,
       when: ({ agent }) => isSupervisorSession(agent.id),
       execute: (args, exec) => {
         const self = requireSupervisor(exec)
-        const projectId = String(args?.projectId ?? '')
-        const project = tasks.project(projectId)
-        if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
-        const owned = tasks.listForSupervisor(self.sessionId).filter(task => task.projectId === projectId)
-        const closed = tasks.closeProject(projectId)
+        const taskId = String(args?.taskId ?? args?.projectId ?? '')
+        const task = tasks.task(taskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
+        const owned = tasks.listForSupervisor(self.sessionId).filter(subtask => subtask.taskId === taskId)
+        const closed = tasks.closeTask(taskId)
         for (const task of owned) {
-          if (task.worker !== null) releaseDeliverySandbox(task.worker, deliveryRoot(projectId))
+          if (task.worker !== null) releaseDeliverySandbox(task.worker, deliveryRoot(taskId))
         }
         return `closed: ${closed.id}\nstatus: ${closed.status}`
       },
     },
     {
       name: 'collab_delivery_list',
-      description: 'List canonical delivery files for this supervisor\'s projects. Names, sizes, and times only; content is not read.',
+      description: 'List canonical delivery files for this supervisor\'s tasks. Names, sizes, and times only; content is not read.',
       parameters: DELIVERY_LIST_PARAMETERS,
       output: TEXT_OUTPUT,
       when: ({ agent }) => isSupervisorSession(agent.id),
       isConcurrencySafe: () => true,
       execute: (args, exec) => {
         const self = requireSupervisor(exec)
-        const projectId = typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined
-        if (projectId !== undefined) {
-          const project = tasks.project(projectId)
-          if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
-          const files = listDeliveryFiles(path.join(sharedRoot, projectId, 'artifacts'))
+        const taskId = typeof args?.taskId === 'string' && args.taskId.trim().length > 0
+          ? args.taskId.trim()
+          : (typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined)
+        if (taskId !== undefined) {
+          const task = tasks.task(taskId)
+          if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
+          const files = listDeliveryFiles(path.join(sharedRoot, taskId, 'artifacts'))
           if (files.length === 0) return 'No delivery files.'
           const lines = files.map(file => `${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`)
           if (files.truncated === true) lines.push(`(truncated at ${MAX_DELIVERY_LIST_FILES} files)`)
           return lines.join('\n')
         }
         const lines = []
-        for (const project of tasks.listProjects(self.sessionId)) {
-          const files = listDeliveryFiles(path.join(sharedRoot, project.id, 'artifacts'))
+        for (const task of tasks.listTasks(self.sessionId)) {
+          const files = listDeliveryFiles(path.join(sharedRoot, task.id, 'artifacts'))
           for (const file of files) {
-            lines.push(`${project.id}/${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`)
+            lines.push(`${task.id}/${file.path}  ${String(file.size)}B  ${iso(file.modifiedAt)}`)
           }
-          if (files.truncated === true) lines.push(`${project.id}/(truncated at ${MAX_DELIVERY_LIST_FILES} files)`)
+          if (files.truncated === true) lines.push(`${task.id}/(truncated at ${MAX_DELIVERY_LIST_FILES} files)`)
         }
         return lines.length === 0 ? 'No delivery files.' : lines.join('\n')
       },
     },
     {
       name: 'collab_delivery_manifest',
-      description: 'Build and persist a canonical delivery manifest (path, bytes, sha256, mode) for a supervisor project.',
+      description: 'Build and persist a canonical delivery manifest (path, bytes, sha256, mode) for a supervisor task.',
       parameters: DELIVERY_MANIFEST_PARAMETERS,
       output: TEXT_OUTPUT,
       when: ({ agent }) => isSupervisorSession(agent.id),
       execute: (args, exec) => {
         const self = requireSupervisor(exec)
-        const projectId = String(args?.projectId ?? '')
-        const project = tasks.project(projectId)
-        if (project === undefined || project.supervisor !== self.sessionId) throw new Error('unknown project')
-        return JSON.stringify(buildDeliveryManifest(projectId))
+        const taskId = String(args?.taskId ?? args?.projectId ?? '')
+        const task = tasks.task(taskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
+        return JSON.stringify(buildDeliveryManifest(taskId))
       },
     },
     {
@@ -1704,19 +1710,19 @@ export function apply(ctx, config = {}) {
         if (request.status !== 'accepted' && request.status !== 'delivered') {
           throw new Error(`request is ${request.status}, not delivery-ready`)
         }
-        if (request.projectId === null) throw new Error('accepted request has no project')
-        const project = tasks.project(request.projectId)
-        if (project === undefined) throw new Error('request project no longer exists')
-        if (project.requestId !== request.id) throw new Error('project is not bound to this request')
-        if (project.status !== 'closed') throw new Error('close the project before delivery')
+        if (request.taskId === null) throw new Error('accepted request has no task')
+        const task = tasks.task(request.taskId)
+        if (task === undefined) throw new Error('request task no longer exists')
+        if (task.requestId !== request.id) throw new Error('task is not bound to this request')
+        if (task.status !== 'closed') throw new Error('close the task before delivery')
         const activeTasks = tasks.listForSupervisor(self.sessionId)
-          .filter(task => task.projectId === project.id && !['done', 'cancelled'].includes(task.status))
-        if (activeTasks.length > 0) throw new Error('all project tasks must be done or cancelled before delivery')
+          .filter(subtask => subtask.taskId === task.id && !['done', 'cancelled'].includes(subtask.status))
+        if (activeTasks.length > 0) throw new Error('all subtasks must be done or cancelled before delivery')
         if (deliveryInFlight.has(request.id)) throw new Error('delivery is already in progress')
         if (!auth.isAuthorized(self.sessionId, request.requester)) throw new Error('未授权：请在“协同授权”页授权双方。')
         deliveryInFlight.add(request.id)
         try {
-          const manifest = buildDeliveryManifest(request.projectId)
+          const manifest = buildDeliveryManifest(request.taskId)
           if (manifest.files.length === 0) throw new Error('delivery has no artifacts')
         const manifestSha256 = crypto.createHash('sha256').update(JSON.stringify(manifest.files)).digest('hex')
         const deliveryId = `delivery-${manifestSha256.slice(0, 16)}`
@@ -1729,7 +1735,7 @@ export function apply(ctx, config = {}) {
           })
         }
         const supersedes = request.delivery === null ? null : request.delivery.deliveryId
-        const publicRoot = publishDeliveryAlias(request.projectId, deliveryId)
+        const publicRoot = publishDeliveryAlias(request.taskId, deliveryId)
         const payload = {
           type: 'collab-task/request-delivered',
           version: 1,
@@ -2149,7 +2155,7 @@ export function apply(ctx, config = {}) {
 
   ctx.commands.register({
     name: 'collab-board',
-    description: 'Read the supervisor dashboard: relationships, tasks, projects, and worker candidates.',
+    description: 'Read the supervisor dashboard: relationships, tasks, subtasks, and worker candidates.',
     recordInput: false,
     handler: (invocation) => {
       const supervisor = invocation.agent?.id
@@ -2162,8 +2168,8 @@ export function apply(ctx, config = {}) {
             capability: effectiveCapability(relationship),
           })),
           workers: workerCandidates(supervisor),
-          tasks: tasks.listForSupervisor(supervisor).map(task => TaskStore.summary(task)),
-          projects: tasks.listProjects(supervisor),
+          tasks: tasks.listTasks(supervisor).map(task => TaskStore.taskSummary(task)),
+          subtasks: tasks.listForSupervisor(supervisor).map(subtask => TaskStore.summary(subtask)),
           requests: requests.listForSupervisor(supervisor).map(request => RequestStore.summary(request)),
         }),
       }
@@ -2185,11 +2191,11 @@ export function apply(ctx, config = {}) {
           capability: effectiveCapability(relationship),
         })),
         workers: workerCandidates(sessionId),
-        tasks: tasks.listForSupervisor(sessionId).map(task => ({
-          ...TaskStore.summary(task),
-          workerTitle: registry.get(task.worker)?.title ?? null,
+        tasks: tasks.listTasks(sessionId).map(task => TaskStore.taskSummary(task)),
+        subtasks: tasks.listForSupervisor(sessionId).map(subtask => ({
+          ...TaskStore.summary(subtask),
+          workerTitle: registry.get(subtask.worker)?.title ?? null,
         })),
-        projects: tasks.listProjects(sessionId),
         requests: requests.listForSupervisor(sessionId).map(request => ({
           ...RequestStore.summary(request),
           requesterTitle: registry.get(request.requester)?.title ?? null,
@@ -2303,12 +2309,12 @@ export function apply(ctx, config = {}) {
       if (isManagedWorker(sessionId)) {
         if (write && project.status !== 'open') return false
         return tasks.listForWorker(sessionId).some(task => (
-          task.projectId === projectId && task.supervisor === project.supervisor
+          task.taskId === projectId && task.supervisor === project.supervisor
         ))
       }
       if (write) return false
       return requests.listForRequester(sessionId).some(request => (
-        request.projectId === projectId
+        request.taskId === projectId
         && (request.status === 'delivered' || (request.status === 'accepted' && request.delivery !== null))
         && project.requestId === request.id
         && request.delivery !== null
@@ -2516,6 +2522,8 @@ export function apply(ctx, config = {}) {
   }, 'collab:notice-outbox')
 
   installPerSessionSandbox()
+  try { tasks.migrate() } catch (error) { warn(`task state migration failed: ${describeError(error)}`) }
+  try { requests.migrate() } catch (error) { warn(`request state migration failed: ${describeError(error)}`) }
   refreshRegistry()
   reconcileRequestProjectBindings()
   pruneDeliveryAliases()
