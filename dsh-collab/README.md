@@ -256,7 +256,11 @@ does not add command rows to the conversation. The authorization Remote is a
 required client dependency because Cordis resolves `ctx.remote.collabAuth`
 through the injected service namespace. Management Remote calls are owner-only;
 a non-owner Peer is rejected before it can list or mutate authorization pairs or
-the collaboration board.
+the collaboration board. The packaged Host service is the generated
+resource-aware class (`lib/index.js`): `authorize`, `revoke`, and `panel`
+declare the `session` resource, while `list` remains a global owner-only read.
+The owner check is kept as the current policy, so resource metadata cannot
+silently broaden access.
 
 ## Copy session name
 
