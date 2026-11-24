@@ -898,3 +898,20 @@ test('the guard denies foreign workdir access through every supported tool shape
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('host refuses preset changes after a collab session starts', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-preset-lock-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  const harness = fakeHarness(workspace)
+  let selected = 'collab'
+  const presets = {
+    presetForSession: () => selected,
+    select: async (_agent, id) => { selected = id; return id },
+  }
+  harness.ctx.provide('agentPresets', presets)
+  apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+  const agent = harness.makeAgent(A, PRESET)
+  await assert.rejects(presets.select({ session: agent.session }, 'standard'), /cannot change/u)
+  assert.equal(await presets.select({ session: agent.session }, 'collab'), 'collab')
+})

@@ -607,6 +607,30 @@ export function apply(ctx, config = {}) {
     }, 'collab:per-session-sandbox')
   }
 
+  const installPresetLock = (presets) => {
+    if (presets === undefined || typeof presets.select !== 'function' || typeof presets.presetForSession !== 'function') return
+    const original = presets.select.bind(presets)
+    presets.select = async (agent, agentPreset) => {
+      let current
+      try { current = presets.presetForSession(agent.session) } catch { current = null }
+      if ((current === 'collab' || current === 'supervisor') && agentPreset !== current) {
+        throw new Error('this collaboration session cannot change its agent preset')
+      }
+      return original(agent, agentPreset)
+    }
+    ctx.effect(() => () => {
+      try { presets.select = original } catch { /* service already replaced */ }
+    }, 'collab:preset-lock')
+  }
+
+  const installPresetLockWhenReady = () => {
+    if (typeof ctx.inject === 'function') {
+      ctx.inject(['agentPresets'], (scope) => { installPresetLock(scope.agentPresets) })
+      return
+    }
+    installPresetLock(ctx.get('agentPresets'))
+  }
+
   const installPerSessionSandbox = () => {
     if (!perSessionSandbox) return
     if (typeof ctx.inject === 'function') {
@@ -2522,6 +2546,7 @@ export function apply(ctx, config = {}) {
   }, 'collab:notice-outbox')
 
   installPerSessionSandbox()
+  installPresetLockWhenReady()
   try { tasks.migrate() } catch (error) { warn(`task state migration failed: ${describeError(error)}`) }
   try { requests.migrate() } catch (error) { warn(`request state migration failed: ${describeError(error)}`) }
   refreshRegistry()
