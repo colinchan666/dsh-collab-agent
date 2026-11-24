@@ -23,10 +23,11 @@ Steps:
 2. Edit `cordis.patch.yml`: replace or remove the absolute
    `sharedRoot: /Users/cc/dsh/collab/shared`. Removing it uses
    `<dsh home>/collab/shared`; a custom path must be writable by the DSH process.
-3. Keep `perSessionSandbox: true` only when the profile provides DSH's
-   `sandboxPolicy` and OS sandbox provider. On Windows, extra writable roots
-   apply to file tools but not necessarily to sandboxed shell processes; test
-   delivery writes and set it to `false` if the platform cannot enforce them.
+3. `perSessionSandbox` is active on macOS/Linux only when the profile provides
+   DSH's `sandboxPolicy` and OS sandbox provider. On Windows it is forced off:
+   DSH's extra writable roots apply to file tools but not to sandboxed shell
+   processes, so the worker's delivery writes would fail. Windows relies on the
+   collaboration guard for PowerShell writes instead.
 4. Rebuild the API only if its generated `lib/` is absent or its source changed:
    `cd ../dsh-collab-api && pnpm install && pnpm build`.
 5. After restart, create a collab session, open its right sidebar once, confirm
@@ -210,14 +211,18 @@ tools. It uses task tools to plan/assign/verify; workers execute.
   Parsed state caches invalidate on file identity changes, and a malformed
   state document is moved to a `.corrupt-<timestamp>` backup instead of being
   silently replaced by an empty store.
-- **Per-session OS sandbox**: `perSessionSandbox` (default true) narrows the
-  DSH sandbox workspace boundary to each collab session's own workdir and
-  registers its project delivery dirs as writable roots. The original
-  workspace remains the prompt/registry value; disable it only if the host's
-  sandbox policy or workspace grouping requires the original workspace root.
+- **Per-session OS sandbox**: `perSessionSandbox` (default true on macOS/Linux,
+  forced off on Windows) narrows the DSH sandbox workspace boundary to each
+  collab session's own workdir and registers its project delivery dirs as
+  writable roots. The original workspace remains the prompt/registry value.
+  Windows keeps the original workspace root and relies on the guard.
 - **Managed-worker write scope**: `write`, `edit`, `apply_patch`, and ordinary
   shell write targets are limited to the assigned deliveryDir, `private/`, and
-  `comm/`. Shell target extraction is conservative; it is not an OS sandbox.
+  `comm/`. The shell extractor covers bash redirections/copy verbs and common
+  PowerShell cmdlets (`Set-Content`, `Add-Content`, `Out-File`, `New-Item`,
+  `Copy-Item`, `Move-Item`, `Remove-Item`, `Invoke-WebRequest -OutFile`,
+  `[IO.File]::WriteAllText`, and similar). It is conservative, not a complete
+  PowerShell parser, and it is not an OS sandbox.
 - **Requests do not require offer**: any collaboration session with bilateral
   authorization to a supervisor can call `collab_request_submit`; it does not
   need to be an offered worker. The request is a normal structured message and
@@ -664,11 +669,11 @@ asserts that the tasks and registration tabs are seeded.
 
 - Another session's whole work directory is protected, not only its `private/`
   directory, because `comm/` holds the pair credential. The guard covers the
-  `bash` tool (including `workdir` and command tokens), `working_directory`
+  `bash`/`pwsh` tools (including `workdir` and command tokens), `working_directory`
   (`cd`), `read`, `read_image`, `write`, `edit`, `glob`, `grep`,
   `apply_patch`, and `office_render`/`office_convert`/`office_recalculate`,
   plus `present` file paths. Managed-worker writes are additionally checked for
-  `write`, `edit`, `apply_patch`, and bash destination/redirection targets. Paths are resolved through symlinks before
+  `write`, `edit`, `apply_patch`, and bash/PowerShell destination targets. Paths are resolved through symlinks before
   comparison, including shared-delivery paths. For a collaboration session,
   wildcard tokens that could expand into `.dsh-collab/sessions`, recursive
   searches, and shells whose effective directory contains another session's
@@ -676,13 +681,15 @@ asserts that the tasks and registration tabs are seeded.
   starts in an authorized delivery directory.
   Normal project sessions keep their full shell and search behavior; only their
   direct access to a collaboration work directory is denied.
-- The guard is not itself an OS security sandbox. With `perSessionSandbox`
-  enabled and a DSH `sandboxPolicy` provider, the OS boundary is narrowed to
-  the session workdir plus open delivery roots; without that provider, another
-  OS user is kept out by `0700` mode, but the same OS user running another
-  session is blocked only by the guard: a deliberately obfuscated shell script,
-  a hard link to a protected file, a future file-reading tool the guard does not
-  know, or the human GUI's file browser is outside that boundary.
+- The guard is not itself an OS security sandbox. On macOS/Linux, with
+  `perSessionSandbox` enabled and a DSH `sandboxPolicy` provider, the OS
+  boundary is narrowed to the session workdir plus open delivery roots; on
+  Windows this per-session narrowing is disabled and the guard is the
+  boundary. Another OS user is kept out by `0700` mode, but the same OS user
+  running another session is blocked only by the guard on Windows: a
+  deliberately obfuscated PowerShell script, a hard link to a protected file, a
+  future file-reading tool the guard does not know, or the human GUI's file
+  browser is outside that boundary.
 - Messaging is local to this Harness profile. Nothing is sent over the network.
   The pair credential is a shared secret, so either side of a pair can produce
   a valid MAC for that pair; the file guard prevents a third session from

@@ -407,7 +407,7 @@ export function apply(ctx, config = {}) {
   const executionTimeoutMs = Number.isFinite(Number(config.executionTimeoutMs))
     ? Math.max(100, Number(config.executionTimeoutMs))
     : 24 * 60 * 60 * 1000
-  const perSessionSandbox = config.perSessionSandbox !== false
+  const perSessionSandbox = config.perSessionSandbox !== false && process.platform !== 'win32'
   const registry = new SessionRegistry(registryPath)
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -524,7 +524,6 @@ export function apply(ctx, config = {}) {
   }
 
   const bindDeliverySandbox = (sessionId, directory, writable = true) => {
-    if (!perSessionSandbox) return
     const resolved = path.resolve(directory)
     const reads = sandboxReadRoots.get(sessionId) ?? new Set()
     reads.add(resolved)
@@ -537,20 +536,36 @@ export function apply(ctx, config = {}) {
     try { mkdirp(directory, 0o755) } catch { /* the assignment will report a real mkdir failure */ }
   }
 
+  const sharedRootVariants = () => {
+    const forward = sharedRoot.replaceAll('\\', '/')
+    return forward === sharedRoot ? [sharedRoot] : [sharedRoot, forward]
+  }
+  const commandMentionsSharedRoot = (command) => {
+    const text = process.platform === 'win32' ? String(command).toLowerCase() : String(command)
+    return sharedRootVariants().some(root => text.includes(process.platform === 'win32' ? root.toLowerCase() : root))
+  }
   const sharedCommandAllowed = (command, sessionId) => {
     if (!isManagedWorker(sessionId)) return false
     const roots = [...(sandboxReadRoots.get(sessionId) ?? [])].map(root => canonicalPath(root))
     if (roots.length === 0) return false
     const text = String(command)
-    let cursor = 0
-    while (true) {
-      const index = text.indexOf(sharedRoot, cursor)
-      if (index < 0) return true
-      const token = text.slice(index).split(/[\s;&|"'`]+/u)[0]
-      const resolved = canonicalPath(token)
-      if (!roots.some(root => resolved === root || resolved.startsWith(`${root}${path.sep}`))) return false
-      cursor = index + sharedRoot.length
+    const haystack = process.platform === 'win32' ? text.toLowerCase() : text
+    const comparable = (value) => process.platform === 'win32' ? value.toLowerCase() : value
+    for (const root of sharedRootVariants()) {
+      const needle = process.platform === 'win32' ? root.toLowerCase() : root
+      let cursor = 0
+      while (true) {
+        const index = haystack.indexOf(needle, cursor)
+        if (index < 0) break
+        const token = text.slice(index).split(/[\s;&|"'`]+/u)[0]
+        const resolved = canonicalPath(token)
+        if (!roots.some(owned => comparable(resolved) === comparable(owned) || comparable(resolved).startsWith(`${comparable(owned)}${path.sep}`))) {
+          return false
+        }
+        cursor = index + needle.length
+      }
     }
+    return true
   }
 
   const releaseDeliverySandbox = (sessionId, directory) => {
@@ -2255,9 +2270,13 @@ export function apply(ctx, config = {}) {
     const currentCwd = exec.agent.session === undefined ? undefined : ctx.workingDirectory.get(exec.agent.session)
     const selfWorkdir = currentCwd ?? self?.workdir
     if (typeof selfWorkdir !== 'string') return undefined
+    const comparablePath = (value) => {
+      const resolved = path.resolve(value)
+      return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+    }
     const pathInside = (candidate, root) => {
-      const resolvedCandidate = path.resolve(candidate)
-      const resolvedRoot = path.resolve(root)
+      const resolvedCandidate = comparablePath(candidate)
+      const resolvedRoot = comparablePath(root)
       return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
     }
     const canonicalSharedRoot = canonicalPath(sharedRoot)
@@ -2330,24 +2349,25 @@ export function apply(ctx, config = {}) {
     const args = exec.arguments
     let hit
     switch (exec.name) {
-      case 'bash': {
-        const bashWorkdir = typeof args?.workdir === 'string' && args.workdir.length > 0
+      case 'bash':
+      case 'pwsh': {
+        const shellWorkdir = typeof args?.workdir === 'string' && args.workdir.length > 0
           ? path.resolve(selfWorkdir, args.workdir)
           : selfWorkdir
         // A collaboration shell whose cwd contains another session's work
         // directory could read it recursively; refuse that cwd. Normal project
         // sessions keep their full shell so the plugin does not break them.
-        hit = (isCollabCaller ? findForeignAncestorAccess([bashWorkdir], options) : undefined)
+        hit = (isCollabCaller ? findForeignAncestorAccess([shellWorkdir], options) : undefined)
           ?? findForeignSessionAccessInCommand(String(args?.command ?? ''), {
             ...options,
-            selfWorkdir: bashWorkdir,
+            selfWorkdir: shellWorkdir,
             checkAncestors: isCollabCaller,
           })
         if (hit === undefined && typeof args?.workdir === 'string') {
           hit = findForeignSessionAccess(allowedDeliveryPaths([args.workdir], true), options)
         }
         if (hit === undefined && isManagedWorker(sessionId)) {
-          for (const target of shellWriteTargets(String(args?.command ?? ''), bashWorkdir)) {
+          for (const target of shellWriteTargets(String(args?.command ?? ''), shellWorkdir)) {
             if (!managedWriteAllowed(target)) { hit = { workerWrite: target }; break }
           }
         }
@@ -2435,18 +2455,18 @@ export function apply(ctx, config = {}) {
       if (typeof args?.input === 'string') candidates.push(args.input)
       if (typeof args?.cd === 'string') candidates.push(args.cd)
       if (Array.isArray(args?.files)) candidates.push(...args.files.map(file => file?.path).filter(value => typeof value === 'string'))
-      if (exec.name === 'bash') {
+      if (exec.name === 'bash' || exec.name === 'pwsh') {
         const command = String(args?.command ?? '')
-        const bashWorkdir = typeof args?.workdir === 'string' && args.workdir.length > 0
+        const shellWorkdir = typeof args?.workdir === 'string' && args.workdir.length > 0
           ? path.resolve(selfWorkdir, args.workdir)
           : selfWorkdir
-        if (command.includes(sharedRoot)) {
+        if (commandMentionsSharedRoot(command)) {
           if (!sharedCommandAllowed(command, sessionId)) hit = { shared: sharedRoot }
         } else if (isManagedWorker(sessionId)) {
-          hit = sharedAccessDenied([bashWorkdir], true)
+          hit = sharedAccessDenied([shellWorkdir], true)
         }
         if (hit === undefined && !sharedCommandAllowed(command, sessionId)
-          && command.split(/\s+/u).some(token => token.includes('shared/'))) {
+          && command.split(/\s+/u).some(token => /shared[\\/]/i.test(token))) {
           hit = { shared: path.join(sharedRoot, 'shared') }
         }
       }

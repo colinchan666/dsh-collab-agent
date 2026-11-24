@@ -629,6 +629,10 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     assert.ok(guard({ agent: worker, name: 'bash', arguments: { workdir: deliveryDir, command: 'cd /tmp && echo pwn > escaped.txt' } }))
     assert.equal(guard({ agent: worker, name: 'bash', arguments: { workdir: deliveryDir, command: 'echo ok > result2.md' } }), undefined)
     assert.equal(guard({ agent: worker, name: 'bash', arguments: { workdir: deliveryDir, command: `shasum -a 256 ${deliveryDir}/result.md` } }), undefined)
+    assert.equal(guard({ agent: worker, name: 'pwsh', arguments: { workdir: deliveryDir, command: 'Set-Content -Path result3.md -Value ok' } }), undefined)
+    assert.ok(guard({ agent: worker, name: 'pwsh', arguments: { workdir: deliveryDir, command: 'Set-Content -Path ../../pwn.txt -Value ok' } }))
+    assert.ok(guard({ agent: worker, name: 'pwsh', arguments: { workdir: deliveryDir, command: `Get-Content ${path.join(sessions, A, 'private', 'secret.txt')}` } }))
+    assert.equal(guard({ agent: worker, name: 'pwsh', arguments: { workdir: deliveryDir, command: `Get-FileHash ${deliveryDir}/result.md` } }), undefined)
     assert.ok(guard({ agent: worker, name: 'apply_patch', arguments: { input: `*** Begin Patch\n*** Add File: ${path.join(workspace, 'pwn.js')}\n+alert(1)\n*** End Patch` } }))
     assert.equal(guard({ agent: worker, name: 'apply_patch', arguments: { input: `*** Begin Patch\n*** Add File: ${path.join(deliveryDir, 'new.md')}\n+ok\n*** End Patch` } }), undefined)
     worker.session.currentCwd = deliveryDir

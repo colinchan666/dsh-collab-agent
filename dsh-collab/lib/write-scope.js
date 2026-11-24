@@ -49,6 +49,37 @@ const shellWriteTargets = (command, cwd) => {
     const words = shellWords(match[1]).filter(word => !word.startsWith('-') && !word.startsWith('s/') && !word.startsWith('s#'))
     for (const word of words) add(word)
   }
+  // PowerShell write cmdlets. DSH uses pwsh instead of bash on Windows; the
+  // parser is deliberately conservative and only claims destinations.
+  const psWrites = /\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Rename-Item|Remove-Item|Clear-Content|Set-Item|New-ItemProperty|Tee-Object|Export-Csv|Start-Transcript|Invoke-WebRequest|Invoke-RestMethod)\b([^;&|]*)/giu
+  for (const match of text.matchAll(psWrites)) {
+    const verb = match[1].toLowerCase()
+    const words = shellWords(match[2])
+    const isCopyLike = verb === 'copy-item' || verb === 'move-item' || verb === 'rename-item'
+    const namedFlags = isCopyLike
+      ? new Set(['-destination', '-newpath', '-newname'])
+      : new Set(['-path', '-filepath', '-literalpath', '-destination', '-outfile'])
+    let named = false
+    for (let index = 0; index < words.length; index += 1) {
+      if (!namedFlags.has(words[index].toLowerCase())) continue
+      const value = words[index + 1]
+      if (value !== undefined) { add(value); named = true }
+    }
+    if (named) continue
+    const positional = words.filter(word => !word.startsWith('-'))
+    if (positional.length === 0) continue
+    if (verb === 'copy-item' || verb === 'move-item' || verb === 'rename-item') {
+      add(positional[positional.length - 1])
+      continue
+    }
+    for (const word of positional) {
+      if (verb === 'remove-item' || verb === 'clear-content') add(word)
+      else { add(word); break }
+    }
+  }
+  for (const match of text.matchAll(/\[(?:System\.)?IO\.File\]::(?:WriteAllText|WriteAllBytes|WriteAllLines|AppendAllText|AppendAllLines)\s*\(\s*["']([^"']+)["']/giu)) {
+    add(match[1])
+  }
   return targets
 }
 

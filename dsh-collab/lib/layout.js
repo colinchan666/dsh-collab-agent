@@ -634,9 +634,14 @@ export function markRead(file, workdir) {
   return target
 }
 
+function comparablePath(value) {
+  const resolved = path.resolve(value)
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+}
+
 function isInside(candidate, root) {
-  const resolvedCandidate = path.resolve(candidate)
-  const resolvedRoot = path.resolve(root)
+  const resolvedCandidate = comparablePath(candidate)
+  const resolvedRoot = comparablePath(root)
   return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
 }
 
@@ -740,8 +745,8 @@ export function findForeignSessionAccess(values, { selfId, selfWorkdir, selfLayo
 }
 
 function isStrictAncestor(candidate, child) {
-  const resolvedCandidate = path.resolve(candidate)
-  const resolvedChild = path.resolve(child)
+  const resolvedCandidate = comparablePath(candidate)
+  const resolvedChild = comparablePath(child)
   return resolvedChild.startsWith(`${resolvedCandidate}${path.sep}`)
 }
 

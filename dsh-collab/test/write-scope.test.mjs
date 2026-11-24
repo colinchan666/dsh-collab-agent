@@ -30,3 +30,14 @@ test('apply_patch targets include add/update/delete/move headers', () => {
     path.join(cwd, 'd.txt'),
   ])
 })
+
+test('PowerShell write extraction covers cmdlets and IO::WriteAllText', () => {
+  assert.deepEqual(shellWriteTargets('Set-Content -Path ./delivery/out.txt -Value hi', cwd), [path.join(cwd, 'delivery/out.txt')])
+  assert.deepEqual(shellWriteTargets("Out-File -FilePath './delivery/out.txt'", cwd), [path.join(cwd, 'delivery/out.txt')])
+  assert.deepEqual(shellWriteTargets('New-Item -ItemType Directory -Path ./delivery', cwd), [path.join(cwd, 'delivery')])
+  assert.deepEqual(shellWriteTargets('Copy-Item ./src.txt ./delivery/dst.txt', cwd), [path.join(cwd, 'delivery/dst.txt')])
+  assert.deepEqual(shellWriteTargets('Copy-Item -Path ./src.txt -Destination ./delivery/dst.txt', cwd), [path.join(cwd, 'delivery/dst.txt')])
+  assert.deepEqual(shellWriteTargets('Invoke-WebRequest https://example.test -OutFile ./delivery/a.bin', cwd), [path.join(cwd, 'delivery/a.bin')])
+  assert.deepEqual(shellWriteTargets("[IO.File]::WriteAllText('./delivery/a.txt', 'x')", cwd), [path.join(cwd, 'delivery/a.txt')])
+  assert.deepEqual(shellWriteTargets('Get-Content ./src.txt', cwd), [])
+})
