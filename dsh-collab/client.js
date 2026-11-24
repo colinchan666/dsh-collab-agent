@@ -1866,7 +1866,7 @@ window.__ModuleLoader__.load({
             if (node.children.length !== 0) continue
             const text = node.textContent ?? ''
             const pair = pairs.find(([source]) => text === source)
-            if (pair !== undefined && pair[1] !== source) node.textContent = pair[1]
+            if (pair !== undefined && pair[1] !== pair[0]) node.textContent = pair[1]
           }
         }
         const hideLockedPresets = () => {
@@ -1890,9 +1890,10 @@ window.__ModuleLoader__.load({
     }
 
     function CollabPresetLockProbe(props) {
-      const sessions = props.useSessions(selectSnapshot)
-      const values = sessions.byId[props.sessionId]?.projectionValues
-        ?? sessions.projectionsBySession?.[props.sessionId]?.values
+      const useSessions = typeof props.useSessions === 'function' ? props.useSessions : () => undefined
+      const sessions = useSessions(selectSnapshot)
+      const values = sessions?.byId?.[props.sessionId]?.projectionValues
+        ?? sessions?.projectionsBySession?.[props.sessionId]?.values
       const locked = values?.agentPreset === 'collab' || values?.agentPreset === 'supervisor'
       React.useEffect(() => {
         if (!locked) return undefined
