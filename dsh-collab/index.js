@@ -29,6 +29,7 @@ import { createDeliveryManifestService } from './lib/delivery-manifest.js'
 import { AuditLog } from './lib/audit.js'
 import { cancelBoundTask } from './lib/cancel-request.js'
 import { createPanelApi } from './lib/panel-api.js'
+import { collectHealth } from './lib/health.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-collab-sessions'
@@ -1960,34 +1961,16 @@ export function apply(ctx, config = {}) {
       isConcurrencySafe: () => true,
       execute: (_args, exec) => {
         const self = requireSelf(exec)
-        const relationshipsList = relationships.list()
-        const invalidRelationships = relationshipsList.filter(relationship => (
-          registry.get(relationship.worker)?.preset !== PRESET
-          || registry.get(relationship.supervisor)?.preset !== SUPERVISOR
-        ))
-        const grants = auth.listGrants()
-        const invalidGrants = grants.filter(grant => (
-          (registry.get(grant.from) !== undefined && !COLLAB_PRESETS.has(registry.get(grant.from).preset))
-          || (registry.get(grant.to) !== undefined && !COLLAB_PRESETS.has(registry.get(grant.to).preset))
-        ))
-        const tasksForSelf = isSupervisorSession(self.sessionId)
-          ? tasks.listTasks(self.sessionId)
-          : []
-        const requestsForSelf = requests.list()
-          .filter(request => request.supervisor === self.sessionId || request.requester === self.sessionId)
-        return JSON.stringify({
+        return JSON.stringify(collectHealth({
           sessionId: self.sessionId,
-          registry: registry.list().length,
-          relationships: relationshipsList.length,
-          invalidRelationships: invalidRelationships.length,
-          grants: grants.length,
-          invalidGrants: invalidGrants.length,
-          tasks: tasksForSelf.length,
-          activeTasks: tasksForSelf.filter(task => task.status === 'open').length,
-          requests: requestsForSelf.length,
-          activeRequests: requestsForSelf.filter(request => request.status === 'accepted').length,
+          registryEntries: registry.list(),
+          relationships: relationships.list(),
+          grants: auth.listGrants(),
+          tasks: tasks.listTasks(self.sessionId),
+          requests: requests.list(),
           auditEntries: collabAdmin.audit(1).length,
-        })
+          isSupervisor: isSupervisorSession(self.sessionId),
+        }))
       },
     },
     {
