@@ -252,6 +252,27 @@ Every named session row has a copy action in its hover strip, and the session
 right-click menu has **复制会话名 / Copy session name**. The action copies the
 display name to the clipboard and briefly marks the button as copied.
 
+## Diagnostics
+
+Use `collab_doctor` for a read-only health snapshot of the collaboration session:
+
+- registry size;
+- relationship and invalid relationship counts;
+- grant and invalid grant counts;
+- task / active task counts;
+- request / active request counts;
+- audit readability.
+
+The append-only audit log lives at:
+
+```text
+<state>/audit.jsonl
+```
+
+It records authorization, request acceptance, task assignment/completion/closure,
+and delivery publication. Losing the audit file does not affect task or request
+state.
+
 ## Manual state recovery
 
 State is under the DSH home:
