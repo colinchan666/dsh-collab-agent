@@ -6,7 +6,7 @@ export const TEXT_OUTPUT = {
   },
 }
 
-export const NO_PARAMETERS = { type: 'object', properties: {} }
+export const NO_PARAMETERS = { type: 'object', properties: {}, additionalProperties: false }
 
 export const SEND_PARAMETERS = {
   type: 'object',
