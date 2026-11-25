@@ -686,7 +686,7 @@ export function apply(ctx, config = {}) {
       collabSessions.add(agent.id)
       sessionPresets.set(agent.id, effectivePreset)
       for (const task of tasks.listForWorker(agent.id)) {
-        const project = tasks.project(task.taskId)
+        const project = tasks.task(task.taskId)
         bindDeliverySandbox(agent.id, deliveryRoot(task.taskId), project?.status === 'open')
       }
       return true
@@ -1224,7 +1224,7 @@ export function apply(ctx, config = {}) {
   const reconcileRequestProjectBindings = () => {
     for (const request of requests.list().sort((left, right) => left.createdAt - right.createdAt)) {
       if (request.status !== 'accepted' || typeof request.taskId !== 'string') continue
-      const project = tasks.project(request.taskId)
+      const project = tasks.task(request.taskId)
       if (project === undefined) continue
       if ((project.requestId ?? null) === null) {
         try {
@@ -1371,7 +1371,7 @@ export function apply(ctx, config = {}) {
         if (!auth.isAuthorized(self.sessionId, worker)) {
           throw new Error('未授权：请在“协同授权”页授权双方。')
         }
-        const project = task.taskId === null ? undefined : tasks.project(task.taskId)
+        const project = task.taskId === null ? undefined : tasks.task(task.taskId)
         if (project !== undefined && project.status !== 'open') throw new Error('project is closed')
         const otherActive = tasks.listForWorker(worker)
           .filter(entry => entry.id !== subtaskId && !['done', 'failed', 'cancelled'].includes(entry.status))
@@ -2377,7 +2377,7 @@ export function apply(ctx, config = {}) {
       const resolved = canonicalPath(path.resolve(selfWorkdir, candidate))
       const projectId = projectIdFromShared(resolved)
       if (projectId === undefined) return false
-      const project = tasks.project(projectId)
+      const project = tasks.task(projectId)
       if (project === undefined) return false
       if (isSupervisorSession(sessionId)) return project.supervisor === sessionId && write !== true
       if (isManagedWorker(sessionId)) {

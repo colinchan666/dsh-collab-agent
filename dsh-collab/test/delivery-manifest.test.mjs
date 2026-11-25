@@ -15,7 +15,7 @@ test('the delivery manifest module hashes files and publishes an alias', () => {
     const artifact = path.join(shared, 'task-a', 'artifacts', 'result.txt')
     fs.mkdirSync(path.dirname(artifact), { recursive: true })
     fs.writeFileSync(artifact, 'hello')
-    const tasks = { project: id => id === 'task-a' ? { id } : undefined }
+    const tasks = { task: id => id === 'task-a' ? { id } : undefined }
     const service = createDeliveryManifestService({
       sharedRoot: shared, tasks, fs, path, crypto, mkdirp, writeJson,
       listDeliveryFiles: (directory) => {

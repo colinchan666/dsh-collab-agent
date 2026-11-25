@@ -355,12 +355,12 @@ test('a project can be bound to only one request', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-binding-'))
   try {
     const store = new TaskStore(path.join(root, 'tasks.json'))
-    const project = store.createProject({ supervisor: SELF, title: 'bound' })
+    const project = store.createTask({ supervisor: SELF, title: 'bound' })
     assert.equal(project.requestId, null)
-    store.bindProject(project.id, 'request-one')
-    assert.equal(store.project(project.id).requestId, 'request-one')
-    assert.throws(() => store.bindProject(project.id, 'request-two'), /another request/u)
-    assert.equal(store.project(project.id).requestId, 'request-one')
+    store.bindTask(project.id, 'request-one')
+    assert.equal(store.task(project.id).requestId, 'request-one')
+    assert.throws(() => store.bindTask(project.id, 'request-two'), /another request/u)
+    assert.equal(store.task(project.id).requestId, 'request-one')
   } finally {
     cleanup(root)
   }
@@ -372,11 +372,11 @@ test('two TaskStore instances preserve independent project writes', () => {
     const file = path.join(root, 'tasks.json')
     const first = new TaskStore(file)
     const second = new TaskStore(file)
-    const one = first.createProject({ supervisor: SELF, title: 'one' })
-    const two = second.createProject({ supervisor: SELF, title: 'two' })
+    const one = first.createTask({ supervisor: SELF, title: 'one' })
+    const two = second.createTask({ supervisor: SELF, title: 'two' })
     const fresh = new TaskStore(file)
-    assert.ok(fresh.project(one.id))
-    assert.ok(fresh.project(two.id))
+    assert.ok(fresh.task(one.id))
+    assert.ok(fresh.task(two.id))
   } finally {
     cleanup(root)
   }
@@ -451,10 +451,10 @@ test('a cached store observes an external state write', () => {
   try {
     const file = path.join(root, 'tasks.json')
     const reader = new TaskStore(file)
-    assert.equal(reader.listProjects(SELF).length, 0)
+    assert.equal(reader.listTasks(SELF).length, 0)
     const writer = new TaskStore(file)
-    writer.createProject({ supervisor: SELF, title: 'external' })
-    assert.equal(reader.listProjects(SELF).length, 1)
+    writer.createTask({ supervisor: SELF, title: 'external' })
+    assert.equal(reader.listTasks(SELF).length, 1)
   } finally {
     cleanup(root)
   }

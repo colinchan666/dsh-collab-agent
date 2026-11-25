@@ -5,7 +5,7 @@ export function createDeliveryManifestService({
   const rootFor = taskId => path.join(sharedRoot, taskId ?? 'default', 'artifacts')
 
   const buildDeliveryManifest = (taskId) => {
-    const task = tasks.project(taskId)
+    const task = tasks.task(taskId)
     if (task === undefined) throw new Error('unknown task')
     const root = rootFor(taskId)
     const listed = listDeliveryFiles(root)
