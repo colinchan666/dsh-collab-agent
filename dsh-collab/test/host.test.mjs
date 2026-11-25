@@ -989,6 +989,8 @@ test('authorization surfaces reject ordinary sessions', async () => {
     const listed = harness.ctx.get('collabAdmin').listAuth()
     assert.deepEqual(listed.pairs.map(pair => [pair.a, pair.b]), [[A, B]])
     assert.deepEqual(listed.pending, [])
+    const persisted = JSON.parse(fs.readFileSync(authorizationPath, 'utf8'))
+    assert.equal(persisted.grants.some(grant => grant.from === PLAIN || grant.to === PLAIN), false)
     const authCommand = harness.commands.find(entry => entry.name === 'collab-auth')
     const refused = authCommand.handler({
       agent: supervisor,

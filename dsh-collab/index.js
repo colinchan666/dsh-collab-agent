@@ -2657,10 +2657,28 @@ export function apply(ctx, config = {}) {
     return () => clearInterval(timer)
   }, 'collab:notice-outbox')
 
+  const pruneInvalidCollabState = () => {
+    for (const grant of auth.listGrants()) {
+      const from = registry.get(grant.from)
+      const to = registry.get(grant.to)
+      if ((from !== undefined && from.preset !== PRESET && from.preset !== SUPERVISOR)
+        || (to !== undefined && to.preset !== PRESET && to.preset !== SUPERVISOR)) {
+        try { auth.revoke(grant.from, grant.to) } catch (error) { warn(`could not prune invalid grant ${grant.from} -> ${grant.to}: ${describeError(error)}`) }
+      }
+    }
+    for (const relationship of relationships.list()) {
+      const worker = registry.get(relationship.worker)
+      if (worker !== undefined && worker.preset !== PRESET) {
+        try { relationships.remove(relationship.supervisor, relationship.worker) } catch (error) { warn(`could not prune invalid relationship: ${describeError(error)}`) }
+      }
+    }
+  }
+
   installPerSessionSandbox()
   try { tasks.migrate() } catch (error) { warn(`task state migration failed: ${describeError(error)}`) }
   try { requests.migrate() } catch (error) { warn(`request state migration failed: ${describeError(error)}`) }
   refreshRegistry()
+  pruneInvalidCollabState()
   reconcileRequestProjectBindings()
   pruneDeliveryAliases()
   sweepRequestTimeouts()
