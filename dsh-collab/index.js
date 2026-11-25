@@ -1106,7 +1106,7 @@ export function apply(ctx, config = {}) {
 
   /** Compact live capability lines injected into the supervisor prompt each turn. */
   const capabilityRoster = (supervisor) => relationships.listForSupervisor(supervisor)
-    .filter(relationship => relationship.offer === true)
+    .filter(relationship => relationship.offer === true && isFunctionalWorker(relationship.worker))
     .map(relationship => {
     const capability = effectiveCapability(relationship)
     const name = capability?.name ?? '(request-only)'
@@ -1116,8 +1116,10 @@ export function apply(ctx, config = {}) {
     return `- ${relationship.worker} capability=${JSON.stringify(name)} source=${source} version=${version}${capability?.changed === true ? ' changed=yes' : ''}${description.length === 0 ? '' : ` description=${JSON.stringify(description.slice(0, 500))}`}`
   })
 
+  const isFunctionalWorker = (sessionId) => registry.get(sessionId)?.preset === PRESET
+
   const workerCandidates = (supervisor) => registry.list()
-    .filter(entry => entry.sessionId !== supervisor && entry.preset !== SUPERVISOR)
+    .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET)
     .map(entry => {
       const capability = liveCapability(entry.sessionId)
       return {
@@ -1299,6 +1301,7 @@ export function apply(ctx, config = {}) {
       execute: (_args, exec) => {
         const self = requireSupervisor(exec)
         const relationshipsForSelf = relationships.listForSupervisor(self.sessionId)
+          .filter(relationship => relationship.offer === true && isFunctionalWorker(relationship.worker))
         if (relationshipsForSelf.length === 0) return 'No functional sessions are registered to this supervisor yet.'
         const lines = [`supervisor: ${self.sessionId}`, '']
         for (const relationship of relationshipsForSelf) {
@@ -1377,6 +1380,7 @@ export function apply(ctx, config = {}) {
         if (relationship === undefined || relationship.offer !== true) {
           throw new Error('worker is not registered to this supervisor with an offer capability')
         }
+        if (!isFunctionalWorker(worker)) throw new Error('worker must be a collaboration session')
         if (!auth.isAuthorized(self.sessionId, worker)) {
           throw new Error('未授权：请在“协同授权”页授权双方。')
         }
@@ -2088,7 +2092,9 @@ export function apply(ctx, config = {}) {
         return {
           kind: 'success',
           text: JSON.stringify({
-            relationships: relationships.listForSupervisor(supervisor).map(view),
+            relationships: relationships.listForSupervisor(supervisor)
+              .filter(relationship => isFunctionalWorker(relationship.worker))
+              .map(view),
             workers: workerCandidates(supervisor),
           }),
         }
@@ -2097,7 +2103,7 @@ export function apply(ctx, config = {}) {
         const worker = parts[1]
         if (!isSessionId(worker) || worker === supervisor) return { kind: 'error', text: usage }
         const entry = registry.get(worker)
-        if (entry === undefined || entry.preset === SUPERVISOR) return { kind: 'error', text: 'worker must be a collaboration session' }
+        if (entry === undefined || entry.preset !== PRESET) return { kind: 'error', text: 'worker must be a collaboration session' }
         if (action === 'unlink') {
           relationships.remove(supervisor, worker)
           auth.revoke(supervisor, worker)
@@ -2163,7 +2169,9 @@ export function apply(ctx, config = {}) {
       return {
         kind: 'success',
         text: JSON.stringify({
-          relationships: relationships.listForSupervisor(supervisor).map(relationship => ({
+          relationships: relationships.listForSupervisor(supervisor)
+            .filter(relationship => isFunctionalWorker(relationship.worker))
+            .map(relationship => ({
             ...relationship,
             capability: effectiveCapability(relationship),
           })),
@@ -2186,7 +2194,9 @@ export function apply(ctx, config = {}) {
     if (op === 'board') {
       if (!supervisor) throw new Error('not a supervisor session')
       return {
-        relationships: relationships.listForSupervisor(sessionId).map(relationship => ({
+        relationships: relationships.listForSupervisor(sessionId)
+          .filter(relationship => isFunctionalWorker(relationship.worker))
+          .map(relationship => ({
           ...relationship,
           capability: effectiveCapability(relationship),
         })),
@@ -2222,7 +2232,7 @@ export function apply(ctx, config = {}) {
     const worker = typeof args?.worker === 'string' ? args.worker : ''
     if (!isSessionId(worker) || worker === sessionId) throw new Error('invalid worker id')
     const entry = registry.get(worker)
-    if (entry === undefined || entry.preset === SUPERVISOR) throw new Error('worker must be a collaboration session')
+    if (entry === undefined || entry.preset !== PRESET) throw new Error('worker must be a collaboration session')
     const view = relationship => relationship === undefined
       ? undefined
       : { ...relationship, capability: effectiveCapability(relationship) }
