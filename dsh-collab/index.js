@@ -442,15 +442,16 @@ export function apply(ctx, config = {}) {
   const deliveryInFlight = new Set()
   let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
+  const isKnownCollab = (id) => collabSessions.has(id)
+    || registry.get(id)?.preset === PRESET
+    || registry.get(id)?.preset === SUPERVISOR
   const collabAdmin = {
     listAuth: () => ({
-      pairs: auth.listPairs(),
-      pending: auth.listPending(),
+      pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
+      pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
     }),
     authorize: (a, b) => {
-      const known = (id) => collabSessions.has(id)
-        || (registry.get(id)?.preset === 'collab' || registry.get(id)?.preset === 'supervisor')
-      if (!known(a) || !known(b)) throw new Error('authorization requires two known collaboration sessions')
+      if (!isKnownCollab(a) || !isKnownCollab(b)) throw new Error('authorization requires two known collaboration sessions')
       auth.authorize(a, b, 'ui')
       return collabAdmin.listAuth()
     },
