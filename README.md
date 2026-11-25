@@ -32,7 +32,7 @@ button uses. It does not create a new Workspace per session.
 ## Repository layout
 
 ```text
-dsh-collab-agent/
+dsh-plugins-collab-agent/
   README.md                              this file — overview and installation
   dsh-collab/                            Host + Client plugin bundle
     README.md                            detailed behavior and development docs
@@ -60,8 +60,8 @@ Both bundles are required:
 ### 1. Clone the repository
 
 ```sh
-git clone https://github.com/colinchan666/dsh-collab-agent.git
-cd dsh-collab-agent
+git clone https://github.com/colinchan666/dsh-plugins-collab-agent.git
+cd dsh-plugins-collab-agent
 ```
 
 The generated API `lib/` is committed; a build is normally not needed. Install
@@ -81,7 +81,7 @@ macOS/Linux:
 
 ```sh
 PROFILE="$HOME/.dsh/profiles/desktop"
-REPO="$HOME/src/dsh-collab-agent"
+REPO="$HOME/src/dsh-plugins-collab-agent"
 mkdir -p "$PROFILE/node_modules/@xmodelin"
 ln -s "$REPO/dsh-collab" "$PROFILE/node_modules/@xmodelin/dsh-collab-sessions"
 ln -s "$REPO/dsh-collab-api/packages/dsh-collab-auth-api" \
@@ -92,7 +92,7 @@ Windows PowerShell (junctions work without Developer Mode):
 
 ```powershell
 $ProfileDir = "$env:USERPROFILE\.dsh\profiles\desktop"
-$Repo = "C:\src\dsh-collab-agent"
+$Repo = "C:\src\dsh-plugins-collab-agent"
 New-Item -ItemType Directory -Force "$ProfileDir\node_modules\@xmodelin" | Out-Null
 New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@xmodelin\dsh-collab-sessions" `
   -Target "$Repo\dsh-collab"
