@@ -249,13 +249,22 @@ test('real browser: collab entry, menu, and authorization page', async t => {
       .find(element => element.textContent.trim() === '继续')
     if (resume !== undefined) resume.click()
   })()`)
-  await browser.evaluate(`(() => {
-    const chip = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
-      .find(element => /标准模式|Standard mode/.test(element.textContent))
-    if (chip === undefined) throw new Error('standard mode chip not found')
-    chip.click()
-  })()`)
-  await waitFor(browser.evaluate, `Array.from(document.querySelectorAll('[role="menuitem"]')).some(element => element.getClientRects().length > 0)`)
+  const chipVisible = `(() => Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
+    .some(element => /标准模式|Standard mode/.test(element.textContent)))()`
+  await waitFor(browser.evaluate, chipVisible)
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await browser.evaluate(`(() => {
+      const chip = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
+        .find(element => /标准模式|Standard mode/.test(element.textContent))
+      if (chip !== undefined) chip.click()
+    })()`)
+    try {
+      await waitFor(browser.evaluate, `Array.from(document.querySelectorAll('[role="menuitem"]')).some(element => element.getClientRects().length > 0)`, 2_000)
+      break
+    } catch {
+      if (attempt === 2) throw new Error('standard preset menu did not open')
+    }
+  }
   const visiblePresetNames = await browser.evaluate(`Array.from(
     document.querySelectorAll('[role="menuitem"]'),
   ).filter(element => element.getClientRects().length > 0)
