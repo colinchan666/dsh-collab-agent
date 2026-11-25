@@ -947,12 +947,18 @@ test('task open is explicit and task close rejects active subtasks', async () =>
     const cancel = harness.tools.find(entry => entry.definition.name === 'collab_task_cancel')
     const opened = JSON.parse(open.definition.execute({ title: 'Bounded task' }, { agent: supervisor }))
     const taskId = opened.task.taskId
+    const parentList = JSON.parse(harness.tools.find(entry => entry.definition.name === 'collab_task_list')
+      .definition.execute({}, { agent: supervisor }))
+    assert.equal(parentList[0].taskId, taskId)
     const created = JSON.parse(create.definition.execute({
       taskId,
       title: 'Pending subtask',
       instruction: 'Wait for cancellation',
     }, { agent: supervisor }))
     assert.throws(() => close.definition.execute({ taskId }, { agent: supervisor }), /active subtask/u)
+    const subtaskList = harness.tools.find(entry => entry.definition.name === 'collab_subtasks')
+      .definition.execute({}, { agent: supervisor })
+    assert.match(subtaskList, /Pending subtask/u)
     cancel.definition.execute({ taskId: created.subtask.id }, { agent: supervisor })
     assert.match(close.definition.execute({ taskId }, { agent: supervisor }), /closed/u)
   } finally {
