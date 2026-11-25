@@ -299,12 +299,7 @@ window.__ModuleLoader__.load({
       if (summary === undefined) return false
       const values = summary.projectionValues ?? state?.projectionsBySession?.[summary.id]?.values
       const preset = values?.agentPreset
-      const workdir = typeof values?.workingDirectory === 'string'
-        ? values.workingDirectory.replace(/\\/gu, '/')
-        : ''
-      return preset === 'collab'
-        || preset === 'supervisor'
-        || workdir.includes('.dsh-collab/sessions/')
+      return preset === 'collab' || preset === 'supervisor'
     }
 
     const CSS = [
@@ -711,7 +706,15 @@ window.__ModuleLoader__.load({
         ? t('panel.loading')
         : (selected.length === 2 ? null : t('panel.selectTwo'))
 
-      const pairRows = pairs.map(pair => h('div', {
+      const visiblePairs = pairs.filter(pair => (
+        sorted.some(summary => summary.id === pair.a)
+        && sorted.some(summary => summary.id === pair.b)
+      ))
+      const visiblePending = pendingGrants.filter(grant => (
+        sorted.some(summary => summary.id === grant.from)
+        && sorted.some(summary => summary.id === grant.to)
+      ))
+      const pairRows = visiblePairs.map(pair => h('div', {
         key: `${pair.a}|${pair.b}`,
         className: 'dsh-collab-auth-row',
       },
@@ -732,7 +735,7 @@ window.__ModuleLoader__.load({
         },
       }, confirmRevoke === `pair:${pair.a}|${pair.b}` ? t('panel.confirmRevoke') : t('panel.revoke'))))
 
-      const pendingRows = pendingGrants.map(grant => h('div', {
+      const pendingRows = visiblePending.map(grant => h('div', {
         key: `pending:${grant.from}|${grant.to}`,
         className: 'dsh-collab-auth-row',
       },
@@ -784,7 +787,7 @@ window.__ModuleLoader__.load({
       },
       h('div', { className: 'dsh-collab-auth-list' },
         loading ? h('p', { className: 'dsh-collab-auth-muted' }, t('panel.loading')) : null,
-        !loading && pairs.length === 0 && pendingGrants.length === 0
+        !loading && visiblePairs.length === 0 && visiblePending.length === 0
           ? h('p', { className: 'dsh-collab-auth-muted' }, t('panel.emptyPairs'))
           : null,
         ...pairRows,
@@ -839,7 +842,7 @@ window.__ModuleLoader__.load({
           h('p', { className: 'dsh-collab-auth-desc' }, t('panel.description'))),
         h('div', { className: 'dsh-collab-auth-tabs-row' },
           h('div', { className: 'dsh-collab-auth-tabs', role: 'tablist' },
-            tabButton('pairs', t('panel.pairsTab'), pairs.length),
+            tabButton('pairs', t('panel.pairsTab'), visiblePairs.length),
             tabButton('sessions', t('panel.sessionsTab'), sorted.length)),
           h('div', { className: 'dsh-collab-auth-tabs-actions' },
             h('button', {
