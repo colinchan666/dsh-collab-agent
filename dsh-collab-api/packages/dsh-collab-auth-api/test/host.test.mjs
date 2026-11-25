@@ -14,6 +14,13 @@ function harness() {
     authorize: () => ({ pairs: [], pending: [] }),
     revoke: () => ({ pairs: [], pending: [] }),
     panel: (sessionId, operation, args) => ({ sessionId, operation, args }),
+    board: sessionId => ({ board: sessionId }),
+    link: (sessionId, worker, payload) => ({ link: { sessionId, worker, payload } }),
+    unlink: (sessionId, worker) => ({ unlink: { sessionId, worker } }),
+    pin: (sessionId, worker) => ({ pin: { sessionId, worker } }),
+    live: (sessionId, worker) => ({ live: { sessionId, worker } }),
+    baseGet: sessionId => ({ baseGet: sessionId }),
+    baseSet: (sessionId, value) => ({ baseSet: { sessionId, value } }),
   }
   const ctx = {
     get: name => name === 'collabAdmin' ? admin : undefined,
@@ -59,4 +66,24 @@ test('the packaged runtime describes session resources and the client carries pa
   const bundle = fs.readFileSync(path.join(root, 'lib/client.js'), 'utf8')
   assert.match(bundle, /collabAuth\/panel/u)
   assert.ok(bundle.length < 600_000)
+})
+
+
+test('typed panel Remote methods preserve the owner-only boundary', () => {
+  const { ctx, service } = harness()
+  const id = 'session-11111111-1111-4111-8111-111111111111'
+  const worker = 'session-22222222-2222-4222-8222-222222222222'
+  assert.equal(JSON.parse(service().board(id)).board, id)
+  assert.deepEqual(JSON.parse(service().link(id, worker, JSON.stringify({ offer: true }))).link.payload, { offer: true })
+  assert.equal(JSON.parse(service().baseGet(id)).baseGet, id)
+  ctx.invocation = { peer: { principal: { kind: 'peer' } } }
+  assert.throws(() => service().board(id), /owner-only/u)
+})
+
+test('the generated host artifact exposes every typed panel method', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+  const host = fs.readFileSync(path.join(root, 'lib/typert.host.js'), 'utf8')
+  for (const method of ['board', 'link', 'unlink', 'pin', 'live', 'baseGet', 'baseSet']) {
+    assert.match(host, new RegExp(`collabAuth/${method}`, 'u'))
+  }
 })

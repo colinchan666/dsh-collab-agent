@@ -20,6 +20,22 @@ export function apply(ctx: any): void {
     list: () => { assertOwner(); return admin().listAuth() },
     authorize: (a: string, b: string) => { assertOwner(); return admin().authorize(a, b) },
     revoke: (a: string, b: string) => { assertOwner(); return admin().revoke(a, b) },
+    board: (sessionId: string) => { assertOwner(); return JSON.stringify(admin().board(sessionId)) },
+    link: (sessionId: string, worker: string, payloadJson: string) => {
+      assertOwner()
+      let payload: Record<string, unknown> = {}
+      if (payloadJson.trim().length > 0) {
+        const parsed: unknown = JSON.parse(payloadJson)
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('link payload must be a JSON object')
+        payload = parsed as Record<string, unknown>
+      }
+      return JSON.stringify(admin().link(sessionId, worker, payload))
+    },
+    unlink: (sessionId: string, worker: string) => { assertOwner(); return JSON.stringify(admin().unlink(sessionId, worker)) },
+    pin: (sessionId: string, worker: string) => { assertOwner(); return JSON.stringify(admin().pin(sessionId, worker)) },
+    live: (sessionId: string, worker: string) => { assertOwner(); return JSON.stringify(admin().live(sessionId, worker)) },
+    baseGet: (sessionId: string) => { assertOwner(); return JSON.stringify(admin().baseGet(sessionId)) },
+    baseSet: (sessionId: string, value: string) => { assertOwner(); return JSON.stringify(admin().baseSet(sessionId, value)) },
     panel: (sessionId: string, operation: string, argsJson: string) => {
       assertOwner()
       let args: Record<string, unknown> = {}

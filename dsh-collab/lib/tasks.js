@@ -364,11 +364,6 @@ export class TaskStore {
   }
 
   // Compatibility aliases used by the existing Host composition.
-  project(taskId) { return this.task(taskId) }
-  listProjects(supervisor) { return this.listTasks(supervisor) }
-  createProject({ supervisor, title }) { return this.createTask({ supervisor, title }) }
-  bindProject(taskId, requestId) { return this.bindTask(taskId, requestId) }
-  closeProject(taskId) { return this.closeTask(taskId) }
 }
 
 TaskStore.summary = subtaskSummary

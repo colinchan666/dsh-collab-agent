@@ -21,6 +21,10 @@ function sessionId(value: string, parameter: string): string {
   return value
 }
 
+function sessionIdOf(value: string, parameter: string): string {
+  return sessionId(value, parameter)
+}
+
 /** Host service backing the generated `ctx.remote.collabAuth` namespace. */
 export class CollabAuthService extends TypertRemoteService {
   /** Required Host services: the collaborator admin face and Typert registration. */
@@ -76,7 +80,8 @@ export class CollabAuthService extends TypertRemoteService {
    * @param b - second Session id.
    * @returns the resulting authorization snapshot.
    */
-  @Remote({ name: 'authorize', resources: { session: (a: string, b: string) => [a, b] } } as never)
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'authorize', resources: { session: (a: string, b: string) => [a, b] } })
   authorize(a: string, b: string): AuthSnapshot {
     this.assertOwner()
     return this.admin().authorize(sessionId(a, 'a'), sessionId(b, 'b'))
@@ -88,21 +93,84 @@ export class CollabAuthService extends TypertRemoteService {
    * @param b - second Session id.
    * @returns the resulting authorization snapshot.
    */
-  @Remote({ name: 'revoke', resources: { session: (a: string, b: string) => [a, b] } } as never)
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'revoke', resources: { session: (a: string, b: string) => [a, b] } })
   revoke(a: string, b: string): AuthSnapshot {
     this.assertOwner()
     return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'))
   }
 
   /**
-   * Read or mutate the supervisor board/base-prompt surface without writing a
-   * slash-command lifecycle into the conversation.
+   * Read the supervisor board.
+   * @param sessionId - collaboration Session id.
+   * @returns JSON board snapshot.
+   */
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'board', resources: { session: (sessionId: string) => sessionId } })
+  board(sessionId: string): string {
+    this.assertOwner()
+    return JSON.stringify(this.admin().board(sessionIdOf(sessionId, 'sessionId')))
+  }
+
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'link', resources: { session: (sessionId: string) => sessionId } })
+  link(sessionId: string, worker: string, payloadJson: string): string {
+    this.assertOwner()
+    const id = sessionIdOf(sessionId, 'sessionId')
+    const peer = sessionIdOf(worker, 'worker')
+    let payload: Record<string, unknown> = {}
+    if (payloadJson.trim().length > 0) {
+      const parsed: unknown = JSON.parse(payloadJson)
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('link payload must be a JSON object')
+      payload = parsed as Record<string, unknown>
+    }
+    return JSON.stringify(this.admin().link(id, peer, payload))
+  }
+
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'unlink', resources: { session: (sessionId: string) => sessionId } })
+  unlink(sessionId: string, worker: string): string {
+    this.assertOwner()
+    return JSON.stringify(this.admin().unlink(sessionIdOf(sessionId, 'sessionId'), sessionIdOf(worker, 'worker')))
+  }
+
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'pin', resources: { session: (sessionId: string) => sessionId } })
+  pin(sessionId: string, worker: string): string {
+    this.assertOwner()
+    return JSON.stringify(this.admin().pin(sessionIdOf(sessionId, 'sessionId'), sessionIdOf(worker, 'worker')))
+  }
+
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'live', resources: { session: (sessionId: string) => sessionId } })
+  live(sessionId: string, worker: string): string {
+    this.assertOwner()
+    return JSON.stringify(this.admin().live(sessionIdOf(sessionId, 'sessionId'), sessionIdOf(worker, 'worker')))
+  }
+
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'baseGet', resources: { session: (sessionId: string) => sessionId } })
+  baseGet(sessionId: string): string {
+    this.assertOwner()
+    return JSON.stringify(this.admin().baseGet(sessionIdOf(sessionId, 'sessionId')))
+  }
+
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'baseSet', resources: { session: (sessionId: string) => sessionId } })
+  baseSet(sessionId: string, value: string): string {
+    this.assertOwner()
+    return JSON.stringify(this.admin().baseSet(sessionIdOf(sessionId, 'sessionId'), value))
+  }
+
+  /**
+   * Read or mutate a supervisor management surface without a slash command.
    * @param sessionId - collaboration Session id.
    * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.
-   * @param args - operation-specific payload.
-   * @returns the operation result.
+   * @param argsJson - JSON operation payload.
+   * @returns JSON operation result.
    */
-  @Remote({ name: 'panel', resources: { session: (sessionId: string) => sessionId } } as never)
+  // @ts-expect-error Typert reads the options object at build time.
+  @Remote({ name: 'panel', resources: { session: (sessionId: string) => sessionId } })
   panel(sessionId: string, operation: string, argsJson: string): string {
     this.assertOwner()
     const checkedSessionId = sessionId === undefined ? '' : sessionId

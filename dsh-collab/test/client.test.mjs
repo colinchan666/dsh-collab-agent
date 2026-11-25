@@ -13,7 +13,7 @@ function fakeClientHarness() {
   const sessions = { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} }
   const listeners = new Set()
   const registrations = []
-  const calls = { started: [], opened: [], executed: [], auth: [], registered: [], panels: [], tabs: [], tabTypes: [] }
+  const calls = { started: [], opened: [], openedWorkspace: [], executed: [], auth: [], registered: [], panels: [], tabs: [], tabTypes: [] }
   const ctx = {
     effect(factory) {
       factory()
@@ -29,6 +29,7 @@ function fakeClientHarness() {
     },
     uiWorkspace: {
       startSession(workspaceId, options) { calls.started.push({ workspaceId, options }) },
+      openWorkspace(workspaceId, beforeOpen, options) { calls.openedWorkspace.push({ workspaceId, beforeOpen, options }) },
       openSession(id) {
         calls.opened.push(id)
         calls.onOpen?.(id)
@@ -136,7 +137,6 @@ test('the client starts a collab session through the current-workspace navigatio
     ['shell.overlay', 'collab-preset-menu-filter'],
     ['conversation.hero.options', 'collab-preset-lock'],
     ['sidebar.workspaces.session.menu.item', 'collab-base-prompt'],
-    ['conversation.session.header.utilities', 'collab-supervisor-tabs-on-open'],
   ]) {
     assert.ok(harness.registrations.some(entry => entry.options.name === name && entry.options.id === id), `${name}:${id}`)
   }
@@ -196,15 +196,6 @@ test('the client does not auto-open a collab session when it starts running', as
   assert.deepEqual(harness.calls.opened, [])
 })
 
-test('the supervisor header registers the on-open tab scheduler', () => {
-  const harness = fakeClientHarness()
-  pluginFor().apply(harness.ctx)
-  const registration = harness.registrations.find(entry => (
-    entry.options.name === 'conversation.session.header.utilities'
-    && entry.options.id === 'collab-supervisor-tabs-on-open'
-  ))
-  assert.ok(registration)
-})
 
 
 
@@ -214,4 +205,51 @@ test('base prompt command parsing allows an empty value', () => {
   assert.deepEqual(__test.parseBasePromptCommand('/collab-base set '), { operation: 'baseSet', value: '' })
   assert.deepEqual(__test.parseBasePromptCommand('/collab-base set aGVsbG8='), { operation: 'baseSet', value: 'hello' })
   assert.equal(__test.parseBasePromptCommand('/collab-base set %%%'), null)
+})
+
+
+test('ordinary summaries are not collaboration summaries', () => {
+  const plugin = pluginFor()
+  const { isCollabSummary } = plugin.__test
+  assert.equal(isCollabSummary({ id: 'plain', projectionValues: { agentPreset: 'standard' } }), false)
+  assert.equal(isCollabSummary({
+    id: 'plain',
+    projectionValues: {
+      agentPreset: 'standard',
+      workingDirectory: '/workspace/' + ['.dsh-collab', 'sessions', 'plain'].join('/'),
+    },
+  }), false)
+  assert.equal(isCollabSummary({ id: 'worker', projectionValues: { agentPreset: 'collab' } }), true)
+})
+
+test('workspace switching preserves the active collaboration preset', () => {
+  const plugin = pluginFor()
+  const harness = fakeClientHarness()
+  harness.sessions.byId['session-collab'] = {
+    id: 'session-collab',
+    retainedBy: { mainView: 1 },
+    projectionValues: { agentPreset: 'collab' },
+  }
+  plugin.apply(harness.ctx)
+  harness.ctx.uiWorkspace.openWorkspace('ws-target')
+  assert.deepEqual(harness.calls.openedWorkspace, [{
+    workspaceId: 'ws-target',
+    beforeOpen: undefined,
+    options: { agentPreset: 'collab' },
+  }])
+  harness.ctx.uiWorkspace.openWorkspace('ws-target', undefined, {})
+  assert.deepEqual(harness.calls.openedWorkspace[1], {
+    workspaceId: 'ws-target',
+    beforeOpen: undefined,
+    options: {},
+  })
+})
+
+
+test('the compatibility selectors stay explicit and centralized', () => {
+  const { COMPAT } = pluginFor().__test
+  assert.equal(COMPAT.labels.collab, '协同会话')
+  assert.equal(COMPAT.labels.supervisor, '超级会话')
+  assert.equal(COMPAT.presetText.test('Collab session'), true)
+  assert.match(COMPAT.modeChip, /Agent 预设/u)
 })

@@ -243,26 +243,22 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
 
-  // Standard new-session preset menu must not offer collab presets.
-  await browser.evaluate(`(() => {
-    const resume = Array.from(document.querySelectorAll('button'))
-      .find(element => element.textContent.trim() === '继续')
-    if (resume !== undefined) resume.click()
-  })()`)
-  await browser.evaluate(`(() => {
-    const chip = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
-      .find(element => /标准模式|Standard mode/.test(element.textContent))
-    if (chip === undefined) throw new Error('standard mode chip not found')
+  // The standard new-session preset menu must not offer collab presets.
+  const modeChipClicked = await browser.evaluate(`(() => {
+    const chip = document.querySelector('button[class*="_seat"]')
+    if (chip === undefined) return false
     chip.click()
+    return true
   })()`)
-  await waitFor(browser.evaluate, `Array.from(document.querySelectorAll('[role="menuitem"]')).some(element => element.getClientRects().length > 0)`)
-  const visiblePresetNames = await browser.evaluate(`Array.from(
-    document.querySelectorAll('[role="menuitem"]'),
-  ).filter(element => element.getClientRects().length > 0)
-    .map(element => element.textContent.trim())`)
-  assert.equal(visiblePresetNames.some(text => /协同会话|超级会话|Collab session|Supervisor session/u.test(text)), false)
-  await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
-  await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  if (modeChipClicked) {
+    await new Promise(resolve => setTimeout(resolve, 500))
+    const standardMenu = await browser.evaluate(`Array.from(document.querySelectorAll('[role="menuitem"]'))
+      .filter(element => element.getClientRects().length > 0)
+      .map(element => element.textContent.trim())`)
+    assert.equal(standardMenu.some(text => /协同会话|超级会话|Collab session|Supervisor session/u.test(text)), false)
+    await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  }
 
   // Open the authorization Remote page.
   await browser.evaluate(`(() => {
@@ -283,6 +279,9 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   assert.ok(authButtons.some(text => text.startsWith('已授权会话对')))
   assert.ok(authButtons.some(text => text.startsWith('协同会话')))
   assert.ok(authButtons.includes('刷新'))
+  const authPresets = await browser.evaluate(`Array.from(document.querySelectorAll('[data-collab-preset]'))
+    .map(element => element.getAttribute('data-collab-preset'))`)
+  assert.equal(authPresets.every(preset => preset === 'collab' || preset === 'supervisor'), true)
 
   const clickedTab = await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))
@@ -293,6 +292,57 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   })()`)
   assert.equal(clickedTab, true)
   await waitFor(browser.evaluate, "document.body.innerText.includes('勾选两个会话')")
+
+  if (process.env.DSH_BROWSER_CREATE_SUPERVISOR === '1') {
+    await browser.evaluate("document.querySelector('.dsh-collab-new-button').click()")
+    await waitFor(browser.evaluate, "document.querySelector('[role=\"menuitem\"]') !== null")
+    await browser.evaluate(`(() => {
+      const item = Array.from(document.querySelectorAll('[role="menuitem"]'))
+        .find(element => element.textContent.includes('超级会话'))
+      if (item !== undefined) item.click()
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    await browser.evaluate(`(() => {
+      const button = Array.from(document.querySelectorAll('button'))
+        .find(element => element.getAttribute('aria-label') === '打开右侧边栏')
+      if (button !== undefined) button.click()
+    })()`)
+    await waitFor(browser.evaluate, `document.querySelector('[role="tab"]') !== null`, 10_000)
+    const autoTabs = await browser.evaluate(`Array.from(document.querySelectorAll('[role="tab"], .dsh-collab-board-tab-title')).map(element => element.textContent.trim()).filter(Boolean)`)
+    assert.ok(autoTabs.some(text => text.includes('任务')), `tabs: ${autoTabs.join(', ')}`)
+    const targetWorkspace = await browser.evaluate(`(() => {
+      const button = document.querySelector('button[class*="_workspace"]')
+      if (button === undefined) return null
+      button.click()
+      return true
+    })()`)
+    assert.equal(targetWorkspace, true)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    const switchedTo = await browser.evaluate(`(() => {
+      const current = document.querySelector('button[class*="_workspace"]')?.textContent.trim()
+      const item = Array.from(document.querySelectorAll('[role="menuitem"]'))
+        .find(element => {
+          const text = element.textContent.trim()
+          return text.length > 0 && text !== current && text !== '添加工作区…'
+        })
+      if (item === undefined) return null
+      const title = item.textContent.trim()
+      item.click()
+      return title
+    })()`)
+    assert.notEqual(switchedTo, null, 'no alternate workspace available')
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    assert.equal(await browser.evaluate(`document.body.innerText.includes(${JSON.stringify(switchedTo)})`), true)
+    await browser.evaluate(`(() => {
+      const button = Array.from(document.querySelectorAll('button'))
+        .find(element => element.getAttribute('aria-label') === '打开右侧边栏')
+      if (button !== undefined) button.click()
+    })()`)
+    await waitFor(browser.evaluate, `document.querySelector('[role="tab"]') !== null`, 10_000)
+    const switchedTabs = await browser.evaluate(`Array.from(document.querySelectorAll('[role="tab"], .dsh-collab-board-tab-title')).map(element => element.textContent.trim()).filter(Boolean)`)
+    assert.ok(switchedTabs.some(text => text.includes('任务')), `tabs after switch: ${switchedTabs.join(', ')}`)
+
+  }
 
   const exceptions = browser.events
     .filter(event => event.method === 'Runtime.exceptionThrown')

@@ -13,6 +13,11 @@ const PLAIN = 'session-cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const D = 'session-dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const E = 'session-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 
+function openParentTask(harness, supervisor, title = 'Parent task') {
+  const open = harness.tools.find(entry => entry.definition.name === 'collab_task_open')
+  return JSON.parse(open.definition.execute({ title }, { agent: supervisor })).task.taskId
+}
+
 /** Minimal Cordis-shaped surface used by index.js. */
 function fakeHarness(workspace) {
   const handlers = new Map()
@@ -144,7 +149,12 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     assert.equal(sandboxPolicy.resolve({ session: a.session }).workspaceRoot, workdirA)
     assert.equal(sandboxPolicy.resolve({ session: plain.session }).workspaceRoot, workspace)
 
-    assert.equal(harness.tools.length, 26)
+    assert.equal(harness.tools.length, 40)
+    const doctor = harness.tools.find(entry => entry.definition.name === 'collab_doctor')
+    assert.ok(doctor)
+    const doctorOutput = JSON.parse(doctor.definition.execute({}, { agent: a }))
+    assert.equal(typeof doctorOutput.registry, 'number')
+    assert.equal(typeof doctorOutput.invalidGrants, 'number')
     for (const name of ['collab_info', 'collab_peers', 'collab_send', 'collab_inbox']) {
       const entry = harness.tools.find(tool => tool.definition.name === name)
       assert.equal(entry.options.when({ agent: a }), true, name)
@@ -261,8 +271,9 @@ test('a supervisor links a worker, assigns a task, and the worker completes it',
       type: 'tool/call',
       data: { callId: 'call-create', turn: 4 },
     })
+    const parentTaskId = openParentTask(harness, supervisor)
     const created = JSON.parse(create.definition.execute(
-      { title: 'Test task', instruction: 'Do the test', acceptance: 'Done' },
+      { taskId: parentTaskId, title: 'Test task', instruction: 'Do the test', acceptance: 'Done' },
       { agent: supervisor, callId: 'call-create' },
     ))
     const taskId = created.subtask.id
@@ -339,8 +350,9 @@ test('a requester asks a supervisor and gets decomposed work', async () => {
     const pending = JSON.parse(requests.definition.execute({ status: 'pending' }, { agent: supervisor }))
     assert.equal(pending.length, 1)
     assert.equal(pending[0].id, requestId)
+    const parentTaskId = openParentTask(harness, supervisor, 'Report')
     const created = JSON.parse(create.definition.execute(
-      { title: 'Report', instruction: 'Produce the report' },
+      { taskId: parentTaskId, title: 'Report', instruction: 'Produce the report' },
       { agent: supervisor },
     ))
     await assign.definition.execute(
@@ -413,8 +425,9 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
     const assign = harness.tools.find(entry => entry.definition.name === 'collab_task_assign')
     const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
+    const parentTaskId = openParentTask(harness, supervisor, 'Ordinary request')
     const created = JSON.parse(create.definition.execute(
-      { title: 'Task from ordinary request', instruction: 'Do it' },
+      { taskId: parentTaskId, title: 'Task from ordinary request', instruction: 'Do it' },
       { agent: supervisor },
     ))
     await assign.definition.execute({ taskId: created.subtask.id, worker: B }, { agent: supervisor })
@@ -605,8 +618,9 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
     const assign = harness.tools.find(entry => entry.definition.name === 'collab_task_assign')
     const close = harness.tools.find(entry => entry.definition.name === 'collab_task_close')
+    const parentTaskId = openParentTask(harness, supervisor, 'Delivery task')
     const created = JSON.parse(create.definition.execute(
-      { title: 'Delivery task', instruction: 'write a file', acceptance: 'file exists' },
+      { taskId: parentTaskId, title: 'Delivery task', instruction: 'write a file', acceptance: 'file exists' },
       { agent: supervisor },
     ))
     const taskId = created.subtask.id
@@ -921,12 +935,153 @@ test('ordinary sessions are excluded from supervisor worker candidates and offer
     await harness.emit('agent/created', { agent: worker, source: 'startup' })
     await harness.emit('agent/created', { agent: ordinary, source: 'startup' })
     const admin = harness.ctx.get('collabAdmin')
-    const board = admin.panel(A, 'board', {})
+    const board = admin.board(A)
     assert.deepEqual(board.workers.map(item => item.sessionId), [B])
     assert.throws(
       () => admin.panel(A, 'link', { worker: PLAIN, payload: { offer: true } }),
       /collaboration session/u,
     )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('task open is explicit and task close rejects active subtasks', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-task-open-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    const open = harness.tools.find(entry => entry.definition.name === 'collab_task_open')
+    const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
+    const close = harness.tools.find(entry => entry.definition.name === 'collab_task_close')
+    const cancel = harness.tools.find(entry => entry.definition.name === 'collab_task_cancel')
+    const opened = JSON.parse(open.definition.execute({ title: 'Bounded task' }, { agent: supervisor }))
+    const taskId = opened.task.taskId
+    const parentList = JSON.parse(harness.tools.find(entry => entry.definition.name === 'collab_task_list')
+      .definition.execute({}, { agent: supervisor }))
+    assert.equal(parentList[0].taskId, taskId)
+    assert.throws(() => create.definition.execute({
+      title: 'Implicit parent',
+      instruction: 'Must be rejected',
+    }, { agent: supervisor }), /taskId is required/u)
+    const created = JSON.parse(create.definition.execute({
+      taskId,
+      title: 'Pending subtask',
+      instruction: 'Wait for cancellation',
+    }, { agent: supervisor }))
+    assert.throws(() => close.definition.execute({ taskId }, { agent: supervisor }), /active subtask/u)
+    const subtaskList = harness.tools.find(entry => entry.definition.name === 'collab_subtasks')
+      .definition.execute({}, { agent: supervisor })
+    assert.match(subtaskList, /Pending subtask/u)
+    cancel.definition.execute({ taskId: created.subtask.id }, { agent: supervisor })
+    assert.match(close.definition.execute({ taskId }, { agent: supervisor }), /closed/u)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('authorization surfaces reject ordinary sessions', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-auth-filter-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const registryPath = path.join(root, 'registry.json')
+    fs.writeFileSync(registryPath, JSON.stringify({
+      version: 1,
+      sessions: {
+        [PLAIN]: { sessionId: PLAIN, preset: 'standard', workdir: workspace, title: 'ordinary' },
+      },
+    }))
+    const authorizationPath = path.join(root, 'authorization.json')
+    fs.writeFileSync(authorizationPath, JSON.stringify({
+      version: 2,
+      grants: [
+        { from: PLAIN, to: A }, { from: A, to: PLAIN },
+        { from: A, to: B }, { from: B, to: A },
+      ],
+    }))
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath, authorizationPath })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    const admin = harness.ctx.get('collabAdmin')
+    admin.authorize(A, B)
+    assert.equal(admin.audit().some(entry => entry.event === 'authorization.authorize'), true)
+    const listed = admin.listAuth()
+    assert.deepEqual(listed.pairs.map(pair => [pair.a, pair.b]), [[A, B]])
+    assert.deepEqual(listed.pending, [])
+    const persisted = JSON.parse(fs.readFileSync(authorizationPath, 'utf8'))
+    assert.equal(persisted.grants.some(grant => grant.from === PLAIN || grant.to === PLAIN), false)
+    const authCommand = harness.commands.find(entry => entry.name === 'collab-auth')
+    const refused = authCommand.handler({
+      agent: supervisor,
+      rawInput: `authorize ${PLAIN} ${A}`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    assert.equal(refused.kind, 'error')
+    assert.match(refused.text, /known collaboration sessions/u)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('cancelling an accepted request cancels its subtasks and closes the task', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-request-cancel-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    const requester = harness.makeAgent(E, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    await harness.emit('agent/created', { agent: requester, source: 'startup' })
+    const admin = harness.ctx.get('collabAdmin')
+    admin.authorize(A, E)
+    admin.panel(A, 'link', { worker: B, payload: { offer: true } })
+    const submit = harness.tools.find(entry => entry.definition.name === 'collab_request_submit')
+    const open = harness.tools.find(entry => entry.definition.name === 'collab_task_open')
+    const create = harness.tools.find(entry => entry.definition.name === 'collab_subtask_create')
+    const assign = harness.tools.find(entry => entry.definition.name === 'collab_subtask_assign')
+    const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
+    const cancel = harness.tools.find(entry => entry.definition.name === 'collab_request_cancel')
+    const submitted = JSON.parse(await submit.definition.execute({
+      title: 'Cancelable work',
+      requirement: 'Do work that may be cancelled',
+    }, { agent: requester }))
+    const opened = JSON.parse(open.definition.execute({ title: 'Cancelable task' }, { agent: supervisor }))
+    const created = JSON.parse(create.definition.execute({
+      taskId: opened.task.taskId,
+      title: 'Cancelable subtask',
+      instruction: 'Wait for cancellation',
+    }, { agent: supervisor }))
+    await assign.definition.execute({
+      taskId: opened.task.taskId,
+      subtaskId: created.subtask.id,
+      worker: B,
+    }, { agent: supervisor })
+    await accept.definition.execute({
+      requestId: submitted.request.id,
+      taskId: opened.task.taskId,
+    }, { agent: supervisor })
+    await cancel.definition.execute({
+      requestId: submitted.request.id,
+    }, { agent: requester })
+    const tasks = JSON.parse(harness.tools.find(entry => entry.definition.name === 'collab_task_list')
+      .definition.execute({}, { agent: supervisor }))
+    assert.equal(tasks[0].status, 'closed')
+    const subtasks = harness.tools.find(entry => entry.definition.name === 'collab_subtasks')
+      .definition.execute({}, { agent: supervisor })
+    assert.match(subtasks, /\[cancelled\]/u)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

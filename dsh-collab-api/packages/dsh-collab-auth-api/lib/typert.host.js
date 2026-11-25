@@ -3,12 +3,12 @@ import { z } from 'zod'
 
 import { createTypertRemoteInfo } from '@deepseek-ai/dsh-typert-protocol/remote-info'
 
-let _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema$value
-const _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema = () => (_local_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema$value
-const _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema = () => (_local_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_authorize_result$schema$value
-const _local_dsh_collab_auth_api_collabAuth_authorize_result$schema = () => (_local_dsh_collab_auth_api_collabAuth_authorize_result$schema$value ??= z.object({
+let _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_authorize_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_authorize_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_authorize_result$schema$value ??= z.object({
   'pairs': z.array(z.object({
   'a': z.string().readonly().describe('First Session id in the pair.'),
   'b': z.string().readonly().describe('Second Session id in the pair.'),
@@ -22,8 +22,30 @@ const _local_dsh_collab_auth_api_collabAuth_authorize_result$schema = () => (_lo
   'updatedAt': z.number().readonly().describe('Last update time in epoch milliseconds.'),
 })).readonly().describe('Directional grants waiting for the other side.'),
 }))
-let _local_dsh_collab_auth_api_collabAuth_list_result$schema$value
-const _local_dsh_collab_auth_api_collabAuth_list_result$schema = () => (_local_dsh_collab_auth_api_collabAuth_list_result$schema$value ??= z.object({
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseGet_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseSet_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_board_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_board_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_board_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_link_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_link_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_link_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_list_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_list_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_list_result$schema$value ??= z.object({
   'pairs': z.array(z.object({
   'a': z.string().readonly().describe('First Session id in the pair.'),
   'b': z.string().readonly().describe('Second Session id in the pair.'),
@@ -37,20 +59,32 @@ const _local_dsh_collab_auth_api_collabAuth_list_result$schema = () => (_local_d
   'updatedAt': z.number().readonly().describe('Last update time in epoch milliseconds.'),
 })).readonly().describe('Directional grants waiting for the other side.'),
 }))
-let _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value
-const _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value
-const _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value
-const _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_panel_result$schema$value
-const _local_dsh_collab_auth_api_collabAuth_panel_result$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_result$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value
-const _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema$value
-const _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_revoke_result$schema$value
-const _local_dsh_collab_auth_api_collabAuth_revoke_result$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_result$schema$value ??= z.object({
+let _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_live_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_live_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_live_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_panel_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_panel_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_panel_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_pin_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_pin_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_pin_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_revoke_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_revoke_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_revoke_result$schema$value ??= z.object({
   'pairs': z.array(z.object({
   'a': z.string().readonly().describe('First Session id in the pair.'),
   'b': z.string().readonly().describe('Second Session id in the pair.'),
@@ -64,20 +98,52 @@ const _local_dsh_collab_auth_api_collabAuth_revoke_result$schema = () => (_local
   'updatedAt': z.number().readonly().describe('Last update time in epoch milliseconds.'),
 })).readonly().describe('Directional grants waiting for the other side.'),
 }))
-let _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$value
-const _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value
-const _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value
-const _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value
-const _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value
-const _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value
-const _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value ??= z.string())
-let _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value
-const _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema = () => (_local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_unlink_result$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_unlink_result$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_unlink_result$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0_strict$schema$value ??= z.string())
+let _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1_strict$schema$value
+const _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1_strict$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1_strict$schema$value ??= z.string())
 
 const $remote = createTypertRemoteInfo({
   package: '@xmodelin/dsh-collab-auth-api',
@@ -94,13 +160,13 @@ const $remote = createTypertRemoteInfo({
           codec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:a',
-            create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:a',
-            create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_0_strict$schema,
             jsonSchema: {"type":"string"},
           },
         },
@@ -111,13 +177,13 @@ const $remote = createTypertRemoteInfo({
           codec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:b',
-            create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/authorize:b',
-            create: _local_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_authorize_parameter_1_strict$schema,
             jsonSchema: {"type":"string"},
           },
         },
@@ -125,11 +191,178 @@ const $remote = createTypertRemoteInfo({
       result: {
         mode: 'strict',
         typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
-        create: _local_dsh_collab_auth_api_collabAuth_authorize_result$schema,
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_authorize_result$schema,
         description: 'the resulting authorization snapshot.',
         jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."}},"required":["pairs","pending"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":64,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":85,"column":3},
+    },
+    'collabAuth/baseGet': {
+      service: 'collabAuth',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseGet:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseGet:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseGet:result',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_result$schema,
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":153,"column":3},
+    },
+    'collabAuth/baseSet': {
+      service: 'collabAuth',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseSet:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseSet:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'value',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseSet:value',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseSet:value',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_parameter_1_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/baseSet:result',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_result$schema,
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":160,"column":3},
+    },
+    'collabAuth/board': {
+      service: 'collabAuth',
+      description: 'Read the supervisor board.',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          description: 'collaboration Session id.',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/board:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/board:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_board_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/board:result',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_board_result$schema,
+        description: 'JSON board snapshot.',
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":110,"column":3},
+    },
+    'collabAuth/link': {
+      service: 'collabAuth',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/link:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/link:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'worker',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/link:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/link:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_1_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'payloadJson',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/link:payloadJson',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/link:payloadJson',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_link_parameter_2_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/link:result',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_link_result$schema,
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":117,"column":3},
     },
     'collabAuth/list': {
       service: 'collabAuth',
@@ -140,15 +373,60 @@ const $remote = createTypertRemoteInfo({
       result: {
         mode: 'strict',
         typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
-        create: _local_dsh_collab_auth_api_collabAuth_list_result$schema,
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_list_result$schema,
         description: 'the current authorization snapshot.',
         jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."}},"required":["pairs","pending"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":53,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":72,"column":3},
+    },
+    'collabAuth/live': {
+      service: 'collabAuth',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/live:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/live:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'worker',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/live:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/live:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_1_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/live:result',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_live_result$schema,
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":146,"column":3},
     },
     'collabAuth/panel': {
       service: 'collabAuth',
-      description: 'Read or mutate the supervisor board/base-prompt surface without writing a slash-command lifecycle into the conversation.',
+      description: 'Read or mutate a supervisor management surface without a slash command.',
       invocation: { kind: 'direct' },
       parameters: [
         {
@@ -158,13 +436,13 @@ const $remote = createTypertRemoteInfo({
           codec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:sessionId',
-            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:sessionId',
-            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_0_strict$schema,
             jsonSchema: {"type":"string"},
           },
         },
@@ -175,29 +453,30 @@ const $remote = createTypertRemoteInfo({
           codec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:operation',
-            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:operation',
-            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_1_strict$schema,
             jsonSchema: {"type":"string"},
           },
         },
         {
           name: 'argsJson',
+          description: 'JSON operation payload.',
           source: 'json',
           codec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:argsJson',
-            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:argsJson',
-            create: _local_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_parameter_2_strict$schema,
             jsonSchema: {"type":"string"},
           },
         },
@@ -205,11 +484,56 @@ const $remote = createTypertRemoteInfo({
       result: {
         mode: 'strict',
         typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:result',
-        create: _local_dsh_collab_auth_api_collabAuth_panel_result$schema,
-        description: 'the operation result.',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_result$schema,
+        description: 'JSON operation result.',
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":88,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":174,"column":3},
+    },
+    'collabAuth/pin': {
+      service: 'collabAuth',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/pin:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/pin:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'worker',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/pin:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/pin:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_pin_parameter_1_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/pin:result',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_pin_result$schema,
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":139,"column":3},
     },
     'collabAuth/revoke': {
       service: 'collabAuth',
@@ -223,13 +547,13 @@ const $remote = createTypertRemoteInfo({
           codec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:a',
-            create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:a',
-            create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_0_strict$schema,
             jsonSchema: {"type":"string"},
           },
         },
@@ -240,13 +564,13 @@ const $remote = createTypertRemoteInfo({
           codec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:b',
-            create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1$schema,
             jsonSchema: {"type":"string"},
           },
           strictCodec: {
             mode: 'strict',
             typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/revoke:b',
-            create: _local_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema,
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_revoke_parameter_1_strict$schema,
             jsonSchema: {"type":"string"},
           },
         },
@@ -254,11 +578,56 @@ const $remote = createTypertRemoteInfo({
       result: {
         mode: 'strict',
         typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
-        create: _local_dsh_collab_auth_api_collabAuth_revoke_result$schema,
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_revoke_result$schema,
         description: 'the resulting authorization snapshot.',
         jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."}},"required":["pairs","pending"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":75,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":98,"column":3},
+    },
+    'collabAuth/unlink': {
+      service: 'collabAuth',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'sessionId',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/unlink:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/unlink:sessionId',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'worker',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/unlink:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/unlink:worker',
+            create: _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_1_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/unlink:result',
+        create: _xmodelin_dsh_collab_auth_api_collabAuth_unlink_result$schema,
+        jsonSchema: {"type":"string"},
+      },
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":132,"column":3},
     },
   },
 }, z)
@@ -306,6 +675,55 @@ export const TYPERT = {
             "signature": "panel(sessionId: string, operation: string, args?: Record<string, unknown>): Record<string, unknown>",
             "summary": "Read or mutate a collaboration management surface without a command record.",
             "jsDoc": "/** Read or mutate a collaboration management surface without a command record. */"
+          },
+          {
+            "kind": "method",
+            "name": "board",
+            "signature": "board(sessionId: string): Record<string, unknown>",
+            "summary": "Read the supervisor board.",
+            "jsDoc": "/** Read the supervisor board. */"
+          },
+          {
+            "kind": "method",
+            "name": "link",
+            "signature": "link(sessionId: string, worker: string, payload?: Record<string, unknown>): Record<string, unknown>",
+            "summary": "Link an offered worker.",
+            "jsDoc": "/** Link an offered worker. */"
+          },
+          {
+            "kind": "method",
+            "name": "unlink",
+            "signature": "unlink(sessionId: string, worker: string): Record<string, unknown>",
+            "summary": "Unlink a worker.",
+            "jsDoc": "/** Unlink a worker. */"
+          },
+          {
+            "kind": "method",
+            "name": "pin",
+            "signature": "pin(sessionId: string, worker: string): Record<string, unknown>",
+            "summary": "Pin a worker capability.",
+            "jsDoc": "/** Pin a worker capability. */"
+          },
+          {
+            "kind": "method",
+            "name": "live",
+            "signature": "live(sessionId: string, worker: string): Record<string, unknown>",
+            "summary": "Return a worker to live capability.",
+            "jsDoc": "/** Return a worker to live capability. */"
+          },
+          {
+            "kind": "method",
+            "name": "baseGet",
+            "signature": "baseGet(sessionId: string): Record<string, unknown>",
+            "summary": "Read a session base prompt.",
+            "jsDoc": "/** Read a session base prompt. */"
+          },
+          {
+            "kind": "method",
+            "name": "baseSet",
+            "signature": "baseSet(sessionId: string, value: string): Record<string, unknown>",
+            "summary": "Set a session base prompt.",
+            "jsDoc": "/** Set a session base prompt. */"
           }
         ],
         "types": [
@@ -341,23 +759,60 @@ export const TYPERT = {
           {
             "kind": "method",
             "name": "authorize",
-            "signature": "@Remote('authorize') authorize(a: string, b: string): AuthSnapshot",
+            "signature": "@Remote({ name: 'authorize', resources: { session: (a: string, b: string) => [a, b] } }) authorize(a: string, b: string): AuthSnapshot",
             "summary": "Authorize both directions of a pair.",
             "jsDoc": "/**\n * Authorize both directions of a pair.\n * @param a - first Session id.\n * @param b - second Session id.\n * @returns the resulting authorization snapshot.\n */"
           },
           {
             "kind": "method",
             "name": "revoke",
-            "signature": "@Remote('revoke') revoke(a: string, b: string): AuthSnapshot",
+            "signature": "@Remote({ name: 'revoke', resources: { session: (a: string, b: string) => [a, b] } }) revoke(a: string, b: string): AuthSnapshot",
             "summary": "Revoke both directions of a pair.",
             "jsDoc": "/**\n * Revoke both directions of a pair.\n * @param a - first Session id.\n * @param b - second Session id.\n * @returns the resulting authorization snapshot.\n */"
           },
           {
             "kind": "method",
+            "name": "board",
+            "signature": "@Remote({ name: 'board', resources: { session: (sessionId: string) => sessionId } }) board(sessionId: string): string",
+            "summary": "Read the supervisor board.",
+            "jsDoc": "/**\n * Read the supervisor board.\n * @param sessionId - collaboration Session id.\n * @returns JSON board snapshot.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "link",
+            "signature": "@Remote({ name: 'link', resources: { session: (sessionId: string) => sessionId } }) link(sessionId: string, worker: string, payloadJson: string): string"
+          },
+          {
+            "kind": "method",
+            "name": "unlink",
+            "signature": "@Remote({ name: 'unlink', resources: { session: (sessionId: string) => sessionId } }) unlink(sessionId: string, worker: string): string"
+          },
+          {
+            "kind": "method",
+            "name": "pin",
+            "signature": "@Remote({ name: 'pin', resources: { session: (sessionId: string) => sessionId } }) pin(sessionId: string, worker: string): string"
+          },
+          {
+            "kind": "method",
+            "name": "live",
+            "signature": "@Remote({ name: 'live', resources: { session: (sessionId: string) => sessionId } }) live(sessionId: string, worker: string): string"
+          },
+          {
+            "kind": "method",
+            "name": "baseGet",
+            "signature": "@Remote({ name: 'baseGet', resources: { session: (sessionId: string) => sessionId } }) baseGet(sessionId: string): string"
+          },
+          {
+            "kind": "method",
+            "name": "baseSet",
+            "signature": "@Remote({ name: 'baseSet', resources: { session: (sessionId: string) => sessionId } }) baseSet(sessionId: string, value: string): string"
+          },
+          {
+            "kind": "method",
             "name": "panel",
-            "signature": "@Remote('panel') panel(sessionId: string, operation: string, argsJson: string): string",
-            "summary": "Read or mutate the supervisor board/base-prompt surface without writing a slash-command lifecycle into the conversation.",
-            "jsDoc": "/**\n * Read or mutate the supervisor board/base-prompt surface without writing a\n * slash-command lifecycle into the conversation.\n * @param sessionId - collaboration Session id.\n * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.\n * @param args - operation-specific payload.\n * @returns the operation result.\n */"
+            "signature": "@Remote({ name: 'panel', resources: { session: (sessionId: string) => sessionId } }) panel(sessionId: string, operation: string, argsJson: string): string",
+            "summary": "Read or mutate a supervisor management surface without a slash command.",
+            "jsDoc": "/**\n * Read or mutate a supervisor management surface without a slash command.\n * @param sessionId - collaboration Session id.\n * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.\n * @param argsJson - JSON operation payload.\n * @returns JSON operation result.\n */"
           }
         ],
         "types": [

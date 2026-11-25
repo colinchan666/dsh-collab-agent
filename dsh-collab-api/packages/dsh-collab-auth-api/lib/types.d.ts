@@ -38,4 +38,18 @@ export interface CollabAdminFace {
     revoke(a: string, b: string): AuthSnapshot;
     /** Read or mutate a collaboration management surface without a command record. */
     panel(sessionId: string, operation: string, args?: Record<string, unknown>): Record<string, unknown>;
+    /** Read the supervisor board. */
+    board(sessionId: string): Record<string, unknown>;
+    /** Link an offered worker. */
+    link(sessionId: string, worker: string, payload?: Record<string, unknown>): Record<string, unknown>;
+    /** Unlink a worker. */
+    unlink(sessionId: string, worker: string): Record<string, unknown>;
+    /** Pin a worker capability. */
+    pin(sessionId: string, worker: string): Record<string, unknown>;
+    /** Return a worker to live capability. */
+    live(sessionId: string, worker: string): Record<string, unknown>;
+    /** Read a session base prompt. */
+    baseGet(sessionId: string): Record<string, unknown>;
+    /** Set a session base prompt. */
+    baseSet(sessionId: string, value: string): Record<string, unknown>;
 }
