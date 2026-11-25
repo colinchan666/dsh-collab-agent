@@ -262,6 +262,9 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   assert.ok(authButtons.some(text => text.startsWith('已授权会话对')))
   assert.ok(authButtons.some(text => text.startsWith('协同会话')))
   assert.ok(authButtons.includes('刷新'))
+  const authPresets = await browser.evaluate(`Array.from(document.querySelectorAll('[data-collab-preset]'))
+    .map(element => element.getAttribute('data-collab-preset'))`)
+  assert.equal(authPresets.every(preset => preset === 'collab' || preset === 'supervisor'), true)
 
   const clickedTab = await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))

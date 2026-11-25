@@ -765,6 +765,7 @@ window.__ModuleLoader__.load({
         : sorted.map(summary => h('label', {
             key: summary.id,
             className: 'dsh-collab-auth-row',
+            'data-collab-preset': presetOf(summary.id) ?? '',
           },
           h('input', {
             type: 'checkbox',
