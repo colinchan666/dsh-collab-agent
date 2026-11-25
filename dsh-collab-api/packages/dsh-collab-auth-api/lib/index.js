@@ -47,6 +47,9 @@ function sessionId(value, parameter) {
         throw new Error(`Invalid ${parameter}: ${value}`);
     return value;
 }
+function sessionIdOf(value, parameter) {
+    return sessionId(value, parameter);
+}
 /** Host service backing the generated `ctx.remote.collabAuth` namespace. */
 let CollabAuthService = (() => {
     let _classSuper = TypertRemoteService;
@@ -54,6 +57,13 @@ let CollabAuthService = (() => {
     let _list_decorators;
     let _authorize_decorators;
     let _revoke_decorators;
+    let _board_decorators;
+    let _link_decorators;
+    let _unlink_decorators;
+    let _pin_decorators;
+    let _live_decorators;
+    let _baseGet_decorators;
+    let _baseSet_decorators;
     let _panel_decorators;
     return class CollabAuthService extends _classSuper {
         static {
@@ -61,10 +71,24 @@ let CollabAuthService = (() => {
             _list_decorators = [Remote('list')];
             _authorize_decorators = [Remote({ name: 'authorize', resources: { session: (a, b) => [a, b] } })];
             _revoke_decorators = [Remote({ name: 'revoke', resources: { session: (a, b) => [a, b] } })];
+            _board_decorators = [Remote({ name: 'board', resources: { session: (sessionId) => sessionId } })];
+            _link_decorators = [Remote({ name: 'link', resources: { session: (sessionId) => sessionId } })];
+            _unlink_decorators = [Remote({ name: 'unlink', resources: { session: (sessionId) => sessionId } })];
+            _pin_decorators = [Remote({ name: 'pin', resources: { session: (sessionId) => sessionId } })];
+            _live_decorators = [Remote({ name: 'live', resources: { session: (sessionId) => sessionId } })];
+            _baseGet_decorators = [Remote({ name: 'baseGet', resources: { session: (sessionId) => sessionId } })];
+            _baseSet_decorators = [Remote({ name: 'baseSet', resources: { session: (sessionId) => sessionId } })];
             _panel_decorators = [Remote({ name: 'panel', resources: { session: (sessionId) => sessionId } })];
             __esDecorate(this, null, _list_decorators, { kind: "method", name: "list", static: false, private: false, access: { has: obj => "list" in obj, get: obj => obj.list }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _authorize_decorators, { kind: "method", name: "authorize", static: false, private: false, access: { has: obj => "authorize" in obj, get: obj => obj.authorize }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _revoke_decorators, { kind: "method", name: "revoke", static: false, private: false, access: { has: obj => "revoke" in obj, get: obj => obj.revoke }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _board_decorators, { kind: "method", name: "board", static: false, private: false, access: { has: obj => "board" in obj, get: obj => obj.board }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _link_decorators, { kind: "method", name: "link", static: false, private: false, access: { has: obj => "link" in obj, get: obj => obj.link }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _unlink_decorators, { kind: "method", name: "unlink", static: false, private: false, access: { has: obj => "unlink" in obj, get: obj => obj.unlink }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _pin_decorators, { kind: "method", name: "pin", static: false, private: false, access: { has: obj => "pin" in obj, get: obj => obj.pin }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _live_decorators, { kind: "method", name: "live", static: false, private: false, access: { has: obj => "live" in obj, get: obj => obj.live }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _baseGet_decorators, { kind: "method", name: "baseGet", static: false, private: false, access: { has: obj => "baseGet" in obj, get: obj => obj.baseGet }, metadata: _metadata }, null, _instanceExtraInitializers);
+            __esDecorate(this, null, _baseSet_decorators, { kind: "method", name: "baseSet", static: false, private: false, access: { has: obj => "baseSet" in obj, get: obj => obj.baseSet }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _panel_decorators, { kind: "method", name: "panel", static: false, private: false, access: { has: obj => "panel" in obj, get: obj => obj.panel }, metadata: _metadata }, null, _instanceExtraInitializers);
             if (_metadata) Object.defineProperty(this, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         }
@@ -115,6 +139,7 @@ let CollabAuthService = (() => {
          * @param b - second Session id.
          * @returns the resulting authorization snapshot.
          */
+        // @ts-expect-error Typert reads the options object at build time.
         authorize(a, b) {
             this.assertOwner();
             return this.admin().authorize(sessionId(a, 'a'), sessionId(b, 'b'));
@@ -125,6 +150,7 @@ let CollabAuthService = (() => {
          * @param b - second Session id.
          * @returns the resulting authorization snapshot.
          */
+        // @ts-expect-error Typert reads the options object at build time.
         revoke(a, b) {
             this.assertOwner();
             return this.admin().revoke(sessionId(a, 'a'), sessionId(b, 'b'));
@@ -137,6 +163,51 @@ let CollabAuthService = (() => {
          * @param args - operation-specific payload.
          * @returns the operation result.
          */
+        // @ts-expect-error Typert reads the options object at build time.
+        board(sessionId) {
+            this.assertOwner();
+            return JSON.stringify(this.admin().board(sessionIdOf(sessionId, 'sessionId')));
+        }
+        // @ts-expect-error Typert reads the options object at build time.
+        link(sessionId, worker, payloadJson) {
+            this.assertOwner();
+            const id = sessionIdOf(sessionId, 'sessionId');
+            const peer = sessionIdOf(worker, 'worker');
+            let payload = {};
+            if (payloadJson.trim().length > 0) {
+                const parsed = JSON.parse(payloadJson);
+                if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+                    throw new Error('link payload must be a JSON object');
+                payload = parsed;
+            }
+            return JSON.stringify(this.admin().link(id, peer, payload));
+        }
+        // @ts-expect-error Typert reads the options object at build time.
+        unlink(sessionId, worker) {
+            this.assertOwner();
+            return JSON.stringify(this.admin().unlink(sessionIdOf(sessionId, 'sessionId'), sessionIdOf(worker, 'worker')));
+        }
+        // @ts-expect-error Typert reads the options object at build time.
+        pin(sessionId, worker) {
+            this.assertOwner();
+            return JSON.stringify(this.admin().pin(sessionIdOf(sessionId, 'sessionId'), sessionIdOf(worker, 'worker')));
+        }
+        // @ts-expect-error Typert reads the options object at build time.
+        live(sessionId, worker) {
+            this.assertOwner();
+            return JSON.stringify(this.admin().live(sessionIdOf(sessionId, 'sessionId'), sessionIdOf(worker, 'worker')));
+        }
+        // @ts-expect-error Typert reads the options object at build time.
+        baseGet(sessionId) {
+            this.assertOwner();
+            return JSON.stringify(this.admin().baseGet(sessionIdOf(sessionId, 'sessionId')));
+        }
+        // @ts-expect-error Typert reads the options object at build time.
+        baseSet(sessionId, value) {
+            this.assertOwner();
+            return JSON.stringify(this.admin().baseSet(sessionIdOf(sessionId, 'sessionId'), value));
+        }
+        // @ts-expect-error Typert reads the options object at build time.
         panel(sessionId, operation, argsJson) {
             this.assertOwner();
             const checkedSessionId = sessionId === undefined ? '' : sessionId;

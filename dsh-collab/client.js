@@ -1947,8 +1947,27 @@ window.__ModuleLoader__.load({
           revoke: async (a, b) => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.revoke(a, b),
         }
         const callPanel = (sessionId, operation, args) => {
-          if (ctx.remote.collabAuth === undefined) return Promise.resolve(authUnavailable)
-          return ctx.remote.collabAuth.panel(sessionId, operation, JSON.stringify(args ?? {}))
+          const auth = ctx.remote.collabAuth
+          if (auth === undefined) return Promise.resolve(authUnavailable)
+          const payload = args ?? {}
+          if (operation === 'board' && typeof auth.board === 'function') return auth.board(sessionId)
+          if (operation === 'link' && typeof auth.link === 'function') {
+            return auth.link(sessionId, String(payload.worker ?? ''), JSON.stringify(payload.payload ?? {}))
+          }
+          if (operation === 'unlink' && typeof auth.unlink === 'function') {
+            return auth.unlink(sessionId, String(payload.worker ?? ''))
+          }
+          if (operation === 'pin' && typeof auth.pin === 'function') {
+            return auth.pin(sessionId, String(payload.worker ?? ''))
+          }
+          if (operation === 'live' && typeof auth.live === 'function') {
+            return auth.live(sessionId, String(payload.worker ?? ''))
+          }
+          if (operation === 'baseGet' && typeof auth.baseGet === 'function') return auth.baseGet(sessionId)
+          if (operation === 'baseSet' && typeof auth.baseSet === 'function') {
+            return auth.baseSet(sessionId, String(payload.value ?? ''))
+          }
+          return auth.panel(sessionId, operation, JSON.stringify(payload))
         }
 
         const panelCommand = async (sessionId, operation, args) => {

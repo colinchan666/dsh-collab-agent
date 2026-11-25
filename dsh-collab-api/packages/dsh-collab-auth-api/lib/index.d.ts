@@ -55,6 +55,13 @@ export declare class CollabAuthService extends TypertRemoteService {
      * @param args - operation-specific payload.
      * @returns the operation result.
      */
+    board(sessionId: string): string;
+    link(sessionId: string, worker: string, payloadJson: string): string;
+    unlink(sessionId: string, worker: string): string;
+    pin(sessionId: string, worker: string): string;
+    live(sessionId: string, worker: string): string;
+    baseGet(sessionId: string): string;
+    baseSet(sessionId: string, value: string): string;
     panel(sessionId: string, operation: string, argsJson: string): string;
 }
 /**

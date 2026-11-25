@@ -21,6 +21,23 @@ export function apply(ctx) {
         list: () => { assertOwner(); return admin().listAuth(); },
         authorize: (a, b) => { assertOwner(); return admin().authorize(a, b); },
         revoke: (a, b) => { assertOwner(); return admin().revoke(a, b); },
+        board: (sessionId) => { assertOwner(); return JSON.stringify(admin().board(sessionId)); },
+        link: (sessionId, worker, payloadJson) => {
+            assertOwner();
+            let payload = {};
+            if (payloadJson.trim().length > 0) {
+                const parsed = JSON.parse(payloadJson);
+                if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+                    throw new Error('link payload must be a JSON object');
+                payload = parsed;
+            }
+            return JSON.stringify(admin().link(sessionId, worker, payload));
+        },
+        unlink: (sessionId, worker) => { assertOwner(); return JSON.stringify(admin().unlink(sessionId, worker)); },
+        pin: (sessionId, worker) => { assertOwner(); return JSON.stringify(admin().pin(sessionId, worker)); },
+        live: (sessionId, worker) => { assertOwner(); return JSON.stringify(admin().live(sessionId, worker)); },
+        baseGet: (sessionId) => { assertOwner(); return JSON.stringify(admin().baseGet(sessionId)); },
+        baseSet: (sessionId, value) => { assertOwner(); return JSON.stringify(admin().baseSet(sessionId, value)); },
         panel: (sessionId, operation, argsJson) => {
             assertOwner();
             let args = {};
