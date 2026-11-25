@@ -264,6 +264,7 @@ State is under the DSH home:
   tasks.json             tasks and subtasks
   requests.json          requester↔supervisor requests and deliveries
   notices.json           durable protocol notice outbox
+  audit.jsonl            append-only collaboration action audit
 ```
 
 A malformed document is moved aside as:
@@ -333,6 +334,7 @@ That backup is the **bad** file, not a clean backup. Do not restore it blindly.
    | `tasks.json` | Task board shows the desired tasks/subtasks; delivery artifacts remain on disk. |
    | `requests.json` | Requester and supervisor can list the requests that still exist. |
    | `notices.json` | Pending wake-ups may be gone; the task/request stores remain authoritative. |
+| `audit.jsonl` | Audit history is append-only; losing it does not affect task/request state. |
 
 ### Empty skeletons
 
