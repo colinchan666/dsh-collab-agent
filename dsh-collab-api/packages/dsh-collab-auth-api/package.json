@@ -1,6 +1,6 @@
 {
   "name": "@xmodelin/dsh-collab-auth-api",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Generated Typert Remote for collaboration authorization",
   "type": "module",
   "main": "lib/index.js",
