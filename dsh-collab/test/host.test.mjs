@@ -13,6 +13,11 @@ const PLAIN = 'session-cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const D = 'session-dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const E = 'session-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 
+function openParentTask(harness, supervisor, title = 'Parent task') {
+  const open = harness.tools.find(entry => entry.definition.name === 'collab_task_open')
+  return JSON.parse(open.definition.execute({ title }, { agent: supervisor })).task.taskId
+}
+
 /** Minimal Cordis-shaped surface used by index.js. */
 function fakeHarness(workspace) {
   const handlers = new Map()
@@ -266,8 +271,9 @@ test('a supervisor links a worker, assigns a task, and the worker completes it',
       type: 'tool/call',
       data: { callId: 'call-create', turn: 4 },
     })
+    const parentTaskId = openParentTask(harness, supervisor)
     const created = JSON.parse(create.definition.execute(
-      { title: 'Test task', instruction: 'Do the test', acceptance: 'Done' },
+      { taskId: parentTaskId, title: 'Test task', instruction: 'Do the test', acceptance: 'Done' },
       { agent: supervisor, callId: 'call-create' },
     ))
     const taskId = created.subtask.id
@@ -344,8 +350,9 @@ test('a requester asks a supervisor and gets decomposed work', async () => {
     const pending = JSON.parse(requests.definition.execute({ status: 'pending' }, { agent: supervisor }))
     assert.equal(pending.length, 1)
     assert.equal(pending[0].id, requestId)
+    const parentTaskId = openParentTask(harness, supervisor, 'Report')
     const created = JSON.parse(create.definition.execute(
-      { title: 'Report', instruction: 'Produce the report' },
+      { taskId: parentTaskId, title: 'Report', instruction: 'Produce the report' },
       { agent: supervisor },
     ))
     await assign.definition.execute(
@@ -418,8 +425,9 @@ test('an ordinary authorized peer can submit a request without an offer', async 
     const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
     const assign = harness.tools.find(entry => entry.definition.name === 'collab_task_assign')
     const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
+    const parentTaskId = openParentTask(harness, supervisor, 'Ordinary request')
     const created = JSON.parse(create.definition.execute(
-      { title: 'Task from ordinary request', instruction: 'Do it' },
+      { taskId: parentTaskId, title: 'Task from ordinary request', instruction: 'Do it' },
       { agent: supervisor },
     ))
     await assign.definition.execute({ taskId: created.subtask.id, worker: B }, { agent: supervisor })
@@ -610,8 +618,9 @@ test('a worker can write only its delivery subdirectory, and only while the proj
     const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
     const assign = harness.tools.find(entry => entry.definition.name === 'collab_task_assign')
     const close = harness.tools.find(entry => entry.definition.name === 'collab_task_close')
+    const parentTaskId = openParentTask(harness, supervisor, 'Delivery task')
     const created = JSON.parse(create.definition.execute(
-      { title: 'Delivery task', instruction: 'write a file', acceptance: 'file exists' },
+      { taskId: parentTaskId, title: 'Delivery task', instruction: 'write a file', acceptance: 'file exists' },
       { agent: supervisor },
     ))
     const taskId = created.subtask.id
@@ -955,6 +964,10 @@ test('task open is explicit and task close rejects active subtasks', async () =>
     const parentList = JSON.parse(harness.tools.find(entry => entry.definition.name === 'collab_task_list')
       .definition.execute({}, { agent: supervisor }))
     assert.equal(parentList[0].taskId, taskId)
+    assert.throws(() => create.definition.execute({
+      title: 'Implicit parent',
+      instruction: 'Must be rejected',
+    }, { agent: supervisor }), /taskId is required/u)
     const created = JSON.parse(create.definition.execute({
       taskId,
       title: 'Pending subtask',

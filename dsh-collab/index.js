@@ -967,7 +967,7 @@ export function apply(ctx, config = {}) {
     },
     {
       name: 'collab_task_create',
-      description: 'Create a subtask for a functional worker. Omit taskId to create the parent task for this requirement.',
+      description: 'Create a subtask under an existing parent task opened with collab_task_open.',
       parameters: TASK_CREATE_PARAMETERS,
       output: TEXT_OUTPUT,
       when: ({ agent }) => isSupervisorSession(agent.id),
@@ -982,17 +982,11 @@ export function apply(ctx, config = {}) {
         if (mentionsSharedCopy) {
           throw new Error('do not create copy-out tasks; workers receive a canonical deliveryDir and publish artifacts there')
         }
-        let taskId = typeof args?.taskId === 'string' && args.taskId.trim().length > 0
-          ? args.taskId.trim()
-          : (typeof args?.projectId === 'string' && args.projectId.trim().length > 0 ? args.projectId.trim() : undefined)
-        if (taskId === undefined) {
-          const task = tasks.createTask({ supervisor: self.sessionId, title })
-          taskId = task.id
-        } else {
-          const task = tasks.task(taskId)
-          if (task === undefined || task.supervisor !== self.sessionId) throw new Error(`unknown task: ${taskId}`)
-          if (task.status !== 'open') throw new Error('task is closed')
-        }
+        const taskId = String(args?.taskId ?? '').trim()
+        if (taskId.length === 0) throw new Error('taskId is required; call collab_task_open first')
+        const task = tasks.task(taskId)
+        if (task === undefined || task.supervisor !== self.sessionId) throw new Error(`unknown task: ${taskId}`)
+        if (task.status !== 'open') throw new Error('task is closed')
         const subtask = tasks.createSubtask({
           supervisor: self.sessionId,
           worker: null,

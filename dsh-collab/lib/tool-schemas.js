@@ -43,9 +43,9 @@ export const TASK_CREATE_PARAMETERS = {
     instruction: { type: 'string', description: 'Self-contained instructions for the worker.' },
     acceptance: { type: 'string', description: 'Acceptance criteria the supervisor will verify.' },
     inputs: { type: 'object', description: 'Optional structured inputs for the worker.' },
-    taskId: { type: 'string', description: 'Optional parent task id; omitted creates the task for this requirement.' },
+    taskId: { type: 'string', description: 'Parent task id returned by collab_task_open.' },
   },
-  required: ['title', 'instruction'],
+  required: ['taskId', 'title', 'instruction'],
   additionalProperties: false,
 }
 
