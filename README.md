@@ -41,12 +41,13 @@ dsh-plugins-collab-agent/
     packages/dsh-collab-auth-api/        generated Typert authorization Remote
 ```
 
-Both bundles are required:
+Two packages are involved:
 
-- `@xmodelin/dsh-collab-sessions` — Host plugin, presets, sidebar and boards;
-- `@xmodelin/dsh-collab-auth-api` — generated authorization Remote and client
-  bundle. The collab client injects it, so enabling only the first bundle leaves
-  authorization unavailable.
+- `@xmodelin/dsh-collab-sessions` — the installable bundle (Host plugin,
+  presets, sidebar/boards, client);
+- `@xmodelin/dsh-collab-auth-api` — the generated authorization Remote and
+  client bundle. It is a package dependency, and the sessions bundle's patch
+  activates its loader row. Do not select it as a second bundle when using npm.
 
 ## Requirements
 
@@ -55,7 +56,38 @@ Both bundles are required:
 - Node.js and pnpm for the optional API dependency install/build.
 - macOS, Linux, or Windows. See the Windows notes below.
 
-## Installation
+## Install from npm (recommended)
+
+The npm package is:
+
+```text
+@xmodelin/dsh-collab-sessions
+```
+
+It declares `@xmodelin/dsh-collab-auth-api` as a dependency, and its bundled
+`cordis.patch.yml` inserts the authorization API row. Installing the sessions
+bundle therefore installs and activates both halves.
+
+1. In DSH open **Plugins** and add an npm package, or install the bundle with
+   the plugin manager using this spec:
+
+   ```text
+   @xmodelin/dsh-collab-sessions@0.0.1
+   ```
+
+2. Do **not** separately install or enable `@xmodelin/dsh-collab-auth-api`; its
+   loader row comes from the sessions patch. If an older two-bundle local
+   install exists, remove both old bundle entries first.
+
+3. Completely quit and reopen DSH.
+
+4. Open a Workspace and use the sidebar's **协同会话** / **超级会话** entries.
+
+If the npm scope is not owned by the publishing account, rename both packages
+and the patch rows before publishing; scoped npm packages require access to the
+scope.
+
+## Local development installation
 
 ### 1. Clone the repository
 
@@ -72,7 +104,7 @@ cd dsh-collab-api
 pnpm install
 ```
 
-### 2. Link both bundles into the DSH profile
+### 2. Link both package directories into the DSH profile
 
 The package names are already `@xmodelin/...`, so use these exact directory
 names.
@@ -102,14 +134,17 @@ New-Item -ItemType Junction -Path "$ProfileDir\node_modules\@xmodelin\dsh-collab
 
 Replace `$REPO` / `$Repo` with the actual checkout path.
 
-### 3. Enable both bundles
+### 3. Enable the sessions bundle
 
-In the DSH plugin manager enable, in this order:
+Enable only:
 
 ```text
-@xmodelin/dsh-collab-auth-api
 @xmodelin/dsh-collab-sessions
 ```
+
+Its patch inserts the authorization API row. Do not also enable
+`@xmodelin/dsh-collab-auth-api` as a separate bundle, or the loader row is
+duplicated.
 
 Then **completely quit and reopen DSH**. A page refresh or bundle reload is not
 enough for Host and client changes.
@@ -180,6 +215,33 @@ would require a DSH core entry-token API.
   behavior.
 - [`dsh-collab-api/README.md`](dsh-collab-api/README.md) — generated
   authorization Remote workspace and build details.
+
+## Publishing to npm
+
+The API package must be published first because the sessions package depends on
+its exact version.
+
+```sh
+cd dsh-collab-api/packages/dsh-collab-auth-api
+npm publish --access public
+
+cd ../../../dsh-collab
+npm publish --access public
+```
+
+Before publishing:
+
+- log in with an account that owns the `@xmodelin` scope;
+- bump **both** versions together;
+- update the sessions dependency to the new API version;
+- run `npm pack --dry-run` in each package and confirm the generated `lib/`,
+  `cordis.patch.yml`, locale files, and icon are present;
+- rebuild the API if its generated `lib/` changed.
+
+Both packages use `publishConfig.access = public`, so `npm publish` publishes a
+public scoped package. Version `0.0.1` is currently unpublished; if that version
+is already taken, bump to `0.0.2` (or later) in both manifests and the sessions
+dependency before publishing.
 
 ## Development
 

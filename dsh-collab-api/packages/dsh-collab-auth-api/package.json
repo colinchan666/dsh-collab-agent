@@ -37,7 +37,8 @@
     "lib/host.js",
     "lib/host.d.ts",
     "lib/index.js",
-    "lib/index.d.ts"
+    "lib/index.d.ts",
+    "README.md"
   ],
   "dsh": {
     "client": {
@@ -61,5 +62,20 @@
   "module": "lib/index.js",
   "scripts": {
     "test": "node --test test/*.test.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/colinchan666/dsh-plugins-collab-agent.git",
+    "directory": "dsh-collab-api/packages/dsh-collab-auth-api"
+  },
+  "homepage": "https://github.com/colinchan666/dsh-plugins-collab-agent#readme",
+  "bugs": {
+    "url": "https://github.com/colinchan666/dsh-plugins-collab-agent/issues"
+  },
+  "engines": {
+    "dsh": "^0.2.2-rc.5"
   }
 }

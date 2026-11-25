@@ -93,9 +93,10 @@ pnpm build
 ```
 
 This emits `lib/typert.host.js`, `lib/typert.remote-client.js`, and the bundled
-`lib/client.js`. The profile links `@xmodelin/dsh-collab-auth-api` as a bundle;
-after rebuilding, disable/enable that bundle (or restart DSH) and refresh the
-Web client so the generated `remote.collabAuth` namespace remounts. Board, base
+`lib/client.js`. The API package is a dependency of the sessions bundle, and
+the sessions patch inserts its loader row. After rebuilding, re-enable the
+sessions bundle (or restart DSH) and refresh the Web client so the generated
+`remote.collabAuth` namespace remounts. Board, base
 prompt, and link actions also use `collabAuth.panel`; they do not add command
 rows to the conversation.
 
