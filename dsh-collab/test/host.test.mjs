@@ -144,7 +144,12 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     assert.equal(sandboxPolicy.resolve({ session: a.session }).workspaceRoot, workdirA)
     assert.equal(sandboxPolicy.resolve({ session: plain.session }).workspaceRoot, workspace)
 
-    assert.equal(harness.tools.length, 39)
+    assert.equal(harness.tools.length, 40)
+    const doctor = harness.tools.find(entry => entry.definition.name === 'collab_doctor')
+    assert.ok(doctor)
+    const doctorOutput = JSON.parse(doctor.definition.execute({}, { agent: a }))
+    assert.equal(typeof doctorOutput.registry, 'number')
+    assert.equal(typeof doctorOutput.invalidGrants, 'number')
     for (const name of ['collab_info', 'collab_peers', 'collab_send', 'collab_inbox']) {
       const entry = harness.tools.find(tool => tool.definition.name === name)
       assert.equal(entry.options.when({ agent: a }), true, name)

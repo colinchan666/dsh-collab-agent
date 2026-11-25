@@ -342,6 +342,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '',
       'Task tools:',
       '- collab_inbox reads messages; task notices have kind=task, ordinary chat has kind=chat.',
+      '- collab_doctor returns a read-only health summary when diagnosing state.',
       '- collab_subtasks lists subtasks assigned to you.',
       '- collab_subtask_accept accepts an assigned subtask and returns its instructions.',
       '- collab_subtask_progress records progress.',
@@ -1949,6 +1950,45 @@ export function apply(ctx, config = {}) {
       output: TEXT_OUTPUT,
       isConcurrencySafe: () => true,
       execute: (_args, exec) => infoText(requireSelf(exec)),
+    },
+    {
+      name: 'collab_doctor',
+      description: 'Read-only collaboration health summary: registry, relationships, grants, tasks, requests, and audit availability.',
+      parameters: NO_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => collabSessions.has(agent.id),
+      isConcurrencySafe: () => true,
+      execute: (_args, exec) => {
+        const self = requireSelf(exec)
+        const relationshipsList = relationships.list()
+        const invalidRelationships = relationshipsList.filter(relationship => (
+          registry.get(relationship.worker)?.preset !== PRESET
+          || registry.get(relationship.supervisor)?.preset !== SUPERVISOR
+        ))
+        const grants = auth.listGrants()
+        const invalidGrants = grants.filter(grant => (
+          (registry.get(grant.from) !== undefined && !COLLAB_PRESETS.has(registry.get(grant.from).preset))
+          || (registry.get(grant.to) !== undefined && !COLLAB_PRESETS.has(registry.get(grant.to).preset))
+        ))
+        const tasksForSelf = isSupervisorSession(self.sessionId)
+          ? tasks.listTasks(self.sessionId)
+          : []
+        const requestsForSelf = requests.list()
+          .filter(request => request.supervisor === self.sessionId || request.requester === self.sessionId)
+        return JSON.stringify({
+          sessionId: self.sessionId,
+          registry: registry.list().length,
+          relationships: relationshipsList.length,
+          invalidRelationships: invalidRelationships.length,
+          grants: grants.length,
+          invalidGrants: invalidGrants.length,
+          tasks: tasksForSelf.length,
+          activeTasks: tasksForSelf.filter(task => task.status === 'open').length,
+          requests: requestsForSelf.length,
+          activeRequests: requestsForSelf.filter(request => request.status === 'accepted').length,
+          auditEntries: collabAdmin.audit(1).length,
+        })
+      },
     },
     {
       name: 'collab_peers',
