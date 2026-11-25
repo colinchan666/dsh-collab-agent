@@ -1964,6 +1964,30 @@ window.__ModuleLoader__.load({
           }
         }
 
+        const mainSessionPreset = () => {
+          const snapshot = ctx.sessions?.list?.getSnapshot?.()
+          if (snapshot === undefined) return undefined
+          const main = Object.values(snapshot.byId ?? {})
+            .find(session => (session.retainedBy?.mainView ?? 0) > 0)
+          return main?.projectionValues?.agentPreset
+        }
+        const originalOpenWorkspace = ctx.uiWorkspace.openWorkspace.bind(ctx.uiWorkspace)
+        const openWorkspacePreservingPreset = (workspaceId, beforeOpen, options) => {
+          if (options === undefined) {
+            const preset = mainSessionPreset()
+            if (preset === 'collab' || preset === 'supervisor') {
+              return originalOpenWorkspace(workspaceId, beforeOpen, { agentPreset: preset })
+            }
+          }
+          return originalOpenWorkspace(workspaceId, beforeOpen, options)
+        }
+        ctx.uiWorkspace.openWorkspace = openWorkspacePreservingPreset
+        ctx.effect(() => () => {
+          if (ctx.uiWorkspace.openWorkspace === openWorkspacePreservingPreset) {
+            ctx.uiWorkspace.openWorkspace = originalOpenWorkspace
+          }
+        }, 'collab:workspace-switch-preset')
+
         const start = (preset = 'collab') => {
           try {
             // The navigation service targets the current Session's Workspace,
