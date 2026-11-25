@@ -921,7 +921,7 @@ test('ordinary sessions are excluded from supervisor worker candidates and offer
     await harness.emit('agent/created', { agent: worker, source: 'startup' })
     await harness.emit('agent/created', { agent: ordinary, source: 'startup' })
     const admin = harness.ctx.get('collabAdmin')
-    const board = admin.panel(A, 'board', {})
+    const board = admin.board(A)
     assert.deepEqual(board.workers.map(item => item.sessionId), [B])
     assert.throws(
       () => admin.panel(A, 'link', { worker: PLAIN, payload: { offer: true } }),

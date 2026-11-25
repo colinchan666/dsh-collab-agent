@@ -2401,6 +2401,13 @@ export function apply(ctx, config = {}) {
     return { relationship: view(relationship), authorized: true }
   }
   collabAdmin.panel = panel
+  collabAdmin.board = sessionId => panel(sessionId, 'board', {})
+  collabAdmin.link = (sessionId, worker, payload) => panel(sessionId, 'link', { worker, payload })
+  collabAdmin.unlink = (sessionId, worker) => panel(sessionId, 'unlink', { worker })
+  collabAdmin.pin = (sessionId, worker) => panel(sessionId, 'pin', { worker })
+  collabAdmin.live = (sessionId, worker) => panel(sessionId, 'live', { worker })
+  collabAdmin.baseGet = sessionId => panel(sessionId, 'baseGet', {})
+  collabAdmin.baseSet = (sessionId, value) => panel(sessionId, 'baseSet', { value })
 
   for (const definition of tools) {
     const { when, ...tool } = definition
