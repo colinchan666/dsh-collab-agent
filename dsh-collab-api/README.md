@@ -28,5 +28,7 @@ generator can recognize the Typert meta symbols without pulling in the entire
 DSH workspace. The API package itself declares the real
 `@deepseek-ai/dsh-typert-protocol` dependency for runtime.
 
-The package is installed as `@xmodelin/dsh-collab-auth-api` in the DSH profile.
-After rebuilding, re-enable that bundle and refresh the Web client.
+The package is published as `@xmodelin/dsh-collab-auth-api` and depended on by
+`@xmodelin/dsh-collab-sessions`; the sessions patch inserts its loader row. Do
+not enable the API as a second bundle when using npm. After rebuilding,
+re-enable the sessions bundle and refresh the Web client.

@@ -1,6 +1,10 @@
 # Collaboration sessions: a left-sidebar entry, a dedicated Agent preset, and
 # the Host plugin that prepares each collaboration session's working directory.
 - insert:
+    - id: collab-auth-api
+      name: '@xmodelin/dsh-collab-auth-api'
+      config: {}
+
     - id: dsh-collab-sessions
       name: '@xmodelin/dsh-collab-sessions'
       config:
