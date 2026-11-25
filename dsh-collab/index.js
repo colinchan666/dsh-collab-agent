@@ -306,6 +306,10 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- collab_requests lists work requests. For each pending request, evaluate registered capabilities before accepting or rejecting.',
       '- collab_capabilities lists the functional sessions registered to you, their capabilities, online/authorization state, and workload.',
       '- collab_task_open creates the parent task for one requirement.',
+      '- collab_task_list lists parent tasks.',
+      '- collab_subtask_create creates a subtask under that parent task.',
+      '- collab_subtask_assign assigns a subtask to an offered worker.',
+      '- collab_subtasks lists subtasks for the supervisor or worker.',
       '- collab_task_create creates a subtask under that task.',
       '- collab_task_assign assigns a task to a worker with an offer relationship and wakes it.',
       '- collab_tasks / collab_task_result inspect progress and results.',
@@ -318,7 +322,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       'How to work:',
       '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a task and subtasks, assign at least one subtask to an offered worker, then call collab_request_accept with the taskId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
       'Never send task IDs, subtask IDs, worker IDs, task decomposition, or internal scheduling to the requester. The requester receives only acceptance/rejection status and the sanitized delivery manifest.',
-      '1. Read the requirement, list capabilities, and plan subtasks with explicit acceptance criteria. Call collab_task_open once per requirement, then pass its taskId to every collab_task_create subtask.',
+      '1. Read the requirement, list capabilities, and plan subtasks with explicit acceptance criteria. Call collab_task_open once per requirement, then pass its taskId to every collab_subtask_create call.',
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
       '3. End your turn after dispatching. Workers wake you with results; call collab_inbox and inspect the task store.',
@@ -1953,6 +1957,42 @@ export function apply(ctx, config = {}) {
       },
     },
   ]
+
+  taskTools.push({
+    name: 'collab_task_list',
+    description: 'List parent tasks for this supervisor.',
+    parameters: TASK_LIST_PARAMETERS,
+    output: TEXT_OUTPUT,
+    when: ({ agent }) => isSupervisorSession(agent.id),
+    isConcurrencySafe: () => true,
+    execute: (args, exec) => {
+      const self = requireSupervisor(exec)
+      const status = typeof args?.status === 'string' && args.status.trim().length > 0 ? args.status.trim() : undefined
+      const list = tasks.listTasks(self.sessionId)
+        .filter(task => status === undefined || task.status === status)
+        .map(task => TaskStore.taskSummary(task))
+      return list.length === 0 ? 'No tasks.' : JSON.stringify(list)
+    },
+  })
+
+  const taskTool = name => taskTools.find(tool => tool.name === name)
+  taskTools.push(
+    {
+      ...taskTool('collab_task_create'),
+      name: 'collab_subtask_create',
+      description: 'Create a subtask under an existing parent task.',
+    },
+    {
+      ...taskTool('collab_task_assign'),
+      name: 'collab_subtask_assign',
+      description: 'Assign a subtask to a worker with an offer relationship and wake it.',
+    },
+    {
+      ...taskTool('collab_tasks'),
+      name: 'collab_subtasks',
+      description: 'List subtasks for this supervisor or the subtasks assigned to the calling worker.',
+    },
+  )
 
   const tools = [
     {
