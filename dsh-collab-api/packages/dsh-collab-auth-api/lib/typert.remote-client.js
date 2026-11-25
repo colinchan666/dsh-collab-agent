@@ -224,7 +224,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_result$schema,
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":156,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":153,"column":3},
     },
     'collabAuth/baseSet': {
       service: 'collabAuth',
@@ -269,11 +269,11 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _xmodelin_dsh_collab_auth_api_collabAuth_baseSet_result$schema,
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":163,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":160,"column":3},
     },
     'collabAuth/board': {
       service: 'collabAuth',
-      description: 'Read or mutate the supervisor board/base-prompt surface without writing a slash-command lifecycle into the conversation.',
+      description: 'Read the supervisor board.',
       invocation: { kind: 'direct' },
       parameters: [
         {
@@ -298,10 +298,10 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/board:result',
         create: _xmodelin_dsh_collab_auth_api_collabAuth_board_result$schema,
-        description: 'the operation result.',
+        description: 'JSON board snapshot.',
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":113,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":110,"column":3},
     },
     'collabAuth/link': {
       service: 'collabAuth',
@@ -362,7 +362,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _xmodelin_dsh_collab_auth_api_collabAuth_link_result$schema,
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":120,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":117,"column":3},
     },
     'collabAuth/list': {
       service: 'collabAuth',
@@ -422,14 +422,16 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _xmodelin_dsh_collab_auth_api_collabAuth_live_result$schema,
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":149,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":146,"column":3},
     },
     'collabAuth/panel': {
       service: 'collabAuth',
+      description: 'Read or mutate a supervisor management surface without a slash command.',
       invocation: { kind: 'direct' },
       parameters: [
         {
           name: 'sessionId',
+          description: 'collaboration Session id.',
           source: 'json',
           codec: {
             mode: 'strict',
@@ -446,6 +448,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         },
         {
           name: 'operation',
+          description: 'board, baseGet, baseSet, link, unlink, pin, or live.',
           source: 'json',
           codec: {
             mode: 'strict',
@@ -462,6 +465,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         },
         {
           name: 'argsJson',
+          description: 'JSON operation payload.',
           source: 'json',
           codec: {
             mode: 'strict',
@@ -481,9 +485,10 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@xmodelin/dsh-collab-auth-api#collabAuth/panel:result',
         create: _xmodelin_dsh_collab_auth_api_collabAuth_panel_result$schema,
+        description: 'JSON operation result.',
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":170,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":174,"column":3},
     },
     'collabAuth/pin': {
       service: 'collabAuth',
@@ -528,7 +533,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _xmodelin_dsh_collab_auth_api_collabAuth_pin_result$schema,
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":142,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":139,"column":3},
     },
     'collabAuth/revoke': {
       service: 'collabAuth',
@@ -622,7 +627,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _xmodelin_dsh_collab_auth_api_collabAuth_unlink_result$schema,
         jsonSchema: {"type":"string"},
       },
-      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":135,"column":3},
+      sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":132,"column":3},
     },
   },
 }, z)

@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { mkdirp } from './layout.js'
+import { mkdirp, withFileLock } from './layout.js'
 
 export class AuditLog {
   constructor(file) {
@@ -12,7 +12,9 @@ export class AuditLog {
   append(event, fields = {}) {
     try {
       mkdirp(path.dirname(this.file), 0o700)
-      fs.appendFileSync(this.file, `${JSON.stringify({ at: Date.now(), event, ...fields })}\n`, { mode: 0o600 })
+      withFileLock(this.file, () => {
+        fs.appendFileSync(this.file, `${JSON.stringify({ at: Date.now(), event, ...fields })}\n`, { mode: 0o600 })
+      })
     } catch {
       // Audit is advisory; a full read-only disk must not break collaboration.
     }

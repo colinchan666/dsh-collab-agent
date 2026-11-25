@@ -48,12 +48,9 @@ export declare class CollabAuthService extends TypertRemoteService {
      */
     revoke(a: string, b: string): AuthSnapshot;
     /**
-     * Read or mutate the supervisor board/base-prompt surface without writing a
-     * slash-command lifecycle into the conversation.
+     * Read the supervisor board.
      * @param sessionId - collaboration Session id.
-     * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.
-     * @param args - operation-specific payload.
-     * @returns the operation result.
+     * @returns JSON board snapshot.
      */
     board(sessionId: string): string;
     link(sessionId: string, worker: string, payloadJson: string): string;
@@ -62,6 +59,13 @@ export declare class CollabAuthService extends TypertRemoteService {
     live(sessionId: string, worker: string): string;
     baseGet(sessionId: string): string;
     baseSet(sessionId: string, value: string): string;
+    /**
+     * Read or mutate a supervisor management surface without a slash command.
+     * @param sessionId - collaboration Session id.
+     * @param operation - board, baseGet, baseSet, link, unlink, pin, or live.
+     * @param argsJson - JSON operation payload.
+     * @returns JSON operation result.
+     */
     panel(sessionId: string, operation: string, argsJson: string): string;
 }
 /**
