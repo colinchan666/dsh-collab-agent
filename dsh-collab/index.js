@@ -27,6 +27,7 @@ import { COLLAB_PRESET as PRESET, SUPERVISOR_PRESET as SUPERVISOR, COLLAB_PRESET
 import { subtaskAliases } from './lib/task-aliases.js'
 import { createDeliveryManifestService } from './lib/delivery-manifest.js'
 import { AuditLog } from './lib/audit.js'
+import { cancelBoundTask } from './lib/cancel-request.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-collab-sessions'
@@ -1902,14 +1903,7 @@ export function apply(ctx, config = {}) {
         clearRequestTimer(request.id)
         clearExecutionTimer(request.id)
         if (request.taskId !== null) {
-          const subtasks = tasks.listSubtasksForTask(request.taskId)
-          for (const subtask of subtasks) {
-            if (!['done', 'cancelled'].includes(subtask.status)) {
-              try { tasks.cancel(subtask.id) } catch { /* cancellation is best effort after the request is cancelled */ }
-            }
-            if (subtask.worker !== null) releaseDeliverySandbox(subtask.worker, deliveryRoot(request.taskId))
-          }
-          try { tasks.closeTask(request.taskId) } catch { /* request cancellation remains authoritative */ }
+          cancelBoundTask(tasks, request.taskId, worker => releaseDeliverySandbox(worker, deliveryRoot(request.taskId)))
         }
         try {
           await sendTaskNotice(self, request.supervisor, {
