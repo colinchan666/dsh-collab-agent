@@ -33,6 +33,7 @@ import { createPanelApi } from './lib/panel-api.js'
 import { collectHealth } from './lib/health.js'
 import { createAccessPolicy } from './lib/access-policy.js'
 import { promptText } from './lib/prompt.js'
+import { taskDetail, taskLine } from './lib/task-views.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-collab-sessions'
@@ -864,38 +865,6 @@ export function apply(ctx, config = {}) {
         relationship: relationships.get(supervisor, entry.sessionId) ?? null,
       }
     })
-
-  const taskLine = (task) => (
-    `- ${task.id} [${task.status}] worker=${task.worker ?? 'unassigned'} task=${task.taskId ?? '-'} title=${JSON.stringify(task.title)}`
-  )
-
-  /** Turn number for one executing tool call, when the session event is known. */
-  const turnForCall = (exec) => {
-    const found = callTurns.get(String(exec?.callId))
-    if (found === undefined) return undefined
-    if (typeof exec?.agent?.id === 'string' && found.sessionId !== exec.agent.id) return undefined
-    return found.turn
-  }
-
-  const taskDetail = (task) => ({
-    id: task.id,
-    subtaskId: task.id,
-    taskId: task.taskId,
-    supervisor: task.supervisor,
-    worker: task.worker,
-    title: task.title,
-    instruction: task.instruction,
-    inputs: task.inputs,
-    acceptance: task.acceptance,
-    status: task.status,
-    attempts: task.attempts,
-    createdTurn: task.createdTurn,
-    assignedTurn: task.assignedTurn,
-    capabilityVersion: task.capabilityVersion,
-    result: task.result,
-    failure: task.failure,
-    history: task.history,
-  })
 
   const deliveryDirFor = (task) => deliveryRoot(task.taskId)
 
