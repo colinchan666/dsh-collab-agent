@@ -71,8 +71,8 @@ bundle therefore installs and activates both halves.
 Published release:
 
 ```text
-@xmodelin/dsh-collab-sessions@0.0.1
-@xmodelin/dsh-collab-auth-api@0.0.1
+@xmodelin/dsh-collab-sessions@0.0.2
+@xmodelin/dsh-collab-auth-api@0.0.2
 ```
 
 Verify the registry before installing:
@@ -82,13 +82,13 @@ npm view @xmodelin/dsh-collab-auth-api version
 npm view @xmodelin/dsh-collab-sessions version
 ```
 
-Both should print `0.0.1`.
+Both should print `0.0.2`.
 
 1. In DSH open **Plugins** and add an npm package, or install the bundle with
    the plugin manager using this spec:
 
    ```text
-   @xmodelin/dsh-collab-sessions@0.0.1
+   @xmodelin/dsh-collab-sessions@0.0.2
    ```
 
 2. Do **not** separately install or enable `@xmodelin/dsh-collab-auth-api`; its
@@ -255,7 +255,7 @@ Before publishing:
 - rebuild the API if its generated `lib/` changed.
 
 Both packages use `publishConfig.access = public`, so `npm publish` publishes a
-public scoped package. Version `0.0.1` is published and installable. For the next release, bump both
+public scoped package. Version `0.0.2` is the current release. For the next release, bump both
 versions together and update the sessions dependency before publishing. npm may
 stage uploads for 2FA approval; approve the staged version before announcing it
 as installable.
@@ -280,5 +280,5 @@ DSH, re-sync `dsh-collab/cordis.patch.yml` from the installed
 
 ## Release branch
 
-The current release line is `release-v0.0.1`. Both it and `main` must stay in
+The current release line is `release-v0.0.2`. Both it and `main` must stay in
 sync for plugin-only changes.
