@@ -899,3 +899,35 @@ test('the guard denies foreign workdir access through every supported tool shape
   }
 })
 
+
+test('ordinary sessions are excluded from supervisor worker candidates and offers', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-ordinary-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const registryPath = path.join(root, 'registry.json')
+    fs.writeFileSync(registryPath, JSON.stringify({
+      version: 1,
+      sessions: {
+        [PLAIN]: { sessionId: PLAIN, preset: 'standard', workdir: workspace, title: 'ordinary' },
+      },
+    }))
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    const ordinary = harness.makeAgent(PLAIN, 'standard')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    await harness.emit('agent/created', { agent: ordinary, source: 'startup' })
+    const admin = harness.ctx.get('collabAdmin')
+    const board = admin.panel(A, 'board', {})
+    assert.deepEqual(board.workers.map(item => item.sessionId), [B])
+    assert.throws(
+      () => admin.panel(A, 'link', { worker: PLAIN, payload: { offer: true } }),
+      /collaboration session/u,
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})

@@ -1971,22 +1971,26 @@ window.__ModuleLoader__.load({
             .find(session => (session.retainedBy?.mainView ?? 0) > 0)
           return main?.projectionValues?.agentPreset
         }
-        const originalOpenWorkspace = ctx.uiWorkspace.openWorkspace.bind(ctx.uiWorkspace)
-        const openWorkspacePreservingPreset = (workspaceId, beforeOpen, options) => {
-          if (options === undefined) {
-            const preset = mainSessionPreset()
-            if (preset === 'collab' || preset === 'supervisor') {
-              return originalOpenWorkspace(workspaceId, beforeOpen, { agentPreset: preset })
+        const originalOpenWorkspace = typeof ctx.uiWorkspace.openWorkspace === 'function'
+          ? ctx.uiWorkspace.openWorkspace.bind(ctx.uiWorkspace)
+          : undefined
+        if (originalOpenWorkspace !== undefined) {
+          const openWorkspacePreservingPreset = (workspaceId, beforeOpen, options) => {
+            if (options === undefined) {
+              const preset = mainSessionPreset()
+              if (preset === 'collab' || preset === 'supervisor') {
+                return originalOpenWorkspace(workspaceId, beforeOpen, { agentPreset: preset })
+              }
             }
+            return originalOpenWorkspace(workspaceId, beforeOpen, options)
           }
-          return originalOpenWorkspace(workspaceId, beforeOpen, options)
+          ctx.uiWorkspace.openWorkspace = openWorkspacePreservingPreset
+          ctx.effect(() => () => {
+            if (ctx.uiWorkspace.openWorkspace === openWorkspacePreservingPreset) {
+              ctx.uiWorkspace.openWorkspace = originalOpenWorkspace
+            }
+          }, 'collab:workspace-switch-preset')
         }
-        ctx.uiWorkspace.openWorkspace = openWorkspacePreservingPreset
-        ctx.effect(() => () => {
-          if (ctx.uiWorkspace.openWorkspace === openWorkspacePreservingPreset) {
-            ctx.uiWorkspace.openWorkspace = originalOpenWorkspace
-          }
-        }, 'collab:workspace-switch-preset')
 
         const start = (preset = 'collab') => {
           try {
