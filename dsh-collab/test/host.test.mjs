@@ -144,7 +144,7 @@ test('agent/created prepares the layout, moves the cwd, and registers gated tool
     assert.equal(sandboxPolicy.resolve({ session: a.session }).workspaceRoot, workdirA)
     assert.equal(sandboxPolicy.resolve({ session: plain.session }).workspaceRoot, workspace)
 
-    assert.equal(harness.tools.length, 26)
+    assert.equal(harness.tools.length, 27)
     for (const name of ['collab_info', 'collab_peers', 'collab_send', 'collab_inbox']) {
       const entry = harness.tools.find(tool => tool.definition.name === name)
       assert.equal(entry.options.when({ agent: a }), true, name)
@@ -927,6 +927,34 @@ test('ordinary sessions are excluded from supervisor worker candidates and offer
       () => admin.panel(A, 'link', { worker: PLAIN, payload: { offer: true } }),
       /collaboration session/u,
     )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('task open is explicit and task close rejects active subtasks', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-task-open-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    const open = harness.tools.find(entry => entry.definition.name === 'collab_task_open')
+    const create = harness.tools.find(entry => entry.definition.name === 'collab_task_create')
+    const close = harness.tools.find(entry => entry.definition.name === 'collab_task_close')
+    const cancel = harness.tools.find(entry => entry.definition.name === 'collab_task_cancel')
+    const opened = JSON.parse(open.definition.execute({ title: 'Bounded task' }, { agent: supervisor }))
+    const taskId = opened.task.taskId
+    const created = JSON.parse(create.definition.execute({
+      taskId,
+      title: 'Pending subtask',
+      instruction: 'Wait for cancellation',
+    }, { agent: supervisor }))
+    assert.throws(() => close.definition.execute({ taskId }, { agent: supervisor }), /active subtask/u)
+    cancel.definition.execute({ taskId: created.subtask.id }, { agent: supervisor })
+    assert.match(close.definition.execute({ taskId }, { agent: supervisor }), /closed/u)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

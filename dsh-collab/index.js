@@ -71,6 +71,15 @@ const INBOX_PARAMETERS = {
   additionalProperties: false,
 }
 
+const TASK_OPEN_PARAMETERS = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', description: 'Short parent-task title.' },
+  },
+  required: ['title'],
+  additionalProperties: false,
+}
+
 const TASK_CREATE_PARAMETERS = {
   type: 'object',
   properties: {
@@ -296,7 +305,8 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       '- collab_peers / collab_send are ordinary communication tools for authorized peers. Chat does not create or change tasks.',
       '- collab_requests lists work requests. For each pending request, evaluate registered capabilities before accepting or rejecting.',
       '- collab_capabilities lists the functional sessions registered to you, their capabilities, online/authorization state, and workload.',
-      '- collab_task_create creates a subtask; omitting taskId creates the parent task for the requirement.',
+      '- collab_task_open creates the parent task for one requirement.',
+      '- collab_task_create creates a subtask under that task.',
       '- collab_task_assign assigns a task to a worker with an offer relationship and wakes it.',
       '- collab_tasks / collab_task_result inspect progress and results.',
       '- collab_task_retry / collab_task_reject / collab_task_cancel manage failures and revisions.',
@@ -308,7 +318,7 @@ function promptText(sessionId, layout, role, relationships, capabilityLines = []
       'How to work:',
       '0. At the start of every turn, read collab_requests. For each pending request, evaluate the registered capabilities. If the request is feasible, create a task and subtasks, assign at least one subtask to an offered worker, then call collab_request_accept with the taskId. If it is not feasible, call collab_request_reject and name the missing capability. Never implement the request yourself.',
       'Never send task IDs, subtask IDs, worker IDs, task decomposition, or internal scheduling to the requester. The requester receives only acceptance/rejection status and the sanitized delivery manifest.',
-      '1. Read the requirement, list capabilities, and plan subtasks with explicit acceptance criteria. Use one taskId per requirement: the first collab_task_create returns it; pass it to the remaining subtasks.',
+      '1. Read the requirement, list capabilities, and plan subtasks with explicit acceptance criteria. Call collab_task_open once per requirement, then pass its taskId to every collab_task_create subtask.',
       'Capabilities are live and versioned. Call collab_capabilities immediately before decomposing tasks; never rely on capability text remembered from an earlier turn. If a capability version changed, re-evaluate the decomposition.',
       '2. Assign each task to a worker whose capability matches; never assign to yourself or to another supervisor.',
       '3. End your turn after dispatching. Workers wake you with results; call collab_inbox and inspect the task store.',
@@ -446,6 +456,7 @@ export function apply(ctx, config = {}) {
     || registry.get(id)?.preset === PRESET
     || registry.get(id)?.preset === SUPERVISOR
   const collabAdmin = {
+    isKnownCollab,
     listAuth: () => ({
       pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
       pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
@@ -1325,6 +1336,20 @@ export function apply(ctx, config = {}) {
       },
     },
     {
+      name: 'collab_task_open',
+      description: 'Open the parent task for one requirement. Create subtasks under the returned taskId.',
+      parameters: TASK_OPEN_PARAMETERS,
+      output: TEXT_OUTPUT,
+      when: ({ agent }) => isSupervisorSession(agent.id),
+      execute: (args, exec) => {
+        const self = requireSupervisor(exec)
+        const title = String(args?.title ?? '').trim()
+        if (title.length === 0) throw new Error('task title must not be empty')
+        const task = tasks.createTask({ supervisor: self.sessionId, title })
+        return JSON.stringify({ task: TaskStore.taskSummary(task) })
+      },
+    },
+    {
       name: 'collab_task_create',
       description: 'Create a subtask for a functional worker. Omit taskId to create the parent task for this requirement.',
       parameters: TASK_CREATE_PARAMETERS,
@@ -1649,6 +1674,10 @@ export function apply(ctx, config = {}) {
         const task = tasks.task(taskId)
         if (task === undefined || task.supervisor !== self.sessionId) throw new Error('unknown task')
         const owned = tasks.listForSupervisor(self.sessionId).filter(subtask => subtask.taskId === taskId)
+        const active = owned.filter(subtask => !['done', 'cancelled'].includes(subtask.status))
+        if (active.length > 0) {
+          throw new Error(`task still has ${String(active.length)} active subtask(s); complete or cancel them before closing`)
+        }
         const closed = tasks.closeTask(taskId)
         for (const task of owned) {
           if (task.worker !== null) releaseDeliverySandbox(task.worker, deliveryRoot(taskId))
@@ -2024,9 +2053,15 @@ export function apply(ctx, config = {}) {
         const a = parts[1]
         const b = parts[2]
         if (!isSessionId(a) || !isSessionId(b) || a === b) return { kind: 'error', text: usage }
-        if (action === 'authorize') auth.authorize(a, b, invocation.agent.id)
-        else if (action === 'grant') auth.grant(a, b, invocation.agent.id)
-        else auth.revoke(a, b)
+        if (action === 'revoke') {
+          auth.revoke(a, b)
+        } else {
+          if (!collabAdmin.isKnownCollab(a) || !collabAdmin.isKnownCollab(b)) {
+            return { kind: 'error', text: 'authorization requires two known collaboration sessions' }
+          }
+          if (action === 'authorize') auth.authorize(a, b, invocation.agent.id)
+          else auth.grant(a, b, invocation.agent.id)
+        }
         return { kind: 'success', text: statePayload() }
       }
       return { kind: 'error', text: usage }
