@@ -25,6 +25,7 @@ import {
 } from './lib/layout.js'
 import { COLLAB_PRESET as PRESET, SUPERVISOR_PRESET as SUPERVISOR, COLLAB_PRESETS } from './lib/presets.js'
 import { subtaskAliases } from './lib/task-aliases.js'
+import { createDeliveryManifestService } from './lib/delivery-manifest.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-collab-sessions'
@@ -769,7 +770,42 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  const deliveryRoot = (projectId) => path.join(sharedRoot, projectId ?? 'default', 'artifacts')
+  const MAX_DELIVERY_LIST_FILES = 2000
+  const listDeliveryFiles = (root, base = root, out = []) => {
+    if (out.length >= MAX_DELIVERY_LIST_FILES) { out.truncated = true; return out }
+    let entries
+    try { entries = fs.readdirSync(root, { withFileTypes: true }) } catch { return out }
+    for (const entry of entries) {
+      if (out.length >= MAX_DELIVERY_LIST_FILES) { out.truncated = true; break }
+      const full = path.join(root, entry.name)
+      if (entry.isDirectory()) {
+        listDeliveryFiles(full, base, out)
+        continue
+      }
+      if (!entry.isFile()) continue
+      let stat
+      try { stat = fs.statSync(full) } catch { continue }
+      out.push({
+        path: path.relative(base, full),
+        size: stat.size,
+        modifiedAt: stat.mtimeMs,
+      })
+    }
+    return out
+  }
+  const { buildDeliveryManifest, publishDeliveryAlias } = createDeliveryManifestService({
+    sharedRoot,
+    tasks,
+    fs,
+    path,
+    crypto,
+    mkdirp,
+    writeJson,
+    listDeliveryFiles,
+    warn,
+    maxFiles: MAX_DELIVERY_LIST_FILES,
+  })
+  const deliveryRoot = (taskId) => path.join(sharedRoot, taskId ?? 'default', 'artifacts')
 
   const peersText = (self) => {
     const entries = registry.list().filter(entry => entry.sessionId !== self.sessionId && COLLAB_PRESETS.has(entry.preset))
@@ -1176,88 +1212,6 @@ export function apply(ctx, config = {}) {
   })
 
   const deliveryDirFor = (task) => deliveryRoot(task.taskId)
-
-  /** Build the canonical project manifest with path/bytes/sha256/mode. */
-  const buildDeliveryManifest = (projectId) => {
-    const project = tasks.project(projectId)
-    if (project === undefined) throw new Error('unknown project')
-    const root = deliveryRoot(projectId)
-    const listed = listDeliveryFiles(root)
-    if (listed.truncated === true) throw new Error(`delivery has more than ${MAX_DELIVERY_LIST_FILES} files; split the project`)
-    const files = listed.sort((left, right) => left.path.localeCompare(right.path)).map(file => {
-      const full = path.join(root, file.path)
-      const before = fs.statSync(full)
-      const content = fs.readFileSync(full)
-      const after = fs.statSync(full)
-      if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
-        throw new Error(`delivery file changed while hashing: ${file.path}`)
-      }
-      const hash = crypto.createHash('sha256').update(content).digest('hex')
-      return {
-        path: file.path.split(path.sep).join('/'),
-        bytes: after.size,
-        sha256: hash,
-        mode: `0${(after.mode & 0o777).toString(8)}`,
-      }
-    })
-    const manifest = {
-      generatedAt: new Date().toISOString(),
-      root,
-      files,
-    }
-    const projectDir = path.join(sharedRoot, projectId)
-    mkdirp(projectDir, 0o755)
-    const manifestPath = path.join(projectDir, 'manifest.json')
-    const temporary = `${manifestPath}.${crypto.randomBytes(4).toString('hex')}.tmp`
-    writeJson(temporary, manifest, 0o644)
-    fs.renameSync(temporary, manifestPath)
-    return manifest
-  }
-
-
-  const MAX_DELIVERY_LIST_FILES = 2000
-  /** Publish an opaque delivery alias so the requester never receives projectId. */
-  const publishDeliveryAlias = (projectId, deliveryId) => {
-    const target = path.join(sharedRoot, projectId, 'artifacts')
-    const aliasRoot = path.join(sharedRoot, '.deliveries', deliveryId)
-    const alias = path.join(aliasRoot, 'artifacts')
-    mkdirp(aliasRoot, 0o755)
-    try {
-      const existing = fs.lstatSync(alias)
-      if (existing.isSymbolicLink() && fs.realpathSync(alias) === fs.realpathSync(target)) return alias
-      fs.rmSync(alias, { recursive: true, force: true })
-    } catch { /* alias does not exist yet */ }
-    try {
-      fs.symlinkSync(target, alias, 'dir')
-      return alias
-    } catch (error) {
-      warn(`delivery alias could not be published: ${describeError(error)}`)
-      return target
-    }
-  }
-
-  const listDeliveryFiles = (root, base = root, out = []) => {
-    if (out.length >= MAX_DELIVERY_LIST_FILES) { out.truncated = true; return out }
-    let entries
-    try { entries = fs.readdirSync(root, { withFileTypes: true }) } catch { return out }
-    for (const entry of entries) {
-      if (out.length >= MAX_DELIVERY_LIST_FILES) { out.truncated = true; break }
-      const full = path.join(root, entry.name)
-      if (entry.isDirectory()) {
-        listDeliveryFiles(full, base, out)
-        continue
-      }
-      if (!entry.isFile()) continue
-      let stat
-      try { stat = fs.statSync(full) } catch { continue }
-      out.push({
-        path: path.relative(base, full),
-        size: stat.size,
-        modifiedAt: stat.mtimeMs,
-      })
-    }
-    return out
-  }
 
   const reconcileRequestProjectBindings = () => {
     for (const request of requests.list().sort((left, right) => left.createdAt - right.createdAt)) {
