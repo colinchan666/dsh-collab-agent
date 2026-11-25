@@ -68,11 +68,19 @@ It declares `@xmodelin/dsh-collab-auth-api` as a dependency, and its bundled
 `cordis.patch.yml` inserts the authorization API row. Installing the sessions
 bundle therefore installs and activates both halves.
 
-Published release:
+Target release:
 
 ```text
 @xmodelin/dsh-collab-sessions@0.0.2
 @xmodelin/dsh-collab-auth-api@0.0.2
+```
+
+If `npm view` returns 404 for `0.0.2`, the release is staged and must be
+approved first:
+
+```sh
+npx npm@latest stage list
+npx npm@latest stage approve <stage-id>
 ```
 
 Verify the registry before installing:
@@ -255,10 +263,10 @@ Before publishing:
 - rebuild the API if its generated `lib/` changed.
 
 Both packages use `publishConfig.access = public`, so `npm publish` publishes a
-public scoped package. Version `0.0.2` is the current release. For the next release, bump both
-versions together and update the sessions dependency before publishing. npm may
-stage uploads for 2FA approval; approve the staged version before announcing it
-as installable.
+public scoped package. Version `0.0.2` is the current staged release. Approve the staged auth API
+version first, then the staged sessions version (it depends on the API). For
+the next release, bump both versions together and update the sessions
+dependency before publishing.
 
 ## Development
 
