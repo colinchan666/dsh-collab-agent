@@ -1914,10 +1914,15 @@ window.__ModuleLoader__.load({
       const sessions = props.useSessions(selectSnapshot)
       const summary = sessions.byId[props.sessionId]
       const supervisor = isSupervisorSessionSummary(summary, sessions)
+      const looksLikeSupervisor = () => {
+        if (supervisor) return true
+        return Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
+          .some(element => /超级会话|Supervisor session/u.test(element.textContent ?? ''))
+      }
       React.useEffect(() => {
-        if (!supervisor) return undefined
         let wasExpanded = false
         const seed = () => {
+          if (!looksLikeSupervisor()) return
           const expanded = props.isExpanded()
           if (!expanded) {
             wasExpanded = false
