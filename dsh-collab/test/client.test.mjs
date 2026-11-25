@@ -137,7 +137,6 @@ test('the client starts a collab session through the current-workspace navigatio
     ['shell.overlay', 'collab-preset-menu-filter'],
     ['conversation.hero.options', 'collab-preset-lock'],
     ['sidebar.workspaces.session.menu.item', 'collab-base-prompt'],
-    ['conversation.session.header.utilities', 'collab-supervisor-tabs-on-open'],
   ]) {
     assert.ok(harness.registrations.some(entry => entry.options.name === name && entry.options.id === id), `${name}:${id}`)
   }
@@ -197,15 +196,6 @@ test('the client does not auto-open a collab session when it starts running', as
   assert.deepEqual(harness.calls.opened, [])
 })
 
-test('the supervisor header registers the on-open tab scheduler', () => {
-  const harness = fakeClientHarness()
-  pluginFor().apply(harness.ctx)
-  const registration = harness.registrations.find(entry => (
-    entry.options.name === 'conversation.session.header.utilities'
-    && entry.options.id === 'collab-supervisor-tabs-on-open'
-  ))
-  assert.ok(registration)
-})
 
 
 

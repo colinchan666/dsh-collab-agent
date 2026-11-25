@@ -1931,10 +1931,6 @@ window.__ModuleLoader__.load({
       return null
     }
 
-    function CollabSupervisorTabsOnOpen() {
-      return null
-    }
-
     return {
       __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
@@ -2120,24 +2116,6 @@ window.__ModuleLoader__.load({
           id: 'collab-preset-lock',
           order: 100,
         }, CollabPresetLockProbe))
-
-        ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-          name: 'conversation.session.header.utilities',
-          id: 'collab-supervisor-tabs-on-open',
-          order: 11,
-          inject: () => ({
-            isExpanded: () => ctx.sidebarRight.isExpanded(),
-            openGuide: () => ctx.sidebarRight.openTab('guide', { revealIfOpened: true }),
-            openTasks: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, {
-              params: { sessionId },
-              revealIfOpened: false,
-            }),
-            openWorkers: (sessionId) => ctx.sidebarRight.openTab(WORKERS_TAB_KIND, {
-              params: { sessionId },
-              revealIfOpened: false,
-            }),
-          }),
-        }, CollabSupervisorTabsOnOpen))
 
         ctx.effect(
           () => ctx.uiConversation.events.register(collabAuthRefusedDefinition),
