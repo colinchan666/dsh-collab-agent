@@ -866,6 +866,14 @@ export function apply(ctx, config = {}) {
       }
     })
 
+  /** Turn number for one executing tool call, when the session event is known. */
+  const turnForCall = (exec) => {
+    const found = callTurns.get(String(exec?.callId))
+    if (found === undefined) return undefined
+    if (typeof exec?.agent?.id === 'string' && found.sessionId !== exec.agent.id) return undefined
+    return found.turn
+  }
+
   const deliveryDirFor = (task) => deliveryRoot(task.taskId)
 
   const reconcileRequestProjectBindings = () => {
