@@ -28,6 +28,7 @@ import { subtaskAliases } from './lib/task-aliases.js'
 import { createDeliveryManifestService } from './lib/delivery-manifest.js'
 import { AuditLog } from './lib/audit.js'
 import { cancelBoundTask } from './lib/cancel-request.js'
+import { createPanelApi } from './lib/panel-api.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-collab-sessions'
@@ -2297,13 +2298,7 @@ export function apply(ctx, config = {}) {
     return { relationship: view(relationship), authorized: true }
   }
   collabAdmin.panel = panel
-  collabAdmin.board = sessionId => panel(sessionId, 'board', {})
-  collabAdmin.link = (sessionId, worker, payload) => panel(sessionId, 'link', { worker, payload })
-  collabAdmin.unlink = (sessionId, worker) => panel(sessionId, 'unlink', { worker })
-  collabAdmin.pin = (sessionId, worker) => panel(sessionId, 'pin', { worker })
-  collabAdmin.live = (sessionId, worker) => panel(sessionId, 'live', { worker })
-  collabAdmin.baseGet = sessionId => panel(sessionId, 'baseGet', {})
-  collabAdmin.baseSet = (sessionId, value) => panel(sessionId, 'baseSet', { value })
+  Object.assign(collabAdmin, createPanelApi(panel))
 
   for (const definition of tools) {
     const { when, ...tool } = definition
