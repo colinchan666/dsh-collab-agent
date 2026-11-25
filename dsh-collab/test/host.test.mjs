@@ -959,3 +959,46 @@ test('task open is explicit and task close rejects active subtasks', async () =>
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('authorization surfaces reject ordinary sessions', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-auth-filter-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const registryPath = path.join(root, 'registry.json')
+    fs.writeFileSync(registryPath, JSON.stringify({
+      version: 1,
+      sessions: {
+        [PLAIN]: { sessionId: PLAIN, preset: 'standard', workdir: workspace, title: 'ordinary' },
+      },
+    }))
+    const authorizationPath = path.join(root, 'authorization.json')
+    fs.writeFileSync(authorizationPath, JSON.stringify({
+      version: 2,
+      grants: [
+        { from: PLAIN, to: A }, { from: A, to: PLAIN },
+        { from: A, to: B }, { from: B, to: A },
+      ],
+    }))
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath, authorizationPath })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    const listed = harness.ctx.get('collabAdmin').listAuth()
+    assert.deepEqual(listed.pairs.map(pair => [pair.a, pair.b]), [[A, B]])
+    assert.deepEqual(listed.pending, [])
+    const authCommand = harness.commands.find(entry => entry.name === 'collab-auth')
+    const refused = authCommand.handler({
+      agent: supervisor,
+      rawInput: `authorize ${PLAIN} ${A}`,
+      attachments: [],
+      signal: new AbortController().signal,
+    })
+    assert.equal(refused.kind, 'error')
+    assert.match(refused.text, /known collaboration sessions/u)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
