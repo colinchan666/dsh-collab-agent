@@ -1002,3 +1002,58 @@ test('authorization surfaces reject ordinary sessions', async () => {
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('cancelling an accepted request cancels its subtasks and closes the task', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-request-cancel-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, 'collab')
+    const requester = harness.makeAgent(E, 'collab')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    await harness.emit('agent/created', { agent: requester, source: 'startup' })
+    const admin = harness.ctx.get('collabAdmin')
+    admin.authorize(A, E)
+    admin.panel(A, 'link', { worker: B, payload: { offer: true } })
+    const submit = harness.tools.find(entry => entry.definition.name === 'collab_request_submit')
+    const open = harness.tools.find(entry => entry.definition.name === 'collab_task_open')
+    const create = harness.tools.find(entry => entry.definition.name === 'collab_subtask_create')
+    const assign = harness.tools.find(entry => entry.definition.name === 'collab_subtask_assign')
+    const accept = harness.tools.find(entry => entry.definition.name === 'collab_request_accept')
+    const cancel = harness.tools.find(entry => entry.definition.name === 'collab_request_cancel')
+    const submitted = JSON.parse(await submit.definition.execute({
+      title: 'Cancelable work',
+      requirement: 'Do work that may be cancelled',
+    }, { agent: requester }))
+    const opened = JSON.parse(open.definition.execute({ title: 'Cancelable task' }, { agent: supervisor }))
+    const created = JSON.parse(create.definition.execute({
+      taskId: opened.task.taskId,
+      title: 'Cancelable subtask',
+      instruction: 'Wait for cancellation',
+    }, { agent: supervisor }))
+    await assign.definition.execute({
+      taskId: opened.task.taskId,
+      subtaskId: created.subtask.id,
+      worker: B,
+    }, { agent: supervisor })
+    await accept.definition.execute({
+      requestId: submitted.request.id,
+      taskId: opened.task.taskId,
+    }, { agent: supervisor })
+    await cancel.definition.execute({
+      requestId: submitted.request.id,
+    }, { agent: requester })
+    const tasks = JSON.parse(harness.tools.find(entry => entry.definition.name === 'collab_task_list')
+      .definition.execute({}, { agent: supervisor }))
+    assert.equal(tasks[0].status, 'closed')
+    const subtasks = harness.tools.find(entry => entry.definition.name === 'collab_subtasks')
+      .definition.execute({}, { agent: supervisor })
+    assert.match(subtasks, /\[cancelled\]/u)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
