@@ -293,6 +293,26 @@ test('real browser: collab entry, menu, and authorization page', async t => {
     await waitFor(browser.evaluate, `document.querySelector('[role="tab"]') !== null`, 10_000)
     const autoTabs = await browser.evaluate(`Array.from(document.querySelectorAll('[role="tab"], .dsh-collab-board-tab-title')).map(element => element.textContent.trim()).filter(Boolean)`)
     assert.ok(autoTabs.some(text => text.includes('任务')), `tabs: ${autoTabs.join(', ')}`)
+    await browser.evaluate(`(() => {
+      const button = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
+        .find(element => element.textContent.trim() === 'strategy')
+      if (button !== undefined) button.click()
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    await browser.evaluate(`(() => {
+      const item = Array.from(document.querySelectorAll('[role="menuitem"]'))
+        .find(element => element.textContent.trim() === 'collab')
+      if (item !== undefined) item.click()
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    await browser.evaluate(`(() => {
+      const button = Array.from(document.querySelectorAll('button'))
+        .find(element => element.getAttribute('aria-label') === '打开右侧边栏')
+      if (button !== undefined) button.click()
+    })()`)
+    await waitFor(browser.evaluate, `document.querySelector('[role="tab"]') !== null`, 10_000)
+    const switchedTabs = await browser.evaluate(`Array.from(document.querySelectorAll('[role="tab"], .dsh-collab-board-tab-title')).map(element => element.textContent.trim()).filter(Boolean)`)
+    assert.ok(switchedTabs.some(text => text.includes('任务')), `tabs after switch: ${switchedTabs.join(', ')}`)
 
   }
 
