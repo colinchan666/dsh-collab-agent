@@ -1379,6 +1379,7 @@ export function apply(ctx, config = {}) {
         mkdirp(deliveryDir, 0o755)
         bindDeliverySandbox(worker, deliveryDir)
         const assigned = tasks.assign(subtaskId, worker, turnForCall(exec), effectiveCapability(relationship)?.version ?? null)
+        audit.append('task.assigned', { taskId: assigned.id, supervisor: self.sessionId, worker })
         const payload = {
           type: 'collab-task/assign',
           version: 1,
@@ -1749,6 +1750,7 @@ export function apply(ctx, config = {}) {
             deliveredAt: Date.now(),
             ...(supersedes === null ? {} : { supersedes }),
           })
+          audit.append('delivery.published', { requestId: request.id, taskId: request.taskId, deliveryId })
           clearExecutionTimer(request.id)
           return JSON.stringify({ requestId: request.id, status: recorded.status, files: manifest.files.length, deliveryId, delivery })
         } finally {
@@ -1801,6 +1803,7 @@ export function apply(ctx, config = {}) {
           details: args?.details,
           artifacts: args?.artifacts,
         })
+        audit.append('task.completed', { taskId: completed.id, worker: self.sessionId })
         const delivery = await sendTaskNotice(self, completed.supervisor, {
           type: 'collab-task/result',
           version: 1,
