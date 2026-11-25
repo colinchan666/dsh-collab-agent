@@ -276,6 +276,26 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   assert.equal(clickedTab, true)
   await waitFor(browser.evaluate, "document.body.innerText.includes('勾选两个会话')")
 
+  if (process.env.DSH_BROWSER_CREATE_SUPERVISOR === '1') {
+    await browser.evaluate("document.querySelector('.dsh-collab-new-button').click()")
+    await waitFor(browser.evaluate, "document.querySelector('[role=\"menuitem\"]') !== null")
+    await browser.evaluate(`(() => {
+      const item = Array.from(document.querySelectorAll('[role="menuitem"]'))
+        .find(element => element.textContent.includes('超级会话'))
+      if (item !== undefined) item.click()
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    await browser.evaluate(`(() => {
+      const button = Array.from(document.querySelectorAll('button'))
+        .find(element => element.getAttribute('aria-label') === '打开右侧边栏')
+      if (button !== undefined) button.click()
+    })()`)
+    await waitFor(browser.evaluate, `document.querySelector('[role="tab"]') !== null`, 10_000)
+    const autoTabs = await browser.evaluate(`Array.from(document.querySelectorAll('[role="tab"], .dsh-collab-board-tab-title')).map(element => element.textContent.trim()).filter(Boolean)`)
+    assert.ok(autoTabs.some(text => text.includes('任务')), `tabs: ${autoTabs.join(', ')}`)
+
+  }
+
   const exceptions = browser.events
     .filter(event => event.method === 'Runtime.exceptionThrown')
     .map(event => JSON.stringify(event.params?.exceptionDetails ?? {}))

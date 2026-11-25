@@ -1910,34 +1910,28 @@ window.__ModuleLoader__.load({
         + 'html[data-collab-preset-lock="true"] button[aria-haspopup="menu"][title*="Agent preset"]{display:none!important}')
     }
 
-    function CollabSupervisorTabsOnOpen(props) {
+    const autoSeededSupervisorTabs = new Set()
+
+    function CollabSupervisorTabsAutoSeed(props) {
       const sessions = props.useSessions(selectSnapshot)
-      const summary = sessions.byId[props.sessionId]
-      const supervisor = isSupervisorSessionSummary(summary, sessions)
-      const looksLikeSupervisor = () => {
-        if (supervisor) return true
-        return Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
-          .some(element => /超级会话|Supervisor session/u.test(element.textContent ?? ''))
-      }
+      const main = Object.values(sessions?.byId ?? {})
+        .find(summary => (summary.retainedBy?.mainView ?? 0) > 0)
+      const preset = main?.projectionValues?.agentPreset
+        ?? sessions?.projectionsBySession?.[main?.id]?.values?.agentPreset
+      const sessionId = main?.id
       React.useEffect(() => {
-        let wasExpanded = false
-        const seed = () => {
-          if (!looksLikeSupervisor()) return
-          const expanded = props.isExpanded()
-          if (!expanded) {
-            wasExpanded = false
-            return
-          }
-          if (wasExpanded) return
-          wasExpanded = true
-          props.openGuide(props.sessionId)
-          props.openTasks(props.sessionId)
-          props.openWorkers(props.sessionId)
-        }
-        seed()
-        const timer = setInterval(seed, 200)
-        return () => clearInterval(timer)
-      }, [supervisor, props.sessionId])
+        if (preset !== 'supervisor' || sessionId === undefined) return undefined
+        if (autoSeededSupervisorTabs.has(sessionId)) return undefined
+        autoSeededSupervisorTabs.add(sessionId)
+        props.openTasks(sessionId)
+        props.openWorkers(sessionId)
+        props.openGuide(sessionId)
+        return undefined
+      }, [preset, sessionId])
+      return null
+    }
+
+    function CollabSupervisorTabsOnOpen() {
       return null
     }
 
@@ -2172,6 +2166,16 @@ window.__ModuleLoader__.load({
           id: 'collab-base-prompt',
           locale: NS,
         }, CollabBasePromptEditor))
+
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay',
+          id: 'collab-supervisor-tabs-auto-seed',
+          inject: () => ({
+            openGuide: (sessionId) => ctx.sidebarRight.openTab('guide', { params: { sessionId }, revealIfOpened: false }),
+            openTasks: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, { params: { sessionId }, revealIfOpened: false }),
+            openWorkers: (sessionId) => ctx.sidebarRight.openTab(WORKERS_TAB_KIND, { params: { sessionId }, revealIfOpened: false }),
+          }),
+        }, CollabSupervisorTabsAutoSeed))
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',
