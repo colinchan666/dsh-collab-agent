@@ -26,6 +26,7 @@ import {
 import { COLLAB_PRESET as PRESET, SUPERVISOR_PRESET as SUPERVISOR, COLLAB_PRESETS } from './lib/presets.js'
 import { subtaskAliases } from './lib/task-aliases.js'
 import { createDeliveryManifestService } from './lib/delivery-manifest.js'
+import { AuditLog } from './lib/audit.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-collab-sessions'
@@ -419,6 +420,7 @@ export function apply(ctx, config = {}) {
     : 24 * 60 * 60 * 1000
   const perSessionSandbox = config.perSessionSandbox !== false && process.platform !== 'win32'
   const registry = new SessionRegistry(registryPath)
+  const audit = new AuditLog(path.join(path.dirname(registryPath), 'audit.jsonl'))
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
       ? config.authorizationPath
@@ -456,6 +458,7 @@ export function apply(ctx, config = {}) {
     || registry.get(id)?.preset === SUPERVISOR
   const collabAdmin = {
     isKnownCollab,
+    audit: (limit = 100) => audit.tail(limit),
     listAuth: () => ({
       pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
       pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
@@ -463,10 +466,12 @@ export function apply(ctx, config = {}) {
     authorize: (a, b) => {
       if (!isKnownCollab(a) || !isKnownCollab(b)) throw new Error('authorization requires two known collaboration sessions')
       auth.authorize(a, b, 'ui')
+      audit.append('authorization.authorize', { a, b })
       return collabAdmin.listAuth()
     },
     revoke: (a, b) => {
       auth.revoke(a, b)
+      audit.append('authorization.revoke', { a, b })
       return collabAdmin.listAuth()
     },
   }
@@ -1298,6 +1303,7 @@ export function apply(ctx, config = {}) {
         const title = String(args?.title ?? '').trim()
         if (title.length === 0) throw new Error('task title must not be empty')
         const task = tasks.createTask({ supervisor: self.sessionId, title })
+        audit.append('task.opened', { taskId: task.id, supervisor: self.sessionId, title })
         return JSON.stringify({ task: TaskStore.taskSummary(task) })
       },
     },
@@ -1440,6 +1446,7 @@ export function apply(ctx, config = {}) {
           throw new Error('task is already bound to another request')
         }
         const acceptedAt = Date.now()
+        audit.append('request.accepted', { requestId: request.id, taskId, supervisor: self.sessionId })
         const accepted = requests.accept(request.id, {
           taskId,
           subtaskIds: assigned.map(subtask => subtask.id),
@@ -1631,6 +1638,7 @@ export function apply(ctx, config = {}) {
           throw new Error(`task still has ${String(active.length)} active subtask(s); complete or cancel them before closing`)
         }
         const closed = tasks.closeTask(taskId)
+        audit.append('task.closed', { taskId, supervisor: self.sessionId })
         for (const task of owned) {
           if (task.worker !== null) releaseDeliverySandbox(task.worker, deliveryRoot(taskId))
         }
