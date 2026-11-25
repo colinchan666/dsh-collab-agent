@@ -13,7 +13,7 @@ function fakeClientHarness() {
   const sessions = { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} }
   const listeners = new Set()
   const registrations = []
-  const calls = { started: [], opened: [], executed: [], auth: [], registered: [], panels: [], tabs: [], tabTypes: [] }
+  const calls = { started: [], opened: [], openedWorkspace: [], executed: [], auth: [], registered: [], panels: [], tabs: [], tabTypes: [] }
   const ctx = {
     effect(factory) {
       factory()
@@ -29,6 +29,7 @@ function fakeClientHarness() {
     },
     uiWorkspace: {
       startSession(workspaceId, options) { calls.started.push({ workspaceId, options }) },
+      openWorkspace(workspaceId, beforeOpen, options) { calls.openedWorkspace.push({ workspaceId, beforeOpen, options }) },
       openSession(id) {
         calls.opened.push(id)
         calls.onOpen?.(id)
@@ -214,4 +215,42 @@ test('base prompt command parsing allows an empty value', () => {
   assert.deepEqual(__test.parseBasePromptCommand('/collab-base set '), { operation: 'baseSet', value: '' })
   assert.deepEqual(__test.parseBasePromptCommand('/collab-base set aGVsbG8='), { operation: 'baseSet', value: 'hello' })
   assert.equal(__test.parseBasePromptCommand('/collab-base set %%%'), null)
+})
+
+
+test('ordinary summaries are not collaboration summaries', () => {
+  const plugin = pluginFor()
+  const { isCollabSummary } = plugin.__test
+  assert.equal(isCollabSummary({ id: 'plain', projectionValues: { agentPreset: 'standard' } }), false)
+  assert.equal(isCollabSummary({
+    id: 'plain',
+    projectionValues: {
+      agentPreset: 'standard',
+      workingDirectory: '/workspace/' + ['.dsh-collab', 'sessions', 'plain'].join('/'),
+    },
+  }), false)
+  assert.equal(isCollabSummary({ id: 'worker', projectionValues: { agentPreset: 'collab' } }), true)
+})
+
+test('workspace switching preserves the active collaboration preset', () => {
+  const plugin = pluginFor()
+  const harness = fakeClientHarness()
+  harness.sessions.byId['session-collab'] = {
+    id: 'session-collab',
+    retainedBy: { mainView: 1 },
+    projectionValues: { agentPreset: 'collab' },
+  }
+  plugin.apply(harness.ctx)
+  harness.ctx.uiWorkspace.openWorkspace('ws-target')
+  assert.deepEqual(harness.calls.openedWorkspace, [{
+    workspaceId: 'ws-target',
+    beforeOpen: undefined,
+    options: { agentPreset: 'collab' },
+  }])
+  harness.ctx.uiWorkspace.openWorkspace('ws-target', undefined, {})
+  assert.deepEqual(harness.calls.openedWorkspace[1], {
+    workspaceId: 'ws-target',
+    beforeOpen: undefined,
+    options: {},
+  })
 })
