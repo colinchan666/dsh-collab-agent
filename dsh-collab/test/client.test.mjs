@@ -244,3 +244,12 @@ test('workspace switching preserves the active collaboration preset', () => {
     options: {},
   })
 })
+
+
+test('the compatibility selectors stay explicit and centralized', () => {
+  const { COMPAT } = pluginFor().__test
+  assert.equal(COMPAT.labels.collab, '协同会话')
+  assert.equal(COMPAT.labels.supervisor, '超级会话')
+  assert.equal(COMPAT.presetText.test('Collab session'), true)
+  assert.match(COMPAT.modeChip, /Agent 预设/u)
+})

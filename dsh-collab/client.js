@@ -17,6 +17,20 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const NS = 'dsh-collab-sessions'
+    /** Compatibility copy and selectors tied to DSH preset chrome. */
+    const COMPAT = Object.freeze({
+      presetText: /(协同会话|超级会话|Collab session|Supervisor session)/u,
+      modeChip:
+        'button[aria-haspopup="menu"][title*="Agent 预设"],'
+        + 'button[aria-haspopup="menu"][title*="Agent preset"]',
+      labels: Object.freeze({
+        collab: '协同会话',
+        supervisor: '超级会话',
+        collabEn: 'Collab session',
+        supervisorEn: 'Supervisor session',
+      }),
+    })
+
     const BOARD_TAB_ID = '@xmodelin/dsh-collab-sessions/supervisor-tasks'
     const BOARD_TAB_KIND = 'collabSupervisorTasks'
     const WORKERS_TAB_ID = '@xmodelin/dsh-collab-sessions/supervisor-workers'
@@ -1861,8 +1875,8 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         const translatePresetCopy = () => {
           const pairs = [
-            ['协同会话', t('preset.collabName')],
-            ['超级会话', t('preset.supervisorName')],
+            [COMPAT.labels.collab, t('preset.collabName')],
+            [COMPAT.labels.supervisor, t('preset.supervisorName')],
             ['拥有独立的 .dsh-collab 工作目录、共享的 comm/ 目录和仅本会话可访问的 private/ 目录，并提供经过身份验证的会话间通信工具。', t('preset.collabDescription')],
             ['负责拆解需求、把子任务分派给已登记的功能会话、核验结果并完成交付；不提供任何实现类工具。', t('preset.supervisorDescription')],
           ]
@@ -1879,7 +1893,7 @@ window.__ModuleLoader__.load({
             // The collab entry's own dropdown also uses role=menuitem.
             if (node.closest('.dsh-collab-new-menu') !== null) continue
             const text = node.textContent ?? ''
-            if (!/(协同会话|超级会话|Collab session|Supervisor session)/u.test(text)) continue
+            if (!COMPAT.presetText.test(text)) continue
             node.hidden = true
             node.setAttribute('aria-hidden', 'true')
             node.style.setProperty('display', 'none', 'important')
@@ -1906,8 +1920,7 @@ window.__ModuleLoader__.load({
         return () => root.removeAttribute('data-collab-preset-lock')
       }, [locked])
       return h('style', null,
-        'html[data-collab-preset-lock="true"] button[aria-haspopup="menu"][title*="Agent 预设"],'
-        + 'html[data-collab-preset-lock="true"] button[aria-haspopup="menu"][title*="Agent preset"]{display:none!important}')
+        `html[data-collab-preset-lock="true"] ${COMPAT.modeChip}{display:none!important}`)
     }
 
     const autoSeededSupervisorTabs = new Set()
@@ -1932,7 +1945,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand },
+      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
