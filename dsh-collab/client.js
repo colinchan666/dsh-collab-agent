@@ -1923,8 +1923,6 @@ window.__ModuleLoader__.load({
         `html[data-collab-preset-lock="true"] ${COMPAT.modeChip}{display:none!important}`)
     }
 
-    const autoSeededSupervisorTabs = new Set()
-
     function CollabSupervisorTabsAutoSeed(props) {
       const sessions = props.useSessions(selectSnapshot)
       const main = Object.values(sessions?.byId ?? {})
@@ -1934,12 +1932,17 @@ window.__ModuleLoader__.load({
       const sessionId = main?.id
       React.useEffect(() => {
         if (preset !== 'supervisor' || sessionId === undefined) return undefined
-        if (autoSeededSupervisorTabs.has(sessionId)) return undefined
-        autoSeededSupervisorTabs.add(sessionId)
-        props.openTasks(sessionId)
-        props.openWorkers(sessionId)
-        props.openGuide(sessionId)
-        return undefined
+        let attempts = 0
+        const seed = () => {
+          attempts += 1
+          props.openTasks(sessionId)
+          props.openWorkers(sessionId)
+          props.openGuide(sessionId)
+          if (attempts >= 12) clearInterval(timer)
+        }
+        seed()
+        const timer = setInterval(seed, 250)
+        return () => clearInterval(timer)
       }, [preset, sessionId])
       return null
     }
