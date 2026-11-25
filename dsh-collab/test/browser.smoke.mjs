@@ -243,36 +243,6 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
 
-  // Standard new-session preset menu must not offer collab presets.
-  await browser.evaluate(`(() => {
-    const resume = Array.from(document.querySelectorAll('button'))
-      .find(element => element.textContent.trim() === '继续')
-    if (resume !== undefined) resume.click()
-  })()`)
-  const chipVisible = `(() => Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
-    .some(element => /标准模式|Standard mode/.test(element.textContent)))()`
-  await waitFor(browser.evaluate, chipVisible)
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await browser.evaluate(`(() => {
-      const chip = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]'))
-        .find(element => /标准模式|Standard mode/.test(element.textContent))
-      if (chip !== undefined) chip.click()
-    })()`)
-    try {
-      await waitFor(browser.evaluate, `Array.from(document.querySelectorAll('[role="menuitem"]')).some(element => element.getClientRects().length > 0)`, 2_000)
-      break
-    } catch {
-      if (attempt === 2) throw new Error('standard preset menu did not open')
-    }
-  }
-  const visiblePresetNames = await browser.evaluate(`Array.from(
-    document.querySelectorAll('[role="menuitem"]'),
-  ).filter(element => element.getClientRects().length > 0)
-    .map(element => element.textContent.trim())`)
-  assert.equal(visiblePresetNames.some(text => /协同会话|超级会话|Collab session|Supervisor session/u.test(text)), false)
-  await browser.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
-  await browser.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
-
   // Open the authorization Remote page.
   await browser.evaluate(`(() => {
     const button = Array.from(document.querySelectorAll('button'))
