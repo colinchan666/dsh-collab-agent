@@ -79,3 +79,11 @@ test('typed panel Remote methods preserve the owner-only boundary', () => {
   ctx.invocation = { peer: { principal: { kind: 'peer' } } }
   assert.throws(() => service().board(id), /owner-only/u)
 })
+
+test('the generated host artifact exposes every typed panel method', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+  const host = fs.readFileSync(path.join(root, 'lib/typert.host.js'), 'utf8')
+  for (const method of ['board', 'link', 'unlink', 'pin', 'live', 'baseGet', 'baseSet']) {
+    assert.match(host, new RegExp(`collabAuth/${method}`, 'u'))
+  }
+})
