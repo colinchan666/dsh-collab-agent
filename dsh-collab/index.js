@@ -30,6 +30,7 @@ import { AuditLog } from './lib/audit.js'
 import { cancelBoundTask } from './lib/cancel-request.js'
 import { createPanelApi } from './lib/panel-api.js'
 import { collectHealth } from './lib/health.js'
+import { createAccessPolicy } from './lib/access-policy.js'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'dsh-collab-sessions'
@@ -2339,68 +2340,16 @@ export function apply(ctx, config = {}) {
     const currentCwd = exec.agent.session === undefined ? undefined : ctx.workingDirectory.get(exec.agent.session)
     const selfWorkdir = currentCwd ?? self?.workdir
     if (typeof selfWorkdir !== 'string') return undefined
-    const comparablePath = (value) => {
-      const resolved = path.resolve(value)
-      return process.platform === 'win32' ? resolved.toLowerCase() : resolved
-    }
-    const pathInside = (candidate, root) => {
-      const resolvedCandidate = comparablePath(candidate)
-      const resolvedRoot = comparablePath(root)
-      return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
-    }
-    const canonicalSharedRoot = canonicalPath(sharedRoot)
-    const projectIdFromShared = (resolved) => {
-      if (!pathInside(resolved, canonicalSharedRoot)) return undefined
-      const relative = path.relative(canonicalSharedRoot, resolved).split(path.sep).filter(Boolean)
-      if (relative.length < 2 || relative[1] !== 'artifacts') return undefined
-      return relative[0]
-    }
-    const deliveryAccessFor = (candidate, write) => {
-      if (typeof candidate !== 'string' || candidate.length === 0) return false
-      const resolved = canonicalPath(path.resolve(selfWorkdir, candidate))
-      const projectId = projectIdFromShared(resolved)
-      if (projectId === undefined) return false
-      const project = tasks.task(projectId)
-      if (project === undefined) return false
-      if (isSupervisorSession(sessionId)) return project.supervisor === sessionId && write !== true
-      if (isManagedWorker(sessionId)) {
-        if (write && project.status !== 'open') return false
-        return tasks.listForWorker(sessionId).some(task => (
-          task.taskId === projectId && task.supervisor === project.supervisor
-        ))
-      }
-      if (write) return false
-      return requests.listForRequester(sessionId).some(request => (
-        request.taskId === projectId
-        && (request.status === 'delivered' || (request.status === 'accepted' && request.delivery !== null))
-        && project.requestId === request.id
-        && request.delivery !== null
-      ))
-    }
-    const sharedAccessDenied = (candidates, write) => {
-      for (const candidate of candidates) {
-        if (typeof candidate !== 'string' || candidate.length === 0) continue
-        const lexical = path.resolve(selfWorkdir, candidate)
-        const resolved = canonicalPath(lexical)
-        if (!pathInside(lexical, sharedRoot) && !pathInside(resolved, canonicalSharedRoot)) continue
-        if (pathInside(lexical, sharedRoot) && !pathInside(resolved, canonicalSharedRoot)) return { path: lexical }
-        if (deliveryAccessFor(candidate, write)) continue
-        return { path: lexical }
-      }
-      return undefined
-    }
-    const managedWriteAllowed = (candidate) => {
-      if (!isManagedWorker(sessionId)) return true
-      if (typeof candidate !== 'string' || candidate.length === 0) return false
-      const resolved = canonicalPath(path.resolve(selfWorkdir, candidate))
-      if (deliveryAccessFor(candidate, true)) return true
-      const layoutWorkdir = self?.workdir ?? selfWorkdir
-      for (const own of [path.join(layoutWorkdir, 'private'), path.join(layoutWorkdir, 'comm')]) {
-        if (pathInside(resolved, canonicalPath(own))) return true
-      }
-      return false
-    }
-    const allowedDeliveryPaths = (candidates, write) => candidates.filter(candidate => !deliveryAccessFor(candidate, write))
+    const { deliveryAccessFor, sharedAccessDenied, managedWriteAllowed, allowedDeliveryPaths } = createAccessPolicy({
+      sharedRoot,
+      sessionId,
+      selfWorkdir,
+      layoutWorkdir: self?.workdir ?? selfWorkdir,
+      tasks,
+      requests,
+      isSupervisorSession,
+      isManagedWorker,
+    })
 
     const byId = new Map()
     for (const entry of registry.list()) {
