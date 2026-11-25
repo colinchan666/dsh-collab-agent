@@ -1945,6 +1945,16 @@ export function apply(ctx, config = {}) {
         const cancelled = requests.cancel(request.id, self.sessionId)
         clearRequestTimer(request.id)
         clearExecutionTimer(request.id)
+        if (request.taskId !== null) {
+          const subtasks = tasks.listSubtasksForTask(request.taskId)
+          for (const subtask of subtasks) {
+            if (!['done', 'cancelled'].includes(subtask.status)) {
+              try { tasks.cancel(subtask.id) } catch { /* cancellation is best effort after the request is cancelled */ }
+            }
+            if (subtask.worker !== null) releaseDeliverySandbox(subtask.worker, deliveryRoot(request.taskId))
+          }
+          try { tasks.closeTask(request.taskId) } catch { /* request cancellation remains authoritative */ }
+        }
         try {
           await sendTaskNotice(self, request.supervisor, {
             type: 'collab-task/request-cancelled',
