@@ -1843,7 +1843,7 @@ window.__ModuleLoader__.load({
                           h('span', { className: 'dsh-collab-board-row-main' },
                             request.title,
                             request.reason === undefined ? null : h('span', { className: 'dsh-collab-board-muted' }, ` · ${request.reason}`)),
-                          h('code', { className: 'dsh-collab-board-id' }, request.requesterTitle ?? shortId(request.requester)),
+                          h('code', { className: 'dsh-collab-board-id' }, titleOf(request.requester)),
                           h('span', { className: 'dsh-collab-board-status' }, statusText(request.status))))),
                       requestPageCount > 1
                         ? h('div', { className: 'dsh-collab-board-actions', 'data-align': 'start' },
@@ -1868,7 +1868,7 @@ window.__ModuleLoader__.load({
                       h('h3', { className: 'dsh-collab-board-section-title' }, selectedRequest.title),
                       h('span', { className: 'dsh-collab-board-status' }, statusText(selectedRequest.status))),
                     h('p', { className: 'dsh-collab-board-muted' },
-                      `${t('board.requester')}: ${selectedRequest.requesterTitle ?? shortId(selectedRequest.requester)}`),
+                      `${t('board.requester')}: ${titleOf(selectedRequest.requester)}`),
                     selectedParentTask === null
                       ? h('p', { className: 'dsh-collab-board-muted' }, t('board.noLinkedTask'))
                       : h(React.Fragment, null,
@@ -1894,7 +1894,7 @@ window.__ModuleLoader__.load({
                               },
                                 h('span', { className: 'dsh-collab-board-row-main' }, task.title),
                                 h('span', { className: 'dsh-collab-board-status' }, t('board.subtask')),
-                                h('code', { className: 'dsh-collab-board-id' }, ` ${t('board.worker')}: ${task.workerTitle ?? shortId(task.worker ?? '-')}`),
+                                h('code', { className: 'dsh-collab-board-id' }, ` ${t('board.worker')}: ${titleOf(task.worker)}`),
                                 h('span', { className: 'dsh-collab-board-locate', 'aria-hidden': 'true' }, '↗'),
                                 h('span', { className: 'dsh-collab-board-status' }, statusText(task.status))))),
         )))

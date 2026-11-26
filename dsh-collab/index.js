@@ -1192,14 +1192,8 @@ export function apply(ctx, config = {}) {
         })),
         workers: workerCandidates(sessionId),
         tasks: tasks.listTasks(sessionId).map(task => TaskStore.taskSummary(task)),
-        subtasks: tasks.listForSupervisor(sessionId).map(subtask => ({
-          ...TaskStore.summary(subtask),
-          workerTitle: registry.get(subtask.worker)?.title ?? null,
-        })),
-        requests: requests.listForSupervisor(sessionId).map(request => ({
-          ...RequestStore.summary(request),
-          requesterTitle: registry.get(request.requester)?.title ?? null,
-        })),
+        subtasks: tasks.listForSupervisor(sessionId).map(subtask => TaskStore.summary(subtask)),
+        requests: requests.listForSupervisor(sessionId).map(request => RequestStore.summary(request)),
       }
     }
     if (op === 'baseGet' || op === 'baseSet') {
