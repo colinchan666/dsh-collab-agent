@@ -1,6 +1,6 @@
 {
   "name": "@xmodelin/dsh-collab-sessions",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "type": "module",
   "description": "Left-sidebar entry that creates collaboration sessions with a private/communication workspace layout and session-to-session messaging.",
   "exports": {
@@ -59,6 +59,6 @@
     "dsh": "^0.2.2-rc.5"
   },
   "dependencies": {
-    "@xmodelin/dsh-collab-auth-api": "0.0.11"
+    "@xmodelin/dsh-collab-auth-api": "0.0.12"
   }
 }
