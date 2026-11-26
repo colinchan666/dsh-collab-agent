@@ -1572,8 +1572,8 @@ window.__ModuleLoader__.load({
       const [selectedRequestId, setSelectedRequestId] = React.useState(null)
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
 
-      const load = async () => {
-        setLoading(true)
+      const load = async (showLoading = true) => {
+        if (showLoading) setLoading(true)
         setError(null)
         try {
           const result = await props.panel(props.sessionId, 'board', {})
@@ -1586,7 +1586,11 @@ window.__ModuleLoader__.load({
         }
       }
 
-      React.useEffect(() => { void load() }, [props.sessionId])
+      React.useEffect(() => {
+        void load()
+        const timer = window.setInterval(() => { void load(false) }, 3000)
+        return () => window.clearInterval(timer)
+      }, [props.sessionId])
 
       React.useEffect(() => {
         const reload = (event) => {
