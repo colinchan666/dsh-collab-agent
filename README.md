@@ -71,11 +71,11 @@ bundle therefore installs and activates both halves.
 Target release:
 
 ```text
-@xmodelin/dsh-collab-sessions@0.0.6
-@xmodelin/dsh-collab-auth-api@0.0.6
+@xmodelin/dsh-collab-sessions@0.0.7
+@xmodelin/dsh-collab-auth-api@0.0.7
 ```
 
-If `npm view` returns 404 for `0.0.6`, the release is staged and must be
+If `npm view` returns 404 for `0.0.7`, the release is staged and must be
 approved first:
 
 ```sh
@@ -90,13 +90,13 @@ npm view @xmodelin/dsh-collab-auth-api version
 npm view @xmodelin/dsh-collab-sessions version
 ```
 
-Both should print `0.0.6`.
+Both should print `0.0.7`.
 
 1. In DSH open **Plugins** and add an npm package, or install the bundle with
    the plugin manager using this spec:
 
    ```text
-   @xmodelin/dsh-collab-sessions@0.0.6
+   @xmodelin/dsh-collab-sessions@0.0.7
    ```
 
 2. Do **not** separately install or enable `@xmodelin/dsh-collab-auth-api`; its
@@ -263,7 +263,7 @@ Before publishing:
 - rebuild the API if its generated `lib/` changed.
 
 Both packages use `publishConfig.access = public`, so `npm publish` publishes a
-public scoped package. Version `0.0.6` is the current staged release. Approve the staged auth API
+public scoped package. Version `0.0.7` is the current staged release. Approve the staged auth API
 version first, then the staged sessions version (it depends on the API). For
 the next release, bump both versions together and update the sessions
 dependency before publishing.
@@ -288,5 +288,5 @@ DSH, re-sync `dsh-collab/cordis.patch.yml` from the installed
 
 ## Release branch
 
-The current release line is `release-v0.0.6`. Both it and `main` must stay in
+The current release line is `release-v0.0.7`. Both it and `main` must stay in
 sync for plugin-only changes.

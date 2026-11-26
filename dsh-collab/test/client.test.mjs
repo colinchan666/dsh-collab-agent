@@ -253,3 +253,16 @@ test('the compatibility selectors stay explicit and centralized', () => {
   assert.equal(COMPAT.presetText.test('Collab session'), true)
   assert.match(COMPAT.modeChip, /Agent 预设/u)
 })
+
+test('guide counts use offered relationships instead of unoffered candidates', () => {
+  const { boardCounts } = pluginFor().__test
+  const counts = boardCounts({
+    workers: [{ sessionId: 'session-w' }],
+    relationships: [
+      { worker: 'session-w', offer: true },
+      { worker: 'session-x', offer: false },
+    ],
+    tasks: [{ status: 'open' }, { status: 'open' }, { status: 'closed' }],
+  })
+  assert.deepEqual(counts, { registered: 1, activeTasks: 2, totalTasks: 3 })
+})

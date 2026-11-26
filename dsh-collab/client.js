@@ -104,8 +104,10 @@ window.__ModuleLoader__.load({
       'board.title': '任务看板',
       'board.tasksTitle': '任务列表',
       'board.tasksGuide': '查看 supervisor 的任务与子任务',
+      'board.tasksGuideCount': '{active} 个进行中 · {total} 个任务',
       'board.workersTitle': '注册中心',
       'board.workersGuide': '查看已登记的协同会话与能力',
+      'board.workersGuideCount': '{total} 个已登记会话',
       'board.allProjects': '全部任务',
       'board.capabilityBoard': '能力登记',
       'board.open': '任务',
@@ -1878,6 +1880,55 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
+    function boardCounts(data) {
+      const relationships = Array.isArray(data?.relationships) ? data.relationships : []
+      const tasks = Array.isArray(data?.tasks) ? data.tasks : []
+      return {
+        registered: relationships.filter(relationship => relationship.offer === true).length,
+        activeTasks: tasks.filter(task => task.status === 'open').length,
+        totalTasks: tasks.length,
+      }
+    }
+
+    function CollabGuideCard(props) {
+      const t = typeof props.t === 'function' ? props.t : fallbackT
+      const { tab } = props.useTabInfo()
+      const [summary, setSummary] = React.useState('')
+      React.useEffect(() => {
+        let alive = true
+        if (typeof props.loadSummary !== 'function') return undefined
+        Promise.resolve(props.loadSummary()).then(raw => {
+          if (!alive) return
+          const data = typeof raw === 'string' ? JSON.parse(raw) : raw
+          const counts = boardCounts(data)
+          if (props.entryId === 'tasks') {
+            setSummary(t('board.tasksGuideCount', { active: counts.activeTasks, total: counts.totalTasks }))
+          } else {
+            setSummary(t('board.workersGuideCount', { total: counts.registered }))
+          }
+        }).catch(() => {})
+        return () => { alive = false }
+      }, [props.sessionId, props.entryId])
+      const icon = props.entryId === 'tasks' ? IconChecklistOutlineRegular : IconUserOutlineRegular
+      return h('button', {
+        type: 'button',
+        className: 'F6Huca_entry',
+        'data-sidebar-right-guide-entry': props.kind,
+        onClick: () => {
+          tab.actions.openTab(props.kind, { replaceTab: true })
+          tab.actions.close()
+        },
+      },
+        h('span', { className: 'F6Huca_entryIcon' },
+          icon === undefined ? null : h(icon, { size: 22 })),
+        h('span', { className: 'F6Huca_entryText' },
+          h('span', { className: 'F6Huca_entryTitle' }, props.title),
+          props.description === undefined ? null : h('span', { className: 'F6Huca_entryDescription' }, props.description),
+          summary.length === 0 ? null : h('span', { className: 'F6Huca_entryDescription' }, summary),
+        ),
+      )
+    }
+
     function CollabPresetMenuFilter(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       React.useEffect(() => {
@@ -1945,7 +1996,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT },
+      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT, boardCounts },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
@@ -2146,6 +2197,18 @@ window.__ModuleLoader__.load({
             key,
             locale: NS,
           }, CollabBoardTabTitle))
+        }
+
+        for (const key of [BOARD_TAB_ID, WORKERS_TAB_ID]) {
+          ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
+            name: 'sidebar.right.tab.guide.entry',
+            key,
+            locale: NS,
+            inject: sessionId => ({
+              sessionId,
+              loadSummary: () => callPanel(sessionId, 'board'),
+            }),
+          }, CollabGuideCard))
         }
 
         ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
