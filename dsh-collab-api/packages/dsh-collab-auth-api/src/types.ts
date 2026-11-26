@@ -30,6 +30,8 @@ export interface AuthSnapshot {
   readonly pairs: readonly AuthPair[]
   /** Directional grants waiting for the other side. */
   readonly pending: readonly PendingGrant[]
+  /** Session ids currently known to the collaboration registry. */
+  readonly knownSessionIds: readonly string[]
 }
 
 /** Host operations the collaboration plugin provides to the Remote. */
