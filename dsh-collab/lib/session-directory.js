@@ -1,5 +1,5 @@
 /** Canonical session metadata projection for collaboration UIs. */
-export function createSessionDirectory({ registry, sessions, sessionTitle, sessionQuery, agents }) {
+export function createSessionDirectory({ registry, sessions, sessionTitle, sessionQuery, archivedSessionIds, agents }) {
   const persistedTitles = new Map()
   const titleFor = (sessionId, stored) => {
     if (typeof stored === 'string' && stored.length > 0) return stored
@@ -13,7 +13,7 @@ export function createSessionDirectory({ registry, sessions, sessionTitle, sessi
     sessionId: entry.sessionId,
     title: titleFor(entry.sessionId, entry.title),
     preset: entry.preset,
-    archived: entry.archived === true,
+    archived: entry.archived === true || archivedSessionIds?.()?.has(entry.sessionId) === true,
     online: agents?.get?.(entry.sessionId) !== undefined,
     workspace: entry.originalCwd ?? null,
   })
