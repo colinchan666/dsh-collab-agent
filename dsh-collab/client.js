@@ -326,7 +326,40 @@ window.__ModuleLoader__.load({
       return preset === 'collab' || preset === 'supervisor'
     }
 
-    const collabDisplayTitles = new Map()
+    const collabDirectoryStore = {
+      records: new Map(),
+      listeners: new Set(),
+      version: 0,
+      subscribe: listener => {
+        collabDirectoryStore.listeners.add(listener)
+        return () => collabDirectoryStore.listeners.delete(listener)
+      },
+      getVersion: () => collabDirectoryStore.version,
+      get: id => collabDirectoryStore.records.get(id),
+      list: () => [...collabDirectoryStore.records.values()],
+      upsertSummaries: (state) => {
+        let changed = false
+        for (const id of state?.ids ?? []) {
+          const summary = state.byId[id]
+          if (summary === undefined || summary.origin === 'subagent') continue
+          const values = summary.projectionValues ?? state.projectionsBySession?.[id]?.values
+          const preset = values?.agentPreset
+          if (preset !== 'collab' && preset !== 'supervisor') continue
+          const title = typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0
+            ? summary.displayTitle
+            : collabDirectoryStore.records.get(id)?.title ?? null
+          const next = { sessionId: id, title, preset, archived: summary.archived === true }
+          const previous = collabDirectoryStore.records.get(id)
+          if (previous?.title === next.title && previous?.preset === next.preset && previous?.archived === next.archived) continue
+          collabDirectoryStore.records.set(id, next)
+          changed = true
+        }
+        if (changed) {
+          collabDirectoryStore.version += 1
+          for (const listener of collabDirectoryStore.listeners) listener()
+        }
+      },
+    }
 
     function collabSessionSummaries(state, preset) {
       return (state?.ids ?? [])
@@ -603,12 +636,8 @@ window.__ModuleLoader__.load({
       const sessions = props.useSessions(selectSnapshot)
       const roots = collabSessionSummaries(sessions)
       React.useEffect(() => {
-        for (const summary of roots) {
-          if (typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0) {
-            collabDisplayTitles.set(summary.id, summary.displayTitle)
-          }
-        }
-      }, [roots.map(summary => summary.id).join('|')])
+        collabDirectoryStore.upsertSummaries(sessions)
+      }, [sessions?.ids?.join('|')])
       const [pairs, setPairs] = React.useState([])
       const [pendingGrants, setPendingGrants] = React.useState([])
       const [knownSessions, setKnownSessions] = React.useState(null)
@@ -1588,7 +1617,8 @@ window.__ModuleLoader__.load({
       const [selectedRequestId, setSelectedRequestId] = React.useState(null)
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
       const sessions = typeof props.useSessions === 'function' ? props.useSessions(selectSnapshot) : undefined
-      const titleOf = id => collabDisplayTitles.get(id) ?? sessions?.byId?.[id]?.displayTitle ?? undefined
+      React.useSyncExternalStore(collabDirectoryStore.subscribe, collabDirectoryStore.getVersion)
+      const titleOf = id => collabDirectoryStore.get(id)?.title ?? sessions?.byId?.[id]?.displayTitle ?? undefined
 
       const load = async (showLoading = true) => {
         if (showLoading) setLoading(true)
@@ -2043,11 +2073,7 @@ window.__ModuleLoader__.load({
         ?? main?.preset
         ?? sessions?.projectionsBySession?.[main?.id]?.values?.agentPreset
       React.useEffect(() => {
-        for (const summary of collabSessionSummaries(sessions)) {
-          if (typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0) {
-            collabDisplayTitles.set(summary.id, summary.displayTitle)
-          }
-        }
+        collabDirectoryStore.upsertSummaries(sessions)
         const chip = document.querySelector('button[class*="_seat"]')?.textContent ?? ''
         const enabled = preset === 'supervisor' || chip.includes('超级会话') || chip.includes('Supervisor')
         props.setSupervisorGuide(enabled)
