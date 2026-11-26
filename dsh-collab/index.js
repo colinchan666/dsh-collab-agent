@@ -1535,6 +1535,7 @@ export function apply(ctx, config = {}) {
     reconciledCollabRegistry = true
     for (const entry of registry.list()) {
       if (entry.sessionId === currentSessionId) continue
+      if (collabSessions.has(entry.sessionId) || ctx.agents.get(entry.sessionId) !== undefined) continue
       if (archived?.has(entry.sessionId) === true) {
         try { cleanupArchivedSession(entry.sessionId, 'session.archived') } catch { /* best effort */ }
         continue
