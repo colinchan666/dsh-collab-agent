@@ -150,14 +150,10 @@ export function apply(ctx, config = {}) {
     isKnownCollab,
     audit: (limit = 100) => audit.tail(limit),
     listAuth: () => {
-      const knownSessionIds = sessionDirectory.list()
-        .filter(entry => (entry.preset === PRESET || entry.preset === SUPERVISOR) && entry.archived !== true)
-        .map(entry => entry.sessionId)
       return {
         pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
         pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
-        knownSessionIds,
-        sessions: sessionDirectory.list(),
+        sessions: sessionDirectory.list().filter(entry => (entry.preset === PRESET || entry.preset === SUPERVISOR) && entry.archived !== true),
       }
     },
     authorize: (a, b) => {

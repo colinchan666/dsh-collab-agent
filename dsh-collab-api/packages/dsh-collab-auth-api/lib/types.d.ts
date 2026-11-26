@@ -35,8 +35,6 @@ export interface AuthSnapshot {
     readonly pairs: readonly AuthPair[];
     /** Directional grants waiting for the other side. */
     readonly pending: readonly PendingGrant[];
-    /** Session ids currently known to the collaboration registry. */
-    readonly knownSessionIds: readonly string[];
     /** Canonical collaboration session directory. */
     readonly sessions: readonly SessionDirectoryEntry[];
 }
