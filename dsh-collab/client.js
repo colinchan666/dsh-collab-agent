@@ -1881,72 +1881,6 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
-    const GUIDE_CARD_CSS = `.F6Huca_guide{--dsl-guide-entry-radius:var(--dsw-radius-xl);box-sizing:border-box;flex-direction:column;justify-content:center;align-items:center;gap:14px;min-height:100%;padding:0 24px;display:flex}.F6Huca_guide:after{content:"";flex:0 10%}.F6Huca_hero{color:var(--dsw-specific-guide-hero);margin-bottom:16px;display:flex}.dsh-collab-guide-entry{box-sizing:border-box;width:380px;max-width:100%;min-height:56px;color:var(--dsw-alias-label-primary);font:inherit;text-align:left;background:var(--dsw-alias-bg-layer-1);border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsl-guide-entry-radius);cursor:pointer;align-items:center;gap:14px;padding:14px 20px;display:flex}@media (hover:hover){.dsh-collab-guide-entry:hover{background:var(--dsw-alias-interactive-bg-hover)}}.dsh-collab-guide-icon{width:26px;height:26px;color:var(--dsw-alias-label-secondary);flex:none;justify-content:center;align-items:center;display:flex}.F6Huca_placeholderInk{color:var(--dsw-alias-label-tertiary)}.dsh-collab-guide-text{flex-direction:column;flex:1;gap:3px;min-width:0;display:flex}.dsh-collab-guide-title{white-space:nowrap;text-overflow:ellipsis;font-size:14px;line-height:1.4;overflow:hidden}.dsh-collab-guide-description{color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-overflow:ellipsis;font-size:11px;line-height:1.4;overflow:hidden}.F6Huca_titleIcon{color:var(--dsw-alias-label-tertiary);flex:none}.dsh-collab-guide-cell{width:380px;max-width:100%}.F6Huca_moreAnchor{width:380px;max-width:100%;display:flex}.F6Huca_moreAnchor .dsh-collab-guide-entry[aria-expanded=true]{background:var(--dsw-alias-interactive-bg-hover)}.F6Huca_moreMenu{width:max-content;max-width:min(480px,100vw - 24px)}`
-
-    function normalizePanelValue(raw) {
-      let value = raw
-      if (typeof value === 'string') value = JSON.parse(value)
-      if (value !== null && typeof value === 'object' && 'ok' in value) {
-        if (value.ok === false) throw new Error(value.error?.message ?? 'collaboration Remote failed')
-        value = value.value
-      }
-      if (typeof value === 'string') value = JSON.parse(value)
-      return value
-    }
-
-    function CollabGuideStyles() {
-      return h('style', null, GUIDE_CARD_CSS)
-    }
-
-    function boardCounts(data) {
-      const relationships = Array.isArray(data?.relationships) ? data.relationships : []
-      const tasks = Array.isArray(data?.tasks) ? data.tasks : []
-      return {
-        registered: relationships.filter(relationship => relationship.offer === true).length,
-        activeTasks: tasks.filter(task => task.status === 'open').length,
-        totalTasks: tasks.length,
-      }
-    }
-
-    function CollabGuideCard(props) {
-      const t = typeof props.t === 'function' ? props.t : fallbackT
-      const { tab } = props.useTabInfo()
-      const [summary, setSummary] = React.useState('')
-      React.useEffect(() => {
-        let alive = true
-        if (typeof props.loadSummary !== 'function') return undefined
-        Promise.resolve(props.loadSummary()).then(raw => {
-          if (!alive) return
-          const data = normalizePanelValue(raw)
-          const counts = boardCounts(data)
-          if (props.entryId === 'tasks') {
-            setSummary(t('board.tasksGuideCount', { active: counts.activeTasks, total: counts.totalTasks }))
-          } else {
-            setSummary(t('board.workersGuideCount', { total: counts.registered }))
-          }
-        }).catch(() => {})
-        return () => { alive = false }
-      }, [props.sessionId, props.entryId])
-      const icon = props.entryId === 'tasks' ? IconChecklistOutlineRegular : IconUserOutlineRegular
-      return h('button', {
-        type: 'button',
-        className: 'dsh-collab-guide-entry',
-        'data-sidebar-right-guide-entry': props.kind,
-        onClick: () => {
-          tab.actions.openTab(props.kind, { replaceTab: true })
-          tab.actions.close()
-        },
-      },
-        h('span', { className: 'dsh-collab-guide-icon' },
-          icon === undefined ? null : h(icon, { size: 22 })),
-        h('span', { className: 'dsh-collab-guide-text' },
-          h('span', { className: 'dsh-collab-guide-title' }, props.title),
-          props.description === undefined ? null : h('span', { className: 'dsh-collab-guide-description' }, props.description),
-          summary.length === 0 ? null : h('span', { className: 'F6Huca_entryDescription' }, summary),
-        ),
-      )
-    }
-
     function CollabPresetMenuFilter(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       React.useEffect(() => {
@@ -2018,7 +1952,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT, boardCounts, normalizePanelValue },
+      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
@@ -2219,23 +2153,6 @@ window.__ModuleLoader__.load({
             key,
             locale: NS,
           }, CollabBoardTabTitle))
-        }
-
-        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-          name: 'shell.overlay',
-          id: 'collab-guide-card-styles',
-        }, CollabGuideStyles))
-
-        for (const key of [BOARD_TAB_ID, WORKERS_TAB_ID]) {
-          ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
-            name: 'sidebar.right.tab.guide.entry',
-            key,
-            locale: NS,
-            inject: sessionId => ({
-              sessionId,
-              loadSummary: () => callPanel(sessionId, 'board'),
-            }),
-          }, CollabGuideCard))
         }
 
         ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
