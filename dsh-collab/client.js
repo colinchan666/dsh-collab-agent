@@ -1229,6 +1229,7 @@ window.__ModuleLoader__.load({
 
     function CollabCapabilityDetailOverlay(props) {
       const state = useCapabilityDetailState()
+      const dialogRef = React.useRef(null)
       React.useEffect(() => {
         if (!state.open) return undefined
         const onKey = (event) => {

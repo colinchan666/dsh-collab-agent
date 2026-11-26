@@ -939,7 +939,7 @@ export function apply(ctx, config = {}) {
   const requestTools = createRequestTools({
     requireSelf, requireSupervisor, requests, tasks, relationships, auth, audit, collabSessions,
     scheduleExecutionDeadline, clearRequestTimer, sendTaskNotice, deliveryRoot, releaseDeliverySandbox,
-    taskDetail, isSupervisorSession, executionTimeoutMs,
+    taskDetail, isSupervisorSession, isManagedWorker, deliveryDirFor, executionTimeoutMs,
   })
 
   const deliveryTools = createDeliveryTools({
