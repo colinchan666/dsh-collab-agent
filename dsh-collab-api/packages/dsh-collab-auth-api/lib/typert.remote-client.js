@@ -22,6 +22,14 @@ const _xmodelin_dsh_collab_auth_api_collabAuth_authorize_result$schema = () => (
   'updatedAt': z.number().readonly().describe('Last update time in epoch milliseconds.'),
 })).readonly().describe('Directional grants waiting for the other side.'),
   'knownSessionIds': z.array(z.string()).readonly().describe('Session ids currently known to the collaboration registry.'),
+  'sessions': z.array(z.object({
+  'sessionId': z.string().readonly(),
+  'title': z.union([z.literal(null), z.string()]).readonly(),
+  'preset': z.string().readonly(),
+  'archived': z.boolean().readonly(),
+  'online': z.boolean().readonly(),
+  'workspace': z.union([z.literal(null), z.string()]).readonly(),
+})).readonly().describe('Canonical collaboration session directory.'),
 }))
 let _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0$schema$value
 const _xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_baseGet_parameter_0$schema$value ??= z.string())
@@ -60,6 +68,14 @@ const _xmodelin_dsh_collab_auth_api_collabAuth_list_result$schema = () => (_xmod
   'updatedAt': z.number().readonly().describe('Last update time in epoch milliseconds.'),
 })).readonly().describe('Directional grants waiting for the other side.'),
   'knownSessionIds': z.array(z.string()).readonly().describe('Session ids currently known to the collaboration registry.'),
+  'sessions': z.array(z.object({
+  'sessionId': z.string().readonly(),
+  'title': z.union([z.literal(null), z.string()]).readonly(),
+  'preset': z.string().readonly(),
+  'archived': z.boolean().readonly(),
+  'online': z.boolean().readonly(),
+  'workspace': z.union([z.literal(null), z.string()]).readonly(),
+})).readonly().describe('Canonical collaboration session directory.'),
 }))
 let _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0$schema$value
 const _xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_live_parameter_0$schema$value ??= z.string())
@@ -100,6 +116,14 @@ const _xmodelin_dsh_collab_auth_api_collabAuth_revoke_result$schema = () => (_xm
   'updatedAt': z.number().readonly().describe('Last update time in epoch milliseconds.'),
 })).readonly().describe('Directional grants waiting for the other side.'),
   'knownSessionIds': z.array(z.string()).readonly().describe('Session ids currently known to the collaboration registry.'),
+  'sessions': z.array(z.object({
+  'sessionId': z.string().readonly(),
+  'title': z.union([z.literal(null), z.string()]).readonly(),
+  'preset': z.string().readonly(),
+  'archived': z.boolean().readonly(),
+  'online': z.boolean().readonly(),
+  'workspace': z.union([z.literal(null), z.string()]).readonly(),
+})).readonly().describe('Canonical collaboration session directory.'),
 }))
 let _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0$schema$value
 const _xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0$schema = () => (_xmodelin_dsh_collab_auth_api_collabAuth_unlink_parameter_0$schema$value ??= z.string())
@@ -196,7 +220,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
         create: _xmodelin_dsh_collab_auth_api_collabAuth_authorize_result$schema,
         description: 'the resulting authorization snapshot.',
-        jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."},"knownSessionIds":{"type":"array","items":{"type":"string"},"description":"Session ids currently known to the collaboration registry."}},"required":["pairs","pending","knownSessionIds"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."},"knownSessionIds":{"type":"array","items":{"type":"string"},"description":"Session ids currently known to the collaboration registry."},"sessions":{"type":"array","items":{"type":"object","properties":{"sessionId":{"type":"string"},"title":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"preset":{"type":"string"},"archived":{"type":"boolean"},"online":{"type":"boolean"},"workspace":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["sessionId","title","preset","archived","online","workspace"],"additionalProperties":true},"description":"Canonical collaboration session directory."}},"required":["pairs","pending","knownSessionIds","sessions"],"additionalProperties":true},
       },
       sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":85,"column":3},
     },
@@ -378,7 +402,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
         create: _xmodelin_dsh_collab_auth_api_collabAuth_list_result$schema,
         description: 'the current authorization snapshot.',
-        jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."},"knownSessionIds":{"type":"array","items":{"type":"string"},"description":"Session ids currently known to the collaboration registry."}},"required":["pairs","pending","knownSessionIds"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."},"knownSessionIds":{"type":"array","items":{"type":"string"},"description":"Session ids currently known to the collaboration registry."},"sessions":{"type":"array","items":{"type":"object","properties":{"sessionId":{"type":"string"},"title":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"preset":{"type":"string"},"archived":{"type":"boolean"},"online":{"type":"boolean"},"workspace":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["sessionId","title","preset","archived","online","workspace"],"additionalProperties":true},"description":"Canonical collaboration session directory."}},"required":["pairs","pending","knownSessionIds","sessions"],"additionalProperties":true},
       },
       sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":72,"column":3},
     },
@@ -583,7 +607,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         typeSymbol: '@xmodelin/dsh-collab-auth-api/types#AuthSnapshot',
         create: _xmodelin_dsh_collab_auth_api_collabAuth_revoke_result$schema,
         description: 'the resulting authorization snapshot.',
-        jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."},"knownSessionIds":{"type":"array","items":{"type":"string"},"description":"Session ids currently known to the collaboration registry."}},"required":["pairs","pending","knownSessionIds"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"pairs":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string","description":"First Session id in the pair."},"b":{"type":"string","description":"Second Session id in the pair."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["a","b","createdAt","updatedAt"],"additionalProperties":true},"description":"Fully authorized pairs."},"pending":{"type":"array","items":{"type":"object","properties":{"from":{"type":"string","description":"Granting Session id."},"to":{"type":"string","description":"Receiving Session id."},"createdAt":{"type":"number","description":"Creation time in epoch milliseconds."},"updatedAt":{"type":"number","description":"Last update time in epoch milliseconds."}},"required":["from","to","createdAt","updatedAt"],"additionalProperties":true},"description":"Directional grants waiting for the other side."},"knownSessionIds":{"type":"array","items":{"type":"string"},"description":"Session ids currently known to the collaboration registry."},"sessions":{"type":"array","items":{"type":"object","properties":{"sessionId":{"type":"string"},"title":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"preset":{"type":"string"},"archived":{"type":"boolean"},"online":{"type":"boolean"},"workspace":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["sessionId","title","preset","archived","online","workspace"],"additionalProperties":true},"description":"Canonical collaboration session directory."}},"required":["pairs","pending","knownSessionIds","sessions"],"additionalProperties":true},
       },
       sourceLocation: {"file":"packages/dsh-collab-auth-api/src/index.ts","line":98,"column":3},
     },

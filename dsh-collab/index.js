@@ -157,6 +157,7 @@ export function apply(ctx, config = {}) {
         pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
         pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
         knownSessionIds,
+        sessions: sessionDirectory.list(),
       }
     },
     authorize: (a, b) => {

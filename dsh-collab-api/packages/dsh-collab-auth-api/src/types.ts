@@ -25,6 +25,15 @@ export interface PendingGrant {
 }
 
 /** Complete authorization state the page renders. */
+export interface SessionDirectoryEntry {
+  readonly sessionId: string
+  readonly title: string | null
+  readonly preset: string
+  readonly archived: boolean
+  readonly online: boolean
+  readonly workspace: string | null
+}
+
 export interface AuthSnapshot {
   /** Fully authorized pairs. */
   readonly pairs: readonly AuthPair[]
@@ -32,6 +41,8 @@ export interface AuthSnapshot {
   readonly pending: readonly PendingGrant[]
   /** Session ids currently known to the collaboration registry. */
   readonly knownSessionIds: readonly string[]
+  /** Canonical collaboration session directory. */
+  readonly sessions: readonly SessionDirectoryEntry[]
 }
 
 /** Host operations the collaboration plugin provides to the Remote. */

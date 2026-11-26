@@ -337,21 +337,20 @@ window.__ModuleLoader__.load({
       getVersion: () => collabDirectoryStore.version,
       get: id => collabDirectoryStore.records.get(id),
       list: () => [...collabDirectoryStore.records.values()],
-      upsertSummaries: (state) => {
+      applySnapshot: (entries) => {
         let changed = false
-        for (const id of state?.ids ?? []) {
-          const summary = state.byId[id]
-          if (summary === undefined || summary.origin === 'subagent') continue
-          const values = summary.projectionValues ?? state.projectionsBySession?.[id]?.values
-          const preset = values?.agentPreset
-          if (preset !== 'collab' && preset !== 'supervisor') continue
-          const title = typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0
-            ? summary.displayTitle
-            : collabDirectoryStore.records.get(id)?.title ?? null
-          const next = { sessionId: id, title, preset, archived: summary.archived === true }
-          const previous = collabDirectoryStore.records.get(id)
+        for (const entry of Array.isArray(entries) ? entries : []) {
+          if (typeof entry?.sessionId !== 'string' || (entry.preset !== 'collab' && entry.preset !== 'supervisor')) continue
+          const next = {
+            sessionId: entry.sessionId,
+            title: typeof entry.title === 'string' && entry.title.length > 0 ? entry.title : null,
+            preset: entry.preset,
+            archived: entry.archived === true,
+            online: entry.online === true,
+          }
+          const previous = collabDirectoryStore.records.get(next.sessionId)
           if (previous?.title === next.title && previous?.preset === next.preset && previous?.archived === next.archived) continue
-          collabDirectoryStore.records.set(id, next)
+          collabDirectoryStore.records.set(next.sessionId, next)
           changed = true
         }
         if (changed) {
@@ -635,9 +634,6 @@ window.__ModuleLoader__.load({
       const t = typeof props.t === 'function' ? props.t : fallbackT
       const sessions = props.useSessions(selectSnapshot)
       const roots = collabSessionSummaries(sessions)
-      React.useEffect(() => {
-        collabDirectoryStore.upsertSummaries(sessions)
-      }, [sessions?.ids?.join('|')])
       const [pairs, setPairs] = React.useState([])
       const [pendingGrants, setPendingGrants] = React.useState([])
       const [knownSessions, setKnownSessions] = React.useState(null)
@@ -674,6 +670,7 @@ window.__ModuleLoader__.load({
           setPairs(next.pairs)
           setPendingGrants(next.pending)
           setKnownSessions(new Set(next.knownSessionIds ?? []))
+          collabDirectoryStore.applySnapshot(next.sessions)
         } catch (failure) {
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
@@ -1618,7 +1615,7 @@ window.__ModuleLoader__.load({
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
       const sessions = typeof props.useSessions === 'function' ? props.useSessions(selectSnapshot) : undefined
       React.useSyncExternalStore(collabDirectoryStore.subscribe, collabDirectoryStore.getVersion)
-      const titleOf = id => collabDirectoryStore.get(id)?.title ?? sessions?.byId?.[id]?.displayTitle ?? undefined
+      const titleOf = id => collabDirectoryStore.get(id)?.title ?? undefined
 
       const load = async (showLoading = true) => {
         if (showLoading) setLoading(true)
@@ -2073,10 +2070,14 @@ window.__ModuleLoader__.load({
         ?? main?.preset
         ?? sessions?.projectionsBySession?.[main?.id]?.values?.agentPreset
       React.useEffect(() => {
-        collabDirectoryStore.upsertSummaries(sessions)
         const chip = document.querySelector('button[class*="_seat"]')?.textContent ?? ''
         const enabled = preset === 'supervisor' || chip.includes('超级会话') || chip.includes('Supervisor')
         props.setSupervisorGuide(enabled)
+        Promise.resolve(props.loadDirectory?.()).then(snapshot => {
+          if (snapshot !== undefined && snapshot !== null && snapshot.ok !== false) {
+            collabDirectoryStore.applySnapshot(snapshot.sessions)
+          }
+        }).catch(() => {})
         return () => props.setSupervisorGuide(false)
       }, [preset, main?.id])
       return null
@@ -2334,7 +2335,12 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',
           id: 'collab-supervisor-guide-bridge',
-          inject: () => ({ setSupervisorGuide }),
+          inject: () => ({
+            setSupervisorGuide,
+            loadDirectory: () => ctx.remote.collabAuth === undefined
+              ? Promise.resolve(undefined)
+              : ctx.remote.collabAuth.list(),
+          }),
         }, CollabSupervisorGuideBridge))
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
