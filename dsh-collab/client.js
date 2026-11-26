@@ -1229,6 +1229,7 @@ window.__ModuleLoader__.load({
 
     function CollabCapabilityDetailOverlay(props) {
       const state = useCapabilityDetailState()
+      const dialogRef = React.useRef(null)
       React.useEffect(() => {
         if (!state.open) return undefined
         const onKey = (event) => {
@@ -1880,53 +1881,68 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
-    function boardCounts(data) {
-      const relationships = Array.isArray(data?.relationships) ? data.relationships : []
-      const tasks = Array.isArray(data?.tasks) ? data.tasks : []
-      return {
-        registered: relationships.filter(relationship => relationship.offer === true).length,
-        activeTasks: tasks.filter(task => task.status === 'open').length,
-        totalTasks: tasks.length,
-      }
-    }
+    const GUIDE_COUNT_CSS = `
+[data-sidebar-right-guide-entry="collabSupervisorTasks"]::after,
+[data-sidebar-right-guide-entry="collabSupervisorWorkers"]::after{content:attr(data-collab-count);margin-left:auto;padding-left:12px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.4;white-space:nowrap;flex:none}
+`
 
-    function CollabGuideCard(props) {
-      const t = typeof props.t === 'function' ? props.t : fallbackT
-      const { tab } = props.useTabInfo()
-      const [summary, setSummary] = React.useState('')
+    function CollabGuideCounts(props) {
       React.useEffect(() => {
         let alive = true
-        if (typeof props.loadSummary !== 'function') return undefined
-        Promise.resolve(props.loadSummary()).then(raw => {
+        let timer
+        const cache = new Map()
+        const readValue = (raw) => {
+          let value = raw
+          if (typeof value === 'string') value = JSON.parse(value)
+          if (value !== null && typeof value === 'object' && 'ok' in value) value = value.value
+          if (typeof value === 'string') value = JSON.parse(value)
+          return value
+        }
+        const apply = (card, kind, data) => {
+          const relationships = Array.isArray(data?.relationships) ? data.relationships : []
+          const tasks = Array.isArray(data?.tasks) ? data.tasks : []
+          const text = kind === 'collabSupervisorTasks'
+            ? `${tasks.filter(task => task.status === 'open').length}/${tasks.length}`
+            : String(relationships.filter(relationship => relationship.offer === true).length)
+          card.setAttribute('data-collab-count', text)
+        }
+        const refresh = () => {
           if (!alive) return
-          const data = typeof raw === 'string' ? JSON.parse(raw) : raw
-          const counts = boardCounts(data)
-          if (props.entryId === 'tasks') {
-            setSummary(t('board.tasksGuideCount', { active: counts.activeTasks, total: counts.totalTasks }))
-          } else {
-            setSummary(t('board.workersGuideCount', { total: counts.registered }))
+          const cards = document.querySelectorAll('[data-sidebar-right-guide-entry="collabSupervisorTasks"], [data-sidebar-right-guide-entry="collabSupervisorWorkers"]')
+          for (const card of cards) {
+            const kind = card.getAttribute('data-sidebar-right-guide-entry')
+            const sessionId = card.closest('[data-sidebar-right-session]')?.getAttribute('data-sidebar-right-session')
+            if (sessionId === undefined || sessionId === null || kind === null) continue
+            if (cache.has(sessionId)) {
+              apply(card, kind, cache.get(sessionId))
+              continue
+            }
+            Promise.resolve(props.loadBoard(sessionId)).then(raw => {
+              if (!alive) return
+              const data = readValue(raw)
+              cache.set(sessionId, data)
+              apply(card, kind, data)
+            }).catch(() => {})
           }
-        }).catch(() => {})
-        return () => { alive = false }
-      }, [props.sessionId, props.entryId])
-      const icon = props.entryId === 'tasks' ? IconChecklistOutlineRegular : IconUserOutlineRegular
-      return h('button', {
-        type: 'button',
-        className: 'F6Huca_entry',
-        'data-sidebar-right-guide-entry': props.kind,
-        onClick: () => {
-          tab.actions.openTab(props.kind, { replaceTab: true })
-          tab.actions.close()
-        },
-      },
-        h('span', { className: 'F6Huca_entryIcon' },
-          icon === undefined ? null : h(icon, { size: 22 })),
-        h('span', { className: 'F6Huca_entryText' },
-          h('span', { className: 'F6Huca_entryTitle' }, props.title),
-          props.description === undefined ? null : h('span', { className: 'F6Huca_entryDescription' }, props.description),
-          summary.length === 0 ? null : h('span', { className: 'F6Huca_entryDescription' }, summary),
-        ),
-      )
+        }
+        const observer = new MutationObserver(() => {
+          clearTimeout(timer)
+          timer = setTimeout(refresh, 100)
+        })
+        observer.observe(document.body, { childList: true, subtree: true })
+        refresh()
+        const poll = setInterval(() => {
+          if (document.querySelector('[data-sidebar-right-guide]') === null) return
+          cache.clear()
+          refresh()
+        }, 2000)
+        return () => { alive = false; observer.disconnect(); clearTimeout(timer); clearInterval(poll) }
+      }, [])
+      return null
+    }
+
+    function CollabGuideCountStyles() {
+      return h('style', null, GUIDE_COUNT_CSS)
     }
 
     function CollabPresetMenuFilter(props) {
@@ -1987,16 +2003,20 @@ window.__ModuleLoader__.load({
       const main = Object.values(sessions?.byId ?? {})
         .find(summary => (summary.retainedBy?.mainView ?? 0) > 0)
       const preset = main?.projectionValues?.agentPreset
+        ?? main?.agentPreset
+        ?? main?.preset
         ?? sessions?.projectionsBySession?.[main?.id]?.values?.agentPreset
       React.useEffect(() => {
-        props.setSupervisorGuide(preset === 'supervisor')
+        const chip = document.querySelector('button[class*="_seat"]')?.textContent ?? ''
+        const enabled = preset === 'supervisor' || chip.includes('超级会话') || chip.includes('Supervisor')
+        props.setSupervisorGuide(enabled)
         return () => props.setSupervisorGuide(false)
-      }, [preset])
+      }, [preset, main?.id])
       return null
     }
 
     return {
-      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT, boardCounts },
+      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
@@ -2199,18 +2219,6 @@ window.__ModuleLoader__.load({
           }, CollabBoardTabTitle))
         }
 
-        for (const key of [BOARD_TAB_ID, WORKERS_TAB_ID]) {
-          ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
-            name: 'sidebar.right.tab.guide.entry',
-            key,
-            locale: NS,
-            inject: sessionId => ({
-              sessionId,
-              loadSummary: () => callPanel(sessionId, 'board'),
-            }),
-          }, CollabGuideCard))
-        }
-
         ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
           name: 'conversation.hero.options',
           id: 'collab-preset-lock',
@@ -2244,6 +2252,17 @@ window.__ModuleLoader__.load({
           id: 'collab-base-prompt',
           locale: NS,
         }, CollabBasePromptEditor))
+
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay',
+          id: 'collab-guide-counts',
+          inject: () => ({ loadBoard: sessionId => callPanel(sessionId, 'board') }),
+        }, CollabGuideCounts))
+
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay',
+          id: 'collab-guide-count-styles',
+        }, CollabGuideCountStyles))
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',
