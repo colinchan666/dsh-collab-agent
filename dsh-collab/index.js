@@ -145,10 +145,17 @@ export function apply(ctx, config = {}) {
   const collabAdmin = {
     isKnownCollab,
     audit: (limit = 100) => audit.tail(limit),
-    listAuth: () => ({
-      pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
-      pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
-    }),
+    listAuth: () => {
+      const knownSessionIds = [...new Set([
+        ...registry.list().map(entry => entry.sessionId),
+        ...collabSessions,
+      ])].filter(isKnownCollab)
+      return {
+        pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
+        pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
+        knownSessionIds,
+      }
+    },
     authorize: (a, b) => {
       if (!isKnownCollab(a) || !isKnownCollab(b)) throw new Error('authorization requires two known collaboration sessions')
       auth.authorize(a, b, 'ui')

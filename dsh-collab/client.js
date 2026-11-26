@@ -593,9 +593,11 @@ window.__ModuleLoader__.load({
       const roots = (sessions?.ids ?? [])
         .map(id => sessions.byId[id])
         .filter(summary => summary !== undefined && summary.origin !== 'subagent' && isCollabSummary(summary, sessions))
-      const sorted = [...roots].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
+      const visibleRoots = knownSessions === null ? [] : roots.filter(summary => knownSessions.has(summary.id))
+      const sorted = [...visibleRoots].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
       const [pairs, setPairs] = React.useState([])
       const [pendingGrants, setPendingGrants] = React.useState([])
+      const [knownSessions, setKnownSessions] = React.useState(null)
       const [activeTab, setActiveTab] = React.useState('pairs')
       const [selected, setSelected] = React.useState([])
       const [loading, setLoading] = React.useState(false)
@@ -626,6 +628,7 @@ window.__ModuleLoader__.load({
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setPairs(next.pairs)
           setPendingGrants(next.pending)
+          setKnownSessions(new Set(next.knownSessionIds ?? []))
         } catch (failure) {
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
