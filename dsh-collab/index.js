@@ -871,7 +871,6 @@ export function apply(ctx, config = {}) {
       return {
         sessionId: entry.sessionId,
         title: entry.title
-          ?? ctx.agents.get(entry.sessionId)?.session?.header?.title
           ?? (() => {
             const liveSession = ctx.get('sessions')?.get?.(entry.sessionId)
             return liveSession === undefined ? undefined : ctx.get('sessionTitle')?.get?.(liveSession)?.title
