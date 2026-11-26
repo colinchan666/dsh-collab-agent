@@ -1640,8 +1640,25 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const workers = data?.workers ?? []
-      const linked = (data?.relationships ?? []).filter(rel => rel.offer === true)
+      const presetOf = id => (sessions?.byId?.[id]?.projectionValues ?? sessions?.projectionsBySession?.[id]?.values)?.agentPreset
+      const hostWorkers = new Map((data?.workers ?? []).map(entry => [entry.sessionId, entry]))
+      const collabSessions = (sessions?.ids ?? [])
+        .map(id => sessions.byId[id])
+        .filter(summary => summary !== undefined
+          && summary.id !== props.sessionId
+          && summary.origin !== 'subagent'
+          && isCollabSummary(summary, sessions)
+          && presetOf(summary.id) === 'collab')
+      const workers = sessions === undefined || sessions === null
+        ? (data?.workers ?? [])
+        : collabSessions.map(summary => ({
+            ...(hostWorkers.get(summary.id) ?? {}),
+            sessionId: summary.id,
+            title: summary.displayTitle,
+          }))
+      const linked = (data?.relationships ?? [])
+        .filter(rel => rel.offer === true)
+        .map(rel => ({ ...rel, workerTitle: titleOf(rel.worker) }))
       const available = workers.filter(entry => !linked.some(rel => rel.worker === entry.sessionId))
       const subtasks = data?.tasks ?? []
       const parentTasks = data?.tasks ?? []
