@@ -266,3 +266,12 @@ test('guide counts use offered relationships instead of unoffered candidates', (
   })
   assert.deepEqual(counts, { registered: 1, activeTasks: 2, totalTasks: 3 })
 })
+
+test('guide board summaries unwrap RemoteResult envelopes', () => {
+  const { normalizePanelValue, boardCounts } = pluginFor().__test
+  const value = normalizePanelValue({ ok: true, value: JSON.stringify({
+    relationships: [{ offer: true }],
+    tasks: [{ status: 'open' }],
+  }) })
+  assert.deepEqual(boardCounts(value), { registered: 1, activeTasks: 1, totalTasks: 1 })
+})
