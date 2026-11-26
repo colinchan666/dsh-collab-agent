@@ -1462,7 +1462,7 @@ export function apply(ctx, config = {}) {
     try { migrateSessionArchive(entry.workdir) } catch (error) { warn(`archive migration failed for ${entry.sessionId}: ${describeError(error)}`) }
   }
   for (const agent of ctx.agents.list()) void setupAgent(agent)
-  const cleanupArchivedSession = (sessionId) => {
+  const cleanupArchivedSession = (sessionId, eventName = 'session.archived') => {
     if (!isSessionId(sessionId)) return
     const known = registry.get(sessionId) !== undefined || collabSessions.has(sessionId)
     if (!known) return
@@ -1499,11 +1499,20 @@ export function apply(ctx, config = {}) {
     }
     try { registry.remove(sessionId) } catch { /* best effort */ }
     collabSessions.delete(sessionId)
-    try { audit.append('session.archived', { sessionId }) } catch { /* best effort */ }
+    try { audit.append(eventName, { sessionId }) } catch { /* best effort */ }
   }
 
   ctx.on('workspace/session-archived', (request) => {
     try { cleanupArchivedSession(request?.sessionId) } catch (error) { warn(`could not clean archived session ${String(request?.sessionId)}: ${describeError(error)}`) }
+  })
+
+  ctx.on('api-session/removed', (sessionId) => {
+    const workspaces = ctx.get('workspaceRegistry')
+    if (workspaces === undefined) return
+    let known
+    try { known = new Set(workspaces.list().flatMap(workspace => workspace.sessionIds)) } catch { return }
+    if (known.size === 0 || known.has(sessionId)) return
+    try { cleanupArchivedSession(sessionId, 'session.removed') } catch (error) { warn(`could not clean removed session ${String(sessionId)}: ${describeError(error)}`) }
   })
 
   ctx.on('agent/created', async ({ agent }) => { await setupAgent(agent) })
