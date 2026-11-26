@@ -1111,6 +1111,10 @@ test('archiving a collaboration session removes its grants and relationships', a
     assert.equal(doctor().relationships, 0)
     assert.equal(doctor().invalidGrants, 0)
     assert.equal(doctor().grants, 0)
+    const registryFile = path.join(root, 'registry.json')
+    assert.equal(JSON.parse(fs.readFileSync(registryFile, 'utf8')).sessions[B].archived, true)
+    await harness.emit('workspace/session-unarchiving', { sessionId: B })
+    assert.equal(JSON.parse(fs.readFileSync(registryFile, 'utf8')).sessions[B].archived, false)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
