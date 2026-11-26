@@ -870,7 +870,13 @@ export function apply(ctx, config = {}) {
       const capability = liveCapability(entry.sessionId)
       return {
         sessionId: entry.sessionId,
-        title: entry.title ?? ctx.agents.get(entry.sessionId)?.session?.header?.title ?? null,
+        title: entry.title
+          ?? ctx.agents.get(entry.sessionId)?.session?.header?.title
+          ?? (() => {
+            const liveSession = ctx.get('sessions')?.get?.(entry.sessionId)
+            return liveSession === undefined ? undefined : ctx.get('sessionTitle')?.get?.(liveSession)?.title
+          })()
+          ?? null,
         online: ctx.agents.get(entry.sessionId) !== undefined,
         authorized: auth.isAuthorized(supervisor, entry.sessionId),
         basePrompt: capability?.description ?? '',
