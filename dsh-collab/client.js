@@ -671,7 +671,7 @@ window.__ModuleLoader__.load({
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setPairs(next.pairs)
           setPendingGrants(next.pending)
-          setDirectorySessions(next.sessions ?? [])
+          setDirectorySessions((next.sessions ?? []).filter(entry => entry.preset === 'collab' || entry.preset === 'supervisor'))
           collabDirectoryStore.applySnapshot(next.sessions)
           const missingTitles = (next.sessions ?? []).filter(entry => (entry.title === null || entry.title === undefined || entry.title.length === 0))
           for (const entry of missingTitles) {
