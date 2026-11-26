@@ -1119,3 +1119,23 @@ test('archiving a collaboration session removes its grants and relationships', a
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('the authorization snapshot exposes the complete collaboration directory', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-directory-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const one = harness.makeAgent(B, PRESET)
+    const two = harness.makeAgent(D, PRESET)
+    for (const agent of [supervisor, one, two]) await harness.emit('agent/created', { agent, source: 'startup' })
+    const admin = harness.ctx.get('collabAdmin')
+    const snapshot = admin.listAuth()
+    assert.deepEqual(snapshot.sessions.map(entry => entry.sessionId).sort(), [A, B, D].sort())
+    assert.equal(snapshot.sessions.every(entry => entry.archived === false), true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
