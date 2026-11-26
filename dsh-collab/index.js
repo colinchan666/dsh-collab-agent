@@ -1530,6 +1530,13 @@ export function apply(ctx, config = {}) {
     try { registry.upsert({ ...entry, archived: false }) } catch { /* best effort */ }
   })
 
+  ctx.on('api-session/added', (summary) => {
+    const sessionId = summary?.sessionId
+    if (!isSessionId(sessionId)) return
+    const archived = archivedSessionIds()
+    if (archived !== undefined && !archived.has(sessionId)) restoreCollabRegistry(sessionId)
+  })
+
   ctx.on('api-session/removed', (sessionId) => {
     const workspaces = ctx.get('workspaceRegistry')
     if (workspaces === undefined) return
@@ -1548,6 +1555,23 @@ export function apply(ctx, config = {}) {
     } catch { /* diagnostic surface unavailable */ }
     return undefined
   }
+  const restoreCollabRegistry = (sessionId) => {
+    const entry = registry.get(sessionId)
+    if (entry === undefined || entry.archived !== true) return
+    try { registry.upsert({ ...entry, archived: false }) } catch { /* best effort */ }
+  }
+  const syncArchivedFlags = () => {
+    const archived = archivedSessionIds()
+    if (archived === undefined) return
+    for (const entry of registry.list()) {
+      if (archived.has(entry.sessionId) && entry.archived !== true) {
+        try { cleanupArchivedSession(entry.sessionId, 'session.archived') } catch { /* best effort */ }
+      } else if (!archived.has(entry.sessionId) && entry.archived === true) {
+        restoreCollabRegistry(entry.sessionId)
+      }
+    }
+  }
+
   const reconcileCollabRegistry = (currentSessionId) => {
     if (reconciledCollabRegistry) return
     const workspaces = ctx.get('workspaceRegistry')
@@ -1564,6 +1588,7 @@ export function apply(ctx, config = {}) {
         try { cleanupArchivedSession(entry.sessionId, 'session.archived') } catch { /* best effort */ }
         continue
       }
+      if (archived !== undefined && entry.archived === true) restoreCollabRegistry(entry.sessionId)
       if (known.size > 0 && !known.has(entry.sessionId)) {
         try { cleanupArchivedSession(entry.sessionId, 'session.orphaned') } catch { /* best effort */ }
       }
