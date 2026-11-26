@@ -1880,20 +1880,6 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
-    const GUIDE_CARD_CSS = `
-.dsh-collab-guide-card{display:flex;align-items:center;gap:10px;width:100%;min-height:64px;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit}
-.dsh-collab-guide-card:hover{background:var(--dsw-alias-fill-secondary,rgba(127,127,127,.12))}
-.dsh-collab-guide-card-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;color:var(--dsw-alias-label-secondary,#777)}
-.dsh-collab-guide-card-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
-.dsh-collab-guide-card-title{font:inherit;font-weight:600;line-height:1.3}
-.dsh-collab-guide-card-description{font-size:12px;line-height:1.3;color:var(--dsw-alias-label-secondary,#777);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsh-collab-guide-card-status{font-size:12px;line-height:1.3;color:var(--dsw-alias-label-secondary,#777);white-space:nowrap}
-`
-
-    function CollabGuideStyles() {
-      return h('style', null, GUIDE_CARD_CSS)
-    }
-
     function CollabGuideCard(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       const { tab } = props.useTabInfo()
@@ -1918,19 +1904,20 @@ window.__ModuleLoader__.load({
       const icon = props.entryId === 'tasks' ? IconChecklistOutlineRegular : IconUserOutlineRegular
       return h('button', {
         type: 'button',
-        className: 'dsh-collab-guide-card',
+        className: 'F6Huca_entry',
         'data-sidebar-right-guide-entry': props.kind,
         onClick: () => {
           tab.actions.openTab(props.kind, { replaceTab: true })
           tab.actions.close()
         },
       },
-        icon === undefined ? null : h('span', { className: 'dsh-collab-guide-card-icon' }, h(icon, { size: 22 })),
-        h('span', { className: 'dsh-collab-guide-card-text' },
-          h('span', { className: 'dsh-collab-guide-card-title' }, props.title),
-          props.description === undefined ? null : h('span', { className: 'dsh-collab-guide-card-description' }, props.description),
+        h('span', { className: 'F6Huca_entryIcon' },
+          icon === undefined ? null : h(icon, { size: 22 })),
+        h('span', { className: 'F6Huca_entryText' },
+          h('span', { className: 'F6Huca_entryTitle' }, props.title),
+          props.description === undefined ? null : h('span', { className: 'F6Huca_entryDescription' }, props.description),
+          summary.length === 0 ? null : h('span', { className: 'F6Huca_entryDescription' }, summary),
         ),
-        summary.length === 0 ? null : h('span', { className: 'dsh-collab-guide-card-status' }, summary),
       )
     }
 
@@ -2215,11 +2202,6 @@ window.__ModuleLoader__.load({
             }),
           }, CollabGuideCard))
         }
-
-        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-          name: 'shell.overlay',
-          id: 'collab-guide-card-styles',
-        }, CollabGuideStyles))
 
         ctx.slots.inject('conversation.hero.options', () => ctx.slots.register({
           name: 'conversation.hero.options',
