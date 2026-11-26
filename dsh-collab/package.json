@@ -40,7 +40,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:browser": "node --test test/browser.smoke.mjs"
+    "test:browser": "node --test test/browser.smoke.mjs",
+    "test:browser:isolated": "node scripts/e2e-fixture.mjs"
   },
   "publishConfig": {
     "access": "public"
