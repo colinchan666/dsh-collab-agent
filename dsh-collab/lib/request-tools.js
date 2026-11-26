@@ -1,10 +1,12 @@
 /** Request inbox and lifecycle tools. */
-import { REQUEST_LIST_PARAMETERS, REQUEST_ACCEPT_PARAMETERS, REQUEST_REJECT_PARAMETERS, REQUEST_HEARTBEAT_PARAMETERS, TEXT_OUTPUT } from './tool-schemas.js'
+import { TASK_LIST_PARAMETERS, TASK_ID_PARAMETERS, TASK_CLOSE_PARAMETERS, TASK_REJECT_PARAMETERS, REQUEST_LIST_PARAMETERS, REQUEST_ACCEPT_PARAMETERS, REQUEST_REJECT_PARAMETERS, REQUEST_HEARTBEAT_PARAMETERS, TEXT_OUTPUT } from './tool-schemas.js'
 import { RequestStore } from './requests.js'
+import { taskLine } from './task-views.js'
+import { TaskStore } from './tasks.js'
 
 export function createRequestTools({
   requireSelf, requireSupervisor, requests, tasks, relationships, auth, audit,
-  scheduleExecutionDeadline, clearRequestTimer, sendTaskNotice, deliveryRoot,
+  scheduleExecutionDeadline, clearRequestTimer, sendTaskNotice, deliveryRoot, releaseDeliverySandbox,
   taskDetail, isSupervisorSession, executionTimeoutMs,
 }) {
   return [

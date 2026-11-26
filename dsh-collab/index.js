@@ -925,8 +925,8 @@ export function apply(ctx, config = {}) {
     ctx, tasks, relationships, auth, registry, requests, audit, deliveryRoot, deliveryDirFor,
     sendTaskNotice, releaseDeliverySandbox, bindDeliverySandbox, isFunctionalWorker,
     effectiveCapability, isSupervisorSession, isManagedWorker, requireSupervisor, requireWorker,
-    requireSelf, turnForCall, collabSessions, sharedRoot, cancelBoundTask, clearExecutionTimer,
-    clearRequestTimer, scheduleRequestTimeout, subtaskAliases,
+    requireSelf, turnForCall, collabSessions, sharedRoot, mkdirp, cancelBoundTask, clearExecutionTimer,
+    clearRequestTimer, scheduleRequestTimeout, requestTimeoutMs, subtaskAliases,
   })
 
   const messageTools = createMessageTools({
@@ -938,7 +938,7 @@ export function apply(ctx, config = {}) {
 
   const requestTools = createRequestTools({
     requireSelf, requireSupervisor, requests, tasks, relationships, auth, audit,
-    scheduleExecutionDeadline, clearRequestTimer, sendTaskNotice, deliveryRoot,
+    scheduleExecutionDeadline, clearRequestTimer, sendTaskNotice, deliveryRoot, releaseDeliverySandbox,
     taskDetail, isSupervisorSession, executionTimeoutMs,
   })
 
@@ -948,6 +948,7 @@ export function apply(ctx, config = {}) {
     publishDeliveryAlias, sendTaskNotice, audit, clearExecutionTimer, isSupervisorSession,
   })
 
+  taskTools.push(...subtaskAliases([...requestTools, ...deliveryTools, ...taskTools]))
   const tools = [...messageTools, ...requestTools, ...deliveryTools, ...taskTools]
 
 

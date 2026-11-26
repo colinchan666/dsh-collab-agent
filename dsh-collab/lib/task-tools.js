@@ -3,13 +3,14 @@ import { TASK_OPEN_PARAMETERS, TASK_CREATE_PARAMETERS, TASK_ASSIGN_PARAMETERS, T
 import { TaskStore } from './tasks.js'
 import { RequestStore } from './requests.js'
 import { taskDetail, taskLine } from './task-views.js'
+import { SUPERVISOR_PRESET as SUPERVISOR } from './presets.js'
 
 export function createTaskTools({
   ctx, tasks, relationships, auth, registry, requests, audit, deliveryRoot, deliveryDirFor,
   sendTaskNotice, releaseDeliverySandbox, bindDeliverySandbox, isFunctionalWorker,
   effectiveCapability, isSupervisorSession, isManagedWorker, requireSupervisor, requireWorker,
-  requireSelf, turnForCall, collabSessions, sharedRoot, cancelBoundTask, clearExecutionTimer,
-  clearRequestTimer, scheduleRequestTimeout, subtaskAliases,
+  requireSelf, turnForCall, collabSessions, sharedRoot, mkdirp, cancelBoundTask, clearExecutionTimer,
+  clearRequestTimer, scheduleRequestTimeout, requestTimeoutMs, subtaskAliases,
 }) {
   const taskTools = [
     {
@@ -327,8 +328,6 @@ export function createTaskTools({
       return list.length === 0 ? 'No tasks.' : JSON.stringify(list)
     },
   })
-
-  taskTools.push(...subtaskAliases(taskTools))
 
   return taskTools
 }
