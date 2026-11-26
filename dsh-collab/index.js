@@ -1515,7 +1515,25 @@ export function apply(ctx, config = {}) {
     try { cleanupArchivedSession(sessionId, 'session.removed') } catch (error) { warn(`could not clean removed session ${String(sessionId)}: ${describeError(error)}`) }
   })
 
-  ctx.on('agent/created', async ({ agent }) => { await setupAgent(agent) })
+  let reconciledCollabRegistry = false
+  const reconcileCollabRegistry = (currentSessionId) => {
+    if (reconciledCollabRegistry) return
+    const workspaces = ctx.get('workspaceRegistry')
+    if (workspaces === undefined) return
+    let known
+    try { known = new Set(workspaces.list().flatMap(workspace => workspace.sessionIds)) } catch { return }
+    if (known.size === 0) return
+    reconciledCollabRegistry = true
+    for (const entry of registry.list()) {
+      if (entry.sessionId === currentSessionId || known.has(entry.sessionId)) continue
+      try { cleanupArchivedSession(entry.sessionId, 'session.orphaned') } catch { /* best effort */ }
+    }
+  }
+
+  ctx.on('agent/created', async ({ agent }) => {
+    await setupAgent(agent)
+    reconcileCollabRegistry(agent.id)
+  })
   ctx.on('agent/disposed', ({ agent }) => {
     sandboxDeliveryRoots.delete(agent.id)
     sandboxReadRoots.delete(agent.id)
