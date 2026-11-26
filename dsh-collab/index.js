@@ -864,8 +864,11 @@ export function apply(ctx, config = {}) {
 
   const isFunctionalWorker = (sessionId) => registry.get(sessionId)?.preset === PRESET
 
-  const workerCandidates = (supervisor) => registry.list()
-    .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET && entry.archived !== true)
+  const workerCandidates = (supervisor) => {
+    const archived = archivedSessionIds()
+    return registry.list()
+      .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET)
+      .filter(entry => archived === undefined ? entry.archived !== true : !archived.has(entry.sessionId))
     .map(entry => {
       const capability = liveCapability(entry.sessionId)
       return {
@@ -878,6 +881,7 @@ export function apply(ctx, config = {}) {
         relationship: relationships.get(supervisor, entry.sessionId) ?? null,
       }
     })
+  }
 
   /** Turn number for one executing tool call, when the session event is known. */
   const turnForCall = (exec) => {
