@@ -107,7 +107,14 @@ export function apply(ctx, config = {}) {
     : 24 * 60 * 60 * 1000
   const perSessionSandbox = config.perSessionSandbox !== false && process.platform !== 'win32'
   const registry = new SessionRegistry(registryPath)
-  const sessionDirectory = createSessionDirectory({ registry, sessions: ctx.get('sessions'), sessionTitle: ctx.get('sessionTitle'), agents: ctx.agents })
+  const sessionDirectory = createSessionDirectory({
+    registry,
+    sessions: ctx.get('sessions'),
+    sessionTitle: ctx.get('sessionTitle'),
+    sessionQuery: { readTitle: (sessionId, signal) => ctx.get('sessionQuery')?.readTitle(sessionId, signal) },
+    archivedSessionIds: () => archivedSessionIds(),
+    agents: ctx.agents,
+  })
   const audit = new AuditLog(path.join(path.dirname(registryPath), 'audit.jsonl'))
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0

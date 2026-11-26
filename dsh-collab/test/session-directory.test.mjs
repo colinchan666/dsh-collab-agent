@@ -40,3 +40,17 @@ test('the session directory hydrates titles from persisted session queries', asy
   assert.equal(directory.get('session-a').title, 'persisted-session-a')
   assert.equal(directory.get('session-a').archived, true)
 })
+
+test('the session directory merges the workspace archive set', () => {
+  const registry = new Map([
+    ['session-a', { sessionId: 'session-a', preset: 'collab', title: 'A' }],
+  ])
+  const directory = createSessionDirectory({
+    registry: { get: id => registry.get(id), list: () => [...registry.values()] },
+    sessions: { get: () => undefined },
+    sessionTitle: { get: () => undefined },
+    archivedSessionIds: () => new Set(['session-a']),
+    agents: { get: () => undefined },
+  })
+  assert.equal(directory.get('session-a').archived, true)
+})
