@@ -509,13 +509,13 @@ export function apply(ctx, config = {}) {
   const deliveryRoot = (taskId) => path.join(sharedRoot, taskId ?? 'default', 'artifacts')
 
   const peersText = (self) => {
-    const entries = registry.list().filter(entry => entry.sessionId !== self.sessionId && COLLAB_PRESETS.has(entry.preset))
+    const entries = sessionDirectory.list().filter(entry => entry.sessionId !== self.sessionId && COLLAB_PRESETS.has(entry.preset) && !entry.archived)
     if (entries.length === 0) {
       return 'No other collaboration sessions are registered yet. Create another one from the left sidebar entry.'
     }
     const lines = [`This session: ${self.sessionId}`, '']
     for (const entry of entries) {
-      const online = ctx.agents.get(entry.sessionId) !== undefined
+      const online = entry.online
       const credential = readJson(credentialPath(self.workdir, entry.sessionId)) !== undefined
       const unread = inboxCount(self.workdir, entry.sessionId)
       const authorized = auth.isAuthorized(self.sessionId, entry.sessionId)
@@ -529,7 +529,7 @@ export function apply(ctx, config = {}) {
   }
 
   const infoText = (self) => {
-    const peers = registry.list().filter(entry => entry.sessionId !== self.sessionId)
+    const peers = sessionDirectory.list().filter(entry => entry.sessionId !== self.sessionId && !entry.archived)
     const lines = [
       `session id: ${self.sessionId}`,
       `preset: ${self.preset}`,
@@ -542,7 +542,7 @@ export function apply(ctx, config = {}) {
     ]
     for (const peer of peers) {
       const unread = inboxCount(self.workdir, peer.sessionId)
-      const online = ctx.agents.get(peer.sessionId) !== undefined
+      const online = peer.online
       lines.push(`- ${peer.sessionId}  ${online ? 'online' : 'offline'}  unread=${unread}`)
     }
     return lines.join('\n')
@@ -865,19 +865,14 @@ export function apply(ctx, config = {}) {
 
   const isFunctionalWorker = (sessionId) => registry.get(sessionId)?.preset === PRESET
 
-  const workerCandidates = (supervisor) => registry.list()
-      .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET && entry.archived !== true)
+  const workerCandidates = (supervisor) => sessionDirectory.list()
+    .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET && entry.archived !== true)
     .map(entry => {
       const capability = liveCapability(entry.sessionId)
       return {
         sessionId: entry.sessionId,
-        title: entry.title
-          ?? (() => {
-            const liveSession = ctx.get('sessions')?.get?.(entry.sessionId)
-            return liveSession === undefined ? undefined : ctx.get('sessionTitle')?.get?.(liveSession)?.title
-          })()
-          ?? null,
-        online: ctx.agents.get(entry.sessionId) !== undefined,
+        title: entry.title,
+        online: entry.online,
         authorized: auth.isAuthorized(supervisor, entry.sessionId),
         basePrompt: capability?.description ?? '',
         capability,
