@@ -34,6 +34,7 @@ import { createMessageTools } from './lib/message-tools.js'
 import { createRequestTools } from './lib/request-tools.js'
 import { createDeliveryTools } from './lib/delivery-tools.js'
 import { createTaskTools } from './lib/task-tools.js'
+import { createSessionDirectory } from './lib/session-directory.js'
 import { collectHealth } from './lib/health.js'
 import { createAccessPolicy } from './lib/access-policy.js'
 import { promptText } from './lib/prompt.js'
@@ -106,6 +107,7 @@ export function apply(ctx, config = {}) {
     : 24 * 60 * 60 * 1000
   const perSessionSandbox = config.perSessionSandbox !== false && process.platform !== 'win32'
   const registry = new SessionRegistry(registryPath)
+  const sessionDirectory = createSessionDirectory({ registry, sessions: ctx.get('sessions'), sessionTitle: ctx.get('sessionTitle'), agents: ctx.agents })
   const audit = new AuditLog(path.join(path.dirname(registryPath), 'audit.jsonl'))
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -1178,6 +1180,7 @@ export function apply(ctx, config = {}) {
     if (!known) throw new Error('not an initialized collaboration session')
     const op = String(operation ?? '')
     const supervisor = isSupervisorSession(sessionId) || registry.get(sessionId)?.preset === SUPERVISOR
+    if (op === 'directory') return sessionDirectory.list()
     if (op === 'board') {
       if (!supervisor) throw new Error('not a supervisor session')
       return {
