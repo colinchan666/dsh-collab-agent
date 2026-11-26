@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main, 'release-v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Collab plugin tests
+        working-directory: dsh-collab
+        run: npm test
+
+      - name: Auth API tests
+        working-directory: dsh-collab-api
+        run: node --test packages/dsh-collab-auth-api/test/host.test.mjs
+
+      - name: Package dry-run
+        run: |
+          (cd dsh-collab && npm pack --dry-run)
+          (cd dsh-collab-api/packages/dsh-collab-auth-api && npm pack --dry-run)
