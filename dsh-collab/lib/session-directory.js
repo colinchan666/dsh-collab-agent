@@ -1,5 +1,5 @@
 /** Canonical session metadata projection for collaboration UIs. */
-export function createSessionDirectory({ registry, sessions, sessionTitle, sessionQuery, archivedSessionIds, agents }) {
+export function createSessionDirectory({ registry, sessions, sessionTitle, sessionQuery, archivedSessionIds, agentPresets, agents }) {
   const persistedTitles = new Map()
   const titleFor = (sessionId, stored) => {
     if (typeof stored === 'string' && stored.length > 0) return stored
@@ -9,14 +9,18 @@ export function createSessionDirectory({ registry, sessions, sessionTitle, sessi
     if (live === undefined) return null
     return sessionTitle?.get?.(live)?.title ?? null
   }
-  const view = entry => ({
-    sessionId: entry.sessionId,
-    title: titleFor(entry.sessionId, entry.title),
-    preset: entry.preset,
+  const view = entry => {
+    const liveSession = sessions?.get?.(entry.sessionId)
+    const livePreset = liveSession === undefined ? undefined : agentPresets?.presetForSession?.(liveSession)
+    return {
+      sessionId: entry.sessionId,
+      title: titleFor(entry.sessionId, entry.title),
+      preset: livePreset ?? entry.preset,
     archived: entry.archived === true || archivedSessionIds?.()?.has(entry.sessionId) === true,
-    online: agents?.get?.(entry.sessionId) !== undefined,
-    workspace: entry.originalCwd ?? null,
-  })
+      online: agents?.get?.(entry.sessionId) !== undefined,
+      workspace: entry.originalCwd ?? null,
+    }
+  }
   return {
     get: sessionId => {
       const entry = registry.get(sessionId)

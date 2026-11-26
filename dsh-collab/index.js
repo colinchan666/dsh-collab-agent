@@ -143,7 +143,7 @@ export function apply(ctx, config = {}) {
   /** Human-facing authorization operations shared by the UI Remote and commands. */
   const isKnownCollab = (id) => {
     if (collabSessions.has(id)) return true
-    const entry = registry.get(id)
+    const entry = sessionDirectory.get(id)
     return entry !== undefined && entry.archived !== true && (entry.preset === PRESET || entry.preset === SUPERVISOR)
   }
   const collabAdmin = {
