@@ -1881,6 +1881,65 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
+    const GUIDE_COUNT_CSS = `
+[data-sidebar-right-guide-entry="collabSupervisorTasks"]::after,
+[data-sidebar-right-guide-entry="collabSupervisorWorkers"]::after{content:attr(data-collab-count);margin-left:auto;padding-left:12px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.4;white-space:nowrap;flex:none}
+`
+
+    function CollabGuideCounts(props) {
+      React.useEffect(() => {
+        let alive = true
+        let timer
+        const cache = new Map()
+        const readValue = (raw) => {
+          let value = raw
+          if (typeof value === 'string') value = JSON.parse(value)
+          if (value !== null && typeof value === 'object' && 'ok' in value) value = value.value
+          if (typeof value === 'string') value = JSON.parse(value)
+          return value
+        }
+        const apply = (card, kind, data) => {
+          const relationships = Array.isArray(data?.relationships) ? data.relationships : []
+          const tasks = Array.isArray(data?.tasks) ? data.tasks : []
+          const text = kind === 'collabSupervisorTasks'
+            ? `${tasks.filter(task => task.status === 'open').length}/${tasks.length}`
+            : String(relationships.filter(relationship => relationship.offer === true).length)
+          card.setAttribute('data-collab-count', text)
+        }
+        const refresh = () => {
+          if (!alive) return
+          const cards = document.querySelectorAll('[data-sidebar-right-guide-entry="collabSupervisorTasks"], [data-sidebar-right-guide-entry="collabSupervisorWorkers"]')
+          for (const card of cards) {
+            const kind = card.getAttribute('data-sidebar-right-guide-entry')
+            const sessionId = card.closest('[data-sidebar-right-session]')?.getAttribute('data-sidebar-right-session')
+            if (sessionId === undefined || sessionId === null || kind === null) continue
+            if (cache.has(sessionId)) {
+              apply(card, kind, cache.get(sessionId))
+              continue
+            }
+            Promise.resolve(props.loadBoard(sessionId)).then(raw => {
+              if (!alive) return
+              const data = readValue(raw)
+              cache.set(sessionId, data)
+              apply(card, kind, data)
+            }).catch(() => {})
+          }
+        }
+        const observer = new MutationObserver(() => {
+          clearTimeout(timer)
+          timer = setTimeout(refresh, 100)
+        })
+        observer.observe(document.body, { childList: true, subtree: true })
+        refresh()
+        return () => { alive = false; observer.disconnect(); clearTimeout(timer) }
+      }, [])
+      return null
+    }
+
+    function CollabGuideCountStyles() {
+      return h('style', null, GUIDE_COUNT_CSS)
+    }
+
     function CollabPresetMenuFilter(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       React.useEffect(() => {
@@ -2188,6 +2247,17 @@ window.__ModuleLoader__.load({
           id: 'collab-base-prompt',
           locale: NS,
         }, CollabBasePromptEditor))
+
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay',
+          id: 'collab-guide-counts',
+          inject: () => ({ loadBoard: sessionId => callPanel(sessionId, 'board') }),
+        }, CollabGuideCounts))
+
+        ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+          name: 'shell.overlay',
+          id: 'collab-guide-count-styles',
+        }, CollabGuideCountStyles))
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',

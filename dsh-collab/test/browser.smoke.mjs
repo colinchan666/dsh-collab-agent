@@ -319,6 +319,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
     const workerIcon = guideIcons.find(entry => entry.kind === 'collabSupervisorWorkers')?.icon
     assert.ok(taskIcon !== undefined && workerIcon !== undefined)
     assert.notEqual(taskIcon, workerIcon)
+    await waitFor(browser.evaluate, `document.querySelector('[data-sidebar-right-guide-entry="collabSupervisorTasks"][data-collab-count]') !== null`, 10_000)
     const openedTaskCard = await browser.evaluate(`(() => {
       const button = Array.from(document.querySelectorAll('button'))
         .find(element => element.textContent.includes('任务列表'))
