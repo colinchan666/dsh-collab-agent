@@ -1931,7 +1931,12 @@ window.__ModuleLoader__.load({
         })
         observer.observe(document.body, { childList: true, subtree: true })
         refresh()
-        return () => { alive = false; observer.disconnect(); clearTimeout(timer) }
+        const poll = setInterval(() => {
+          if (document.querySelector('[data-sidebar-right-guide]') === null) return
+          cache.clear()
+          refresh()
+        }, 2000)
+        return () => { alive = false; observer.disconnect(); clearTimeout(timer); clearInterval(poll) }
       }, [])
       return null
     }
