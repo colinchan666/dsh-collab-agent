@@ -309,8 +309,16 @@ test('real browser: collab entry, menu, and authorization page', async t => {
     })()`)
     await waitFor(browser.evaluate, "document.body.innerText.includes('任务列表')", 10_000)
     const guideCards = await browser.evaluate(`Array.from(document.querySelectorAll('button')).map(element => element.textContent.trim()).filter(Boolean)`)
-    assert.ok(guideCards.some(text => text.includes('任务列表')), `guide cards: ${guideCards.join(', ')}`)
-    assert.ok(guideCards.some(text => text.includes('注册中心')), `guide cards: ${guideCards.join(', ')}`)
+    assert.equal(guideCards.filter(text => text.includes('任务列表')).length, 1, `guide cards: ${guideCards.join(', ')}`)
+    assert.equal(guideCards.filter(text => text.includes('注册中心')).length, 1, `guide cards: ${guideCards.join(', ')}`)
+    const guideIcons = await browser.evaluate(`Array.from(document.querySelectorAll('[data-sidebar-right-guide-entry]')).map(element => ({
+      kind: element.getAttribute('data-sidebar-right-guide-entry'),
+      icon: element.querySelector('svg')?.outerHTML ?? '',
+    }))`)
+    const taskIcon = guideIcons.find(entry => entry.kind === 'collabSupervisorTasks')?.icon
+    const workerIcon = guideIcons.find(entry => entry.kind === 'collabSupervisorWorkers')?.icon
+    assert.ok(taskIcon !== undefined && workerIcon !== undefined)
+    assert.notEqual(taskIcon, workerIcon)
     const openedTaskCard = await browser.evaluate(`(() => {
       const button = Array.from(document.querySelectorAll('button'))
         .find(element => element.textContent.includes('任务列表'))

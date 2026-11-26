@@ -38,15 +38,21 @@ window.__ModuleLoader__.load({
     let MenuItemButton
     let Button
     let IconCopyOutlineRegular
+    let IconChecklistOutlineRegular
+    let IconUserOutlineRegular
     try {
       const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
       MenuItemButton = primitives.MenuItemButton
       Button = primitives.Button
       IconCopyOutlineRegular = primitives.IconCopyOutlineRegular
+      IconChecklistOutlineRegular = primitives.IconChecklistOutlineRegular
+      IconUserOutlineRegular = primitives.IconUserOutlineRegular
     } catch {
       MenuItemButton = undefined
       Button = undefined
       IconCopyOutlineRegular = undefined
+      IconChecklistOutlineRegular = undefined
+      IconUserOutlineRegular = undefined
     }
 
     const ZH = {
@@ -2078,11 +2084,11 @@ window.__ModuleLoader__.load({
         const registerTabTypes = (withGuide) => {
           for (const dispose of tabTypeDisposers.splice(0)) dispose()
           const t = ctx.locale.bind(NS)
-          const guide = withGuide
-            ? [
-                { id: 'tasks', title: () => t('board.tasksTitle'), description: () => t('board.tasksGuide'), order: 20 },
-                { id: 'workers', title: () => t('board.workersTitle'), description: () => t('board.workersGuide'), order: 21 },
-              ]
+          const taskGuide = withGuide
+            ? [{ id: 'tasks', title: () => t('board.tasksTitle'), description: () => t('board.tasksGuide'), order: 20, icon: IconChecklistOutlineRegular }]
+            : undefined
+          const workerGuide = withGuide
+            ? [{ id: 'workers', title: () => t('board.workersTitle'), description: () => t('board.workersGuide'), order: 21, icon: IconUserOutlineRegular }]
             : undefined
           tabTypeDisposers = [
             ctx.sidebarRightTabs.register({
@@ -2090,14 +2096,14 @@ window.__ModuleLoader__.load({
               kind: BOARD_TAB_KIND,
               priority: 'builtin',
               title: () => t('board.tasksTitle'),
-              guide,
+              guide: taskGuide,
             }),
             ctx.sidebarRightTabs.register({
               id: WORKERS_TAB_ID,
               kind: WORKERS_TAB_KIND,
               priority: 'builtin',
               title: () => t('board.workersTitle'),
-              guide,
+              guide: workerGuide,
             }),
           ]
         }
