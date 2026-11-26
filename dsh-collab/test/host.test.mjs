@@ -1086,3 +1086,32 @@ test('cancelling an accepted request cancels its subtasks and closes the task', 
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('archiving a collaboration session removes its grants and relationships', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-archive-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    const worker = harness.makeAgent(B, PRESET)
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    await harness.emit('agent/created', { agent: worker, source: 'startup' })
+    const auth = harness.commands.find(command => command.name === 'collab-auth').handler
+    const link = harness.commands.find(command => command.name === 'collab-link').handler
+    const invocation = { agent: supervisor, attachments: [], signal: new AbortController().signal }
+    await auth({ ...invocation, rawInput: `authorize ${A} ${B}` })
+    await link({ ...invocation, rawInput: `link ${B} e30=` })
+    const doctor = () => JSON.parse(harness.tools.find(entry => entry.definition.name === 'collab_doctor')
+      .definition.execute({}, { agent: supervisor }))
+    assert.equal(doctor().relationships, 1)
+    assert.equal(doctor().grants, 2)
+    await harness.emit('workspace/session-archived', { sessionId: B })
+    assert.equal(doctor().relationships, 0)
+    assert.equal(doctor().invalidGrants, 0)
+    assert.equal(doctor().grants, 0)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})

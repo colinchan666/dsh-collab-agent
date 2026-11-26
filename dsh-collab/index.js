@@ -1462,7 +1462,93 @@ export function apply(ctx, config = {}) {
     try { migrateSessionArchive(entry.workdir) } catch (error) { warn(`archive migration failed for ${entry.sessionId}: ${describeError(error)}`) }
   }
   for (const agent of ctx.agents.list()) void setupAgent(agent)
-  ctx.on('agent/created', async ({ agent }) => { await setupAgent(agent) })
+  const cleanupArchivedSession = (sessionId, eventName = 'session.archived') => {
+    if (!isSessionId(sessionId)) return
+    const known = registry.get(sessionId) !== undefined || collabSessions.has(sessionId)
+    if (!known) return
+    const rels = [
+      ...relationships.listForSupervisor(sessionId),
+      ...relationships.listForWorker(sessionId),
+    ]
+    for (const rel of rels) {
+      try { relationships.remove(rel.supervisor, rel.worker) } catch { /* best effort */ }
+      try { releaseDeliverySandbox(rel.worker, deliveryRoot(rel.taskId)) } catch { /* best effort */ }
+    }
+    for (const grant of auth.listGrants().filter(grant => grant.from === sessionId || grant.to === sessionId)) {
+      try { auth.revokeGrant(grant.from, grant.to) } catch { /* best effort */ }
+    }
+    for (const request of requests.list()) {
+      if (request.requester !== sessionId && request.supervisor !== sessionId) continue
+      if (request.status !== 'pending' && request.status !== 'accepted') continue
+      try {
+        requests.cancel(request.id, request.requester)
+        clearRequestTimer(request.id)
+        clearExecutionTimer(request.id)
+        if (request.taskId !== null) {
+          cancelBoundTask(tasks, request.taskId, worker => releaseDeliverySandbox(worker, deliveryRoot(request.taskId)))
+        }
+      } catch { /* best effort */ }
+    }
+    for (const subtask of tasks.listForWorker(sessionId)) {
+      if (['done', 'failed', 'cancelled'].includes(subtask.status)) continue
+      try { tasks.cancel(subtask.id) } catch { /* best effort */ }
+    }
+    for (const task of tasks.listTasks(sessionId)) {
+      if (task.status !== 'open') continue
+      try { cancelBoundTask(tasks, task.id, worker => releaseDeliverySandbox(worker, deliveryRoot(task.id))) } catch { /* best effort */ }
+    }
+    try { registry.remove(sessionId) } catch { /* best effort */ }
+    collabSessions.delete(sessionId)
+    try { audit.append(eventName, { sessionId }) } catch { /* best effort */ }
+  }
+
+  ctx.on('workspace/session-archived', (request) => {
+    try { cleanupArchivedSession(request?.sessionId) } catch (error) { warn(`could not clean archived session ${String(request?.sessionId)}: ${describeError(error)}`) }
+  })
+
+  ctx.on('api-session/removed', (sessionId) => {
+    const workspaces = ctx.get('workspaceRegistry')
+    if (workspaces === undefined) return
+    let known
+    try { known = new Set(workspaces.list().flatMap(workspace => workspace.sessionIds)) } catch { return }
+    if (known.size === 0 || known.has(sessionId)) return
+    try { cleanupArchivedSession(sessionId, 'session.removed') } catch (error) { warn(`could not clean removed session ${String(sessionId)}: ${describeError(error)}`) }
+  })
+
+  let reconciledCollabRegistry = false
+  const archivedSessionIds = () => {
+    const domain = ctx.get('storageDomain')?.get?.('workspace')
+    try {
+      const global = domain?.global?.get?.()
+      if (Array.isArray(global?.archivedSessionIds)) return new Set(global.archivedSessionIds)
+    } catch { /* diagnostic surface unavailable */ }
+    return undefined
+  }
+  const reconcileCollabRegistry = (currentSessionId) => {
+    if (reconciledCollabRegistry) return
+    const workspaces = ctx.get('workspaceRegistry')
+    if (workspaces === undefined) return
+    let known
+    try { known = new Set(workspaces.list().flatMap(workspace => workspace.sessionIds)) } catch { return }
+    const archived = archivedSessionIds()
+    if (known.size === 0 && archived === undefined) return
+    reconciledCollabRegistry = true
+    for (const entry of registry.list()) {
+      if (entry.sessionId === currentSessionId) continue
+      if (archived?.has(entry.sessionId) === true) {
+        try { cleanupArchivedSession(entry.sessionId, 'session.archived') } catch { /* best effort */ }
+        continue
+      }
+      if (known.size > 0 && !known.has(entry.sessionId)) {
+        try { cleanupArchivedSession(entry.sessionId, 'session.orphaned') } catch { /* best effort */ }
+      }
+    }
+  }
+
+  ctx.on('agent/created', async ({ agent }) => {
+    await setupAgent(agent)
+    reconcileCollabRegistry(agent.id)
+  })
   ctx.on('agent/disposed', ({ agent }) => {
     sandboxDeliveryRoots.delete(agent.id)
     sandboxReadRoots.delete(agent.id)
