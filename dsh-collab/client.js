@@ -97,7 +97,9 @@ window.__ModuleLoader__.load({
       'base.heroButton': '设置提示词',
       'board.title': '任务看板',
       'board.tasksTitle': '任务列表',
+      'board.tasksGuide': '查看 supervisor 的任务与子任务',
       'board.workersTitle': '注册中心',
+      'board.workersGuide': '查看已登记的协同会话与能力',
       'board.allProjects': '全部任务',
       'board.capabilityBoard': '能力登记',
       'board.open': '任务',
@@ -1923,39 +1925,16 @@ window.__ModuleLoader__.load({
         `html[data-collab-preset-lock="true"] ${COMPAT.modeChip}{display:none!important}`)
     }
 
-    const autoSeededSupervisorTabs = new Set()
-
-    function CollabSupervisorTabsAutoSeed(props) {
+    function CollabSupervisorGuideBridge(props) {
       const sessions = props.useSessions(selectSnapshot)
       const main = Object.values(sessions?.byId ?? {})
         .find(summary => (summary.retainedBy?.mainView ?? 0) > 0)
       const preset = main?.projectionValues?.agentPreset
         ?? sessions?.projectionsBySession?.[main?.id]?.values?.agentPreset
-      const sessionId = main?.id
       React.useEffect(() => {
-        if (preset !== 'supervisor' || sessionId === undefined) return undefined
-        if (autoSeededSupervisorTabs.has(sessionId)) return undefined
-        let attempts = 0
-        let timer
-        const seed = () => {
-          if (autoSeededSupervisorTabs.has(sessionId)) return
-          if (document.querySelector('.dsh-collab-board-tab-title') !== null) {
-            autoSeededSupervisorTabs.add(sessionId)
-            return
-          }
-          attempts += 1
-          props.openTasks(sessionId)
-          props.openWorkers(sessionId)
-          props.openGuide(sessionId)
-          if (attempts >= 12) {
-            clearInterval(timer)
-            return
-          }
-        }
-        seed()
-        timer = setInterval(seed, 250)
-        return () => clearInterval(timer)
-      }, [preset, sessionId])
+        props.setSupervisorGuide(preset === 'supervisor')
+        return () => props.setSupervisorGuide(false)
+      }, [preset])
       return null
     }
 
@@ -2094,19 +2073,43 @@ window.__ModuleLoader__.load({
           inject: () => ({ auth: authPanel }),
         }, CollabAuthPanel))
 
-        ctx.effect(() => ctx.sidebarRightTabs.register({
-          id: BOARD_TAB_ID,
-          kind: BOARD_TAB_KIND,
-          priority: 'builtin',
-          title: () => ctx.locale.bind(NS)('board.tasksTitle'),
-        }), 'collab-sessions: supervisor task board tab type')
-
-        ctx.effect(() => ctx.sidebarRightTabs.register({
-          id: WORKERS_TAB_ID,
-          kind: WORKERS_TAB_KIND,
-          priority: 'builtin',
-          title: () => ctx.locale.bind(NS)('board.workersTitle'),
-        }), 'collab-sessions: supervisor capability board tab type')
+        let supervisorGuide = false
+        let tabTypeDisposers = []
+        const registerTabTypes = (withGuide) => {
+          for (const dispose of tabTypeDisposers.splice(0)) dispose()
+          const t = ctx.locale.bind(NS)
+          const guide = withGuide
+            ? [
+                { id: 'tasks', title: () => t('board.tasksTitle'), description: () => t('board.tasksGuide'), order: 20 },
+                { id: 'workers', title: () => t('board.workersTitle'), description: () => t('board.workersGuide'), order: 21 },
+              ]
+            : undefined
+          tabTypeDisposers = [
+            ctx.sidebarRightTabs.register({
+              id: BOARD_TAB_ID,
+              kind: BOARD_TAB_KIND,
+              priority: 'builtin',
+              title: () => t('board.tasksTitle'),
+              guide,
+            }),
+            ctx.sidebarRightTabs.register({
+              id: WORKERS_TAB_ID,
+              kind: WORKERS_TAB_KIND,
+              priority: 'builtin',
+              title: () => t('board.workersTitle'),
+              guide,
+            }),
+          ]
+        }
+        ctx.effect(() => {
+          registerTabTypes(false)
+          return () => { for (const dispose of tabTypeDisposers.splice(0)) dispose() }
+        }, 'collab-sessions: supervisor tab types')
+        const setSupervisorGuide = (enabled) => {
+          if (supervisorGuide === enabled) return
+          supervisorGuide = enabled
+          registerTabTypes(enabled)
+        }
 
         ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
           name: 'sidebar.right.pane.tab',
@@ -2175,13 +2178,9 @@ window.__ModuleLoader__.load({
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',
-          id: 'collab-supervisor-tabs-auto-seed',
-          inject: () => ({
-            openGuide: (sessionId) => ctx.sidebarRight.openTab('guide', { params: { sessionId }, revealIfOpened: false }),
-            openTasks: (sessionId) => ctx.sidebarRight.openTab(BOARD_TAB_KIND, { params: { sessionId }, revealIfOpened: false }),
-            openWorkers: (sessionId) => ctx.sidebarRight.openTab(WORKERS_TAB_KIND, { params: { sessionId }, revealIfOpened: false }),
-          }),
-        }, CollabSupervisorTabsAutoSeed))
+          id: 'collab-supervisor-guide-bridge',
+          inject: () => ({ setSupervisorGuide }),
+        }, CollabSupervisorGuideBridge))
 
         ctx.slots.inject('shell.overlay', () => ctx.slots.register({
           name: 'shell.overlay',
