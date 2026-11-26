@@ -1137,11 +1137,11 @@ export function apply(ctx, config = {}) {
 
   /** Management operations used by the UI Remote instead of slash commands. */
   const panel = (sessionId, operation, args) => {
-    if (!isSessionId(sessionId) || !collabSessions.has(sessionId)) {
-      throw new Error('not an initialized collaboration session')
-    }
+    if (!isSessionId(sessionId)) throw new Error('not an initialized collaboration session')
+    const known = collabSessions.has(sessionId) || registry.get(sessionId) !== undefined
+    if (!known) throw new Error('not an initialized collaboration session')
     const op = String(operation ?? '')
-    const supervisor = isSupervisorSession(sessionId)
+    const supervisor = isSupervisorSession(sessionId) || registry.get(sessionId)?.preset === SUPERVISOR
     if (op === 'board') {
       if (!supervisor) throw new Error('not a supervisor session')
       return {
