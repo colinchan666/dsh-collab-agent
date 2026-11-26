@@ -1814,7 +1814,9 @@ window.__ModuleLoader__.load({
         mode === 'workers'
           ? h(React.Fragment, null,
               h('section', { className: 'dsh-collab-board-section' },
-                h('h3', { className: 'dsh-collab-board-section-title' }, t('board.workers')),
+                h('div', { className: 'dsh-collab-board-head' },
+                  h('h3', { className: 'dsh-collab-board-section-title' }, t('board.workers')),
+                  h('span', { className: 'dsh-collab-board-status' }, String(linked.length))),
                 linked.length === 0
                   ? h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyWorkers'))
                   : linked.map(rel => h('div', {
@@ -1845,7 +1847,9 @@ window.__ModuleLoader__.load({
                       onKeyDown: (event) => { event.stopPropagation() },
                     }, t('board.unlink'))))),
               h('section', { className: 'dsh-collab-board-section' },
-                h('h3', { className: 'dsh-collab-board-section-title' }, t('board.available')),
+                h('div', { className: 'dsh-collab-board-head' },
+                  h('h3', { className: 'dsh-collab-board-section-title' }, t('board.available')),
+                  h('span', { className: 'dsh-collab-board-status' }, String(available.length))),
                 available.length === 0
                   ? h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyAvailable'))
                   : available.map(entry => h('div', { key: entry.sessionId, className: 'dsh-collab-board-row' },
