@@ -671,6 +671,14 @@ window.__ModuleLoader__.load({
           setPendingGrants(next.pending)
           setKnownSessions(new Set(next.knownSessionIds ?? []))
           collabDirectoryStore.applySnapshot(next.sessions)
+          const missingTitles = (next.sessions ?? []).filter(entry => (entry.title === null || entry.title === undefined || entry.title.length === 0))
+          for (const entry of missingTitles) {
+            const title = sessions?.byId?.[entry.sessionId]?.displayTitle
+            if (typeof title === 'string' && title.length > 0) {
+              try { await props.auth.backfillTitle(entry.sessionId, title) } catch { /* best effort */ }
+            }
+          }
+          if (missingTitles.length > 0) void loadSnapshot(false)
         } catch (failure) {
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
@@ -2093,6 +2101,9 @@ window.__ModuleLoader__.load({
           list: async () => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.list(),
           authorize: async (a, b) => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.authorize(a, b),
           revoke: async (a, b) => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.revoke(a, b),
+          backfillTitle: async (sessionId, title) => ctx.remote.collabAuth === undefined
+            ? authUnavailable
+            : ctx.remote.collabAuth.panel(sessionId, 'backfillTitle', JSON.stringify({ title })),
         }
         const callPanel = (sessionId, operation, args) => {
           const auth = ctx.remote.collabAuth

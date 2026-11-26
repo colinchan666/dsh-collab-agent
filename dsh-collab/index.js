@@ -1176,6 +1176,14 @@ export function apply(ctx, config = {}) {
     const op = String(operation ?? '')
     const supervisor = isSupervisorSession(sessionId) || registry.get(sessionId)?.preset === SUPERVISOR
     if (op === 'directory') return sessionDirectory.list()
+    if (op === 'backfillTitle') {
+      const title = String(args?.title ?? '').trim()
+      if (title.length === 0 || title.length > 200) throw new Error('invalid title')
+      const entry = registry.get(sessionId)
+      if (entry === undefined) throw new Error('unknown collaboration session')
+      registry.upsert({ ...entry, title })
+      return { sessionId, title }
+    }
     if (op === 'board') {
       if (!supervisor) throw new Error('not a supervisor session')
       return {
