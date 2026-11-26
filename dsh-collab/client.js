@@ -326,6 +326,8 @@ window.__ModuleLoader__.load({
       return preset === 'collab' || preset === 'supervisor'
     }
 
+    const collabDisplayTitles = new Map()
+
     function collabSessionSummaries(state, preset) {
       return (state?.ids ?? [])
         .map(id => state.byId[id])
@@ -600,6 +602,13 @@ window.__ModuleLoader__.load({
       const t = typeof props.t === 'function' ? props.t : fallbackT
       const sessions = props.useSessions(selectSnapshot)
       const roots = collabSessionSummaries(sessions)
+      React.useEffect(() => {
+        for (const summary of roots) {
+          if (typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0) {
+            collabDisplayTitles.set(summary.id, summary.displayTitle)
+          }
+        }
+      }, [roots.map(summary => summary.id).join('|')])
       const [pairs, setPairs] = React.useState([])
       const [pendingGrants, setPendingGrants] = React.useState([])
       const [knownSessions, setKnownSessions] = React.useState(null)
@@ -1579,7 +1588,7 @@ window.__ModuleLoader__.load({
       const [selectedRequestId, setSelectedRequestId] = React.useState(null)
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
       const sessions = typeof props.useSessions === 'function' ? props.useSessions(selectSnapshot) : undefined
-      const titleOf = id => sessions?.byId?.[id]?.displayTitle ?? undefined
+      const titleOf = id => collabDisplayTitles.get(id) ?? sessions?.byId?.[id]?.displayTitle ?? undefined
 
       const load = async (showLoading = true) => {
         if (showLoading) setLoading(true)
@@ -2034,6 +2043,11 @@ window.__ModuleLoader__.load({
         ?? main?.preset
         ?? sessions?.projectionsBySession?.[main?.id]?.values?.agentPreset
       React.useEffect(() => {
+        for (const summary of collabSessionSummaries(sessions)) {
+          if (typeof summary.displayTitle === 'string' && summary.displayTitle.length > 0) {
+            collabDisplayTitles.set(summary.id, summary.displayTitle)
+          }
+        }
         const chip = document.querySelector('button[class*="_seat"]')?.textContent ?? ''
         const enabled = preset === 'supervisor' || chip.includes('超级会话') || chip.includes('Supervisor')
         props.setSupervisorGuide(enabled)
