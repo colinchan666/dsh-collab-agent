@@ -9,7 +9,7 @@ export function createTaskTools({
   ctx, tasks, relationships, auth, registry, requests, audit, deliveryRoot, deliveryDirFor,
   sendTaskNotice, releaseDeliverySandbox, bindDeliverySandbox, isFunctionalWorker,
   effectiveCapability, isSupervisorSession, isManagedWorker, requireSupervisor, requireWorker,
-  requireSelf, turnForCall, collabSessions, sharedRoot, mkdirp, cancelBoundTask, clearExecutionTimer,
+  requireSelf, turnForCall, collabSessions, sessionDirectory, sharedRoot, mkdirp, cancelBoundTask, clearExecutionTimer,
   clearRequestTimer, scheduleRequestTimeout, requestTimeoutMs, subtaskAliases,
 }) {
   const taskTools = [
@@ -28,8 +28,8 @@ export function createTaskTools({
         const lines = [`supervisor: ${self.sessionId}`, '']
         for (const relationship of relationshipsForSelf) {
           if (relationship.offer !== true) continue
-          const worker = registry.get(relationship.worker)
-          const online = ctx.agents.get(relationship.worker) !== undefined
+          const worker = sessionDirectory.get(relationship.worker)
+          const online = worker?.online === true
           const authorized = auth.isAuthorized(self.sessionId, relationship.worker)
           const active = tasks.activeCount(relationship.worker)
           const capability = effectiveCapability(relationship)

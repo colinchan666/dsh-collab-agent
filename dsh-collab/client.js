@@ -326,6 +326,15 @@ window.__ModuleLoader__.load({
       return preset === 'collab' || preset === 'supervisor'
     }
 
+    function collabSessionSummaries(state, preset) {
+      return (state?.ids ?? [])
+        .map(id => state.byId[id])
+        .filter(summary => summary !== undefined
+          && summary.origin !== 'subagent'
+          && isCollabSummary(summary, state)
+          && (preset === undefined || (summary.projectionValues ?? state.projectionsBySession?.[summary.id]?.values)?.agentPreset === preset))
+    }
+
     const CSS = [
       '.dsh-collab-new-stack{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;min-width:0}',
       '.dsh-collab-new-stack[data-wide="false"]{width:36px;align-items:flex-start;gap:4px}',
@@ -590,9 +599,7 @@ window.__ModuleLoader__.load({
     function CollabAuthPanel(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       const sessions = props.useSessions(selectSnapshot)
-      const roots = (sessions?.ids ?? [])
-        .map(id => sessions.byId[id])
-        .filter(summary => summary !== undefined && summary.origin !== 'subagent' && isCollabSummary(summary, sessions))
+      const roots = collabSessionSummaries(sessions)
       const [pairs, setPairs] = React.useState([])
       const [pendingGrants, setPendingGrants] = React.useState([])
       const [knownSessions, setKnownSessions] = React.useState(null)
@@ -1640,15 +1647,9 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const presetOf = id => (sessions?.byId?.[id]?.projectionValues ?? sessions?.projectionsBySession?.[id]?.values)?.agentPreset
       const hostWorkers = new Map((data?.workers ?? []).map(entry => [entry.sessionId, entry]))
-      const collabSessions = (sessions?.ids ?? [])
-        .map(id => sessions.byId[id])
-        .filter(summary => summary !== undefined
-          && summary.id !== props.sessionId
-          && summary.origin !== 'subagent'
-          && isCollabSummary(summary, sessions)
-          && presetOf(summary.id) === 'collab')
+      const collabSessions = collabSessionSummaries(sessions, 'collab')
+        .filter(summary => summary.id !== props.sessionId)
       const workers = sessions === undefined || sessions === null
         ? (data?.workers ?? [])
         : collabSessions.map(summary => ({

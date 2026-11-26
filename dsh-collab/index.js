@@ -935,7 +935,7 @@ export function apply(ctx, config = {}) {
     ctx, tasks, relationships, auth, registry, requests, audit, deliveryRoot, deliveryDirFor,
     sendTaskNotice, releaseDeliverySandbox, bindDeliverySandbox, isFunctionalWorker,
     effectiveCapability, isSupervisorSession, isManagedWorker, requireSupervisor, requireWorker,
-    requireSelf, turnForCall, collabSessions, sharedRoot, mkdirp, cancelBoundTask, clearExecutionTimer,
+    requireSelf, turnForCall, collabSessions, sessionDirectory, sharedRoot, mkdirp, cancelBoundTask, clearExecutionTimer,
     clearRequestTimer, scheduleRequestTimeout, requestTimeoutMs, subtaskAliases,
   })
 
