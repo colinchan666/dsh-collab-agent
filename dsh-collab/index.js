@@ -1631,9 +1631,28 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  let reconciledPresets = false
+  const reconcilePersistedPresets = async () => {
+    if (reconciledPresets) return
+    reconciledPresets = true
+    const query = ctx.get('sessionQuery')
+    const presets = ctx.get('agentPresets')
+    if (typeof query?.inspectSession !== 'function' || typeof presets?.presetForSession !== 'function') return
+    for (const entry of registry.list()) {
+      if (ctx.get('sessions')?.get?.(entry.sessionId) !== undefined) continue
+      try {
+        const preset = await query.inspectSession(entry.sessionId, session => presets.presetForSession(session))
+        if (preset !== undefined && preset !== null && !COLLAB_PRESETS.has(preset)) {
+          cleanupArchivedSession(entry.sessionId, 'session.preset.changed')
+        }
+      } catch { /* missing or unreadable history */ }
+    }
+  }
+
   ctx.on('agent/created', async ({ agent }) => {
     await setupAgent(agent)
     reconcileCollabRegistry(agent.id)
+    void reconcilePersistedPresets()
     void sessionDirectory.hydrate()
   })
   ctx.on('agent/disposed', ({ agent }) => {
