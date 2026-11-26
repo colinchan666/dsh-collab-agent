@@ -307,9 +307,27 @@ test('real browser: collab entry, menu, and authorization page', async t => {
         .find(element => element.getAttribute('aria-label') === '打开右侧边栏')
       if (button !== undefined) button.click()
     })()`)
-    await waitFor(browser.evaluate, `document.querySelector('[role="tab"]') !== null`, 10_000)
-    const autoTabs = await browser.evaluate(`Array.from(document.querySelectorAll('[role="tab"], .dsh-collab-board-tab-title')).map(element => element.textContent.trim()).filter(Boolean)`)
-    assert.ok(autoTabs.some(text => text.includes('任务')), `tabs: ${autoTabs.join(', ')}`)
+    await waitFor(browser.evaluate, "document.body.innerText.includes('任务列表')", 10_000)
+    const guideCards = await browser.evaluate(`Array.from(document.querySelectorAll('button')).map(element => element.textContent.trim()).filter(Boolean)`)
+    assert.equal(guideCards.filter(text => text.includes('任务列表')).length, 1, `guide cards: ${guideCards.join(', ')}`)
+    assert.equal(guideCards.filter(text => text.includes('注册中心')).length, 1, `guide cards: ${guideCards.join(', ')}`)
+    const guideIcons = await browser.evaluate(`Array.from(document.querySelectorAll('[data-sidebar-right-guide-entry]')).map(element => ({
+      kind: element.getAttribute('data-sidebar-right-guide-entry'),
+      icon: element.querySelector('svg')?.outerHTML ?? '',
+    }))`)
+    const taskIcon = guideIcons.find(entry => entry.kind === 'collabSupervisorTasks')?.icon
+    const workerIcon = guideIcons.find(entry => entry.kind === 'collabSupervisorWorkers')?.icon
+    assert.ok(taskIcon !== undefined && workerIcon !== undefined)
+    assert.notEqual(taskIcon, workerIcon)
+    const openedTaskCard = await browser.evaluate(`(() => {
+      const button = Array.from(document.querySelectorAll('button'))
+        .find(element => element.textContent.includes('任务列表'))
+      if (button === undefined) return false
+      button.click()
+      return true
+    })()`)
+    assert.equal(openedTaskCard, true)
+    await waitFor(browser.evaluate, `document.querySelector('.dsh-collab-board-tab-title') !== null`, 10_000)
     const targetWorkspace = await browser.evaluate(`(() => {
       const button = document.querySelector('button[class*="_workspace"]')
       if (button === undefined) return null
@@ -338,9 +356,16 @@ test('real browser: collab entry, menu, and authorization page', async t => {
         .find(element => element.getAttribute('aria-label') === '打开右侧边栏')
       if (button !== undefined) button.click()
     })()`)
-    await waitFor(browser.evaluate, `document.querySelector('[role="tab"]') !== null`, 10_000)
-    const switchedTabs = await browser.evaluate(`Array.from(document.querySelectorAll('[role="tab"], .dsh-collab-board-tab-title')).map(element => element.textContent.trim()).filter(Boolean)`)
-    assert.ok(switchedTabs.some(text => text.includes('任务')), `tabs after switch: ${switchedTabs.join(', ')}`)
+    await waitFor(browser.evaluate, "document.body.innerText.includes('任务列表')", 10_000)
+    const openedTaskAfterSwitch = await browser.evaluate(`(() => {
+      const button = Array.from(document.querySelectorAll('button'))
+        .find(element => element.textContent.includes('任务列表'))
+      if (button === undefined) return false
+      button.click()
+      return true
+    })()`)
+    assert.equal(openedTaskAfterSwitch, true)
+    await waitFor(browser.evaluate, `document.querySelector('.dsh-collab-board-tab-title') !== null`, 10_000)
 
   }
 
