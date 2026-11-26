@@ -1613,6 +1613,12 @@ export function apply(ctx, config = {}) {
     reconciledCollabRegistry = true
     for (const entry of registry.list()) {
       if (entry.sessionId === currentSessionId) continue
+      const liveSession = ctx.get('sessions')?.get?.(entry.sessionId)
+      const livePreset = liveSession === undefined ? undefined : ctx.get('agentPresets')?.presetForSession?.(liveSession)
+      if (livePreset !== undefined && !COLLAB_PRESETS.has(livePreset)) {
+        try { cleanupArchivedSession(entry.sessionId, 'session.preset.changed') } catch { /* best effort */ }
+        continue
+      }
       if (collabSessions.has(entry.sessionId) || ctx.agents.get(entry.sessionId) !== undefined) continue
       if (archived?.has(entry.sessionId) === true) {
         try { cleanupArchivedSession(entry.sessionId, 'session.archived') } catch { /* best effort */ }
