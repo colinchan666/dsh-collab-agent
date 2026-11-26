@@ -994,9 +994,16 @@ export function apply(ctx, config = {}) {
     name: 'collab-debug',
     description: 'Read-only collaboration candidate diagnostics for the current supervisor.',
     recordInput: false,
-    handler: (invocation) => {
+    handler: async (invocation) => {
       const sessionId = invocation.agent?.id
       if (!isSupervisorSession(sessionId)) return { kind: 'error', text: 'not a supervisor session' }
+      const inspected = invocation.rawInput.trim()
+      if (isSessionId(inspected)) {
+        const query = ctx.get('sessionQuery')
+        const presets = ctx.get('agentPresets')
+        const persistedPreset = await query.inspectSession(inspected, session => presets.presetForSession(session)).catch(() => null)
+        return { kind: 'success', text: JSON.stringify({ inspected, persistedPreset, registryPreset: registry.get(inspected)?.preset ?? null }, null, 2) }
+      }
       return {
         kind: 'success',
         text: JSON.stringify({
