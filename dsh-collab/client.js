@@ -2005,17 +2005,21 @@ window.__ModuleLoader__.load({
       const main = Object.values(sessions?.byId ?? {})
         .find(summary => (summary.retainedBy?.mainView ?? 0) > 0)
       const preset = main?.projectionValues?.agentPreset
+        ?? main?.agentPreset
+        ?? main?.preset
         ?? sessions?.projectionsBySession?.[main?.id]?.values?.agentPreset
       React.useEffect(() => {
-        props.setSupervisorGuide(preset === 'supervisor')
+        const chip = document.querySelector('button[class*="_seat"]')?.textContent ?? ''
+        const enabled = preset === 'supervisor' || chip.includes('超级会话') || chip.includes('Supervisor')
+        props.setSupervisorGuide(enabled)
         return () => props.setSupervisorGuide(false)
-      }, [preset])
+      }, [preset, main?.id])
       return null
     }
 
     return {
       __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT, boardCounts, normalizePanelValue },
-      inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
+      inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
         const authUnavailable = { ok: false, error: { code: 'collab-auth-unavailable', message: 'Collaboration authorization Remote is not loaded' } }
