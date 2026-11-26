@@ -24,7 +24,7 @@ jobs:
 
       - name: Install workspace dependencies
         working-directory: dsh-collab-api
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Collab plugin tests
         working-directory: dsh-collab
