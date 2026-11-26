@@ -1659,10 +1659,10 @@ export function apply(ctx, config = {}) {
   let reconciledPresets = false
   const reconcilePersistedPresets = async () => {
     if (reconciledPresets) return
-    reconciledPresets = true
     const query = ctx.get('sessionQuery')
     const presets = ctx.get('agentPresets')
     if (typeof query?.inspectSession !== 'function' || typeof presets?.presetForSession !== 'function') return
+    reconciledPresets = true
     for (const entry of registry.list()) {
       if (ctx.get('sessions')?.get?.(entry.sessionId) !== undefined) continue
       try {
