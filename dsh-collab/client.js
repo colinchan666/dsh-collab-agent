@@ -633,12 +633,15 @@ window.__ModuleLoader__.load({
     function CollabAuthPanel(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       const sessions = props.useSessions(selectSnapshot)
-      const roots = collabSessionSummaries(sessions)
+      const titleOf = id => sessions?.byId?.[id]?.displayTitle ?? shortId(id)
       const [pairs, setPairs] = React.useState([])
       const [pendingGrants, setPendingGrants] = React.useState([])
-      const [knownSessions, setKnownSessions] = React.useState(null)
-      const visibleRoots = knownSessions === null ? [] : roots.filter(summary => knownSessions.has(summary.id))
-      const sorted = [...visibleRoots].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
+      const [directorySessions, setDirectorySessions] = React.useState([])
+      const roots = directorySessions.map(entry => ({
+        id: entry.sessionId,
+        displayTitle: entry.title ?? titleOf(entry.sessionId),
+      }))
+      const sorted = [...roots].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
       const [activeTab, setActiveTab] = React.useState('pairs')
       const [selected, setSelected] = React.useState([])
       const [loading, setLoading] = React.useState(false)
@@ -647,7 +650,6 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState(null)
       const [confirmRevoke, setConfirmRevoke] = React.useState(null)
 
-      const titleOf = id => sessions?.byId?.[id]?.displayTitle ?? shortId(id)
       const presetOf = id => (sessions?.byId?.[id]?.projectionValues ?? sessions?.projectionsBySession?.[id]?.values)?.agentPreset
 
       const run = async (operation) => {
@@ -669,7 +671,7 @@ window.__ModuleLoader__.load({
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setPairs(next.pairs)
           setPendingGrants(next.pending)
-          setKnownSessions(new Set((next.sessions ?? []).map(entry => entry.sessionId)))
+          setDirectorySessions(next.sessions ?? [])
           collabDirectoryStore.applySnapshot(next.sessions)
           const missingTitles = (next.sessions ?? []).filter(entry => (entry.title === null || entry.title === undefined || entry.title.length === 0))
           for (const entry of missingTitles) {
@@ -1691,16 +1693,7 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const hostWorkers = new Map((data?.workers ?? []).map(entry => [entry.sessionId, entry]))
-      const collabSessions = collabSessionSummaries(sessions, 'collab')
-        .filter(summary => summary.id !== props.sessionId)
-      const workers = sessions === undefined || sessions === null
-        ? (data?.workers ?? [])
-        : collabSessions.map(summary => ({
-            ...(hostWorkers.get(summary.id) ?? {}),
-            sessionId: summary.id,
-            title: summary.displayTitle,
-          }))
+      const workers = (data?.workers ?? [])
       const linked = (data?.relationships ?? [])
         .filter(rel => rel.offer === true)
         .map(rel => ({ ...rel, workerTitle: titleOf(rel.worker) }))
