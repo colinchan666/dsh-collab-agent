@@ -5,7 +5,7 @@ import { taskLine } from './task-views.js'
 import { TaskStore } from './tasks.js'
 
 export function createRequestTools({
-  requireSelf, requireSupervisor, requests, tasks, relationships, auth, audit,
+  requireSelf, requireSupervisor, requests, tasks, relationships, auth, audit, collabSessions,
   scheduleExecutionDeadline, clearRequestTimer, sendTaskNotice, deliveryRoot, releaseDeliverySandbox,
   taskDetail, isSupervisorSession, executionTimeoutMs,
 }) {
