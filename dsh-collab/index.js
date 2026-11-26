@@ -1516,17 +1516,32 @@ export function apply(ctx, config = {}) {
   })
 
   let reconciledCollabRegistry = false
+  const archivedSessionIds = () => {
+    const domain = ctx.get('storageDomain')?.get?.('workspace')
+    try {
+      const global = domain?.global?.get?.()
+      if (Array.isArray(global?.archivedSessionIds)) return new Set(global.archivedSessionIds)
+    } catch { /* diagnostic surface unavailable */ }
+    return undefined
+  }
   const reconcileCollabRegistry = (currentSessionId) => {
     if (reconciledCollabRegistry) return
     const workspaces = ctx.get('workspaceRegistry')
     if (workspaces === undefined) return
     let known
     try { known = new Set(workspaces.list().flatMap(workspace => workspace.sessionIds)) } catch { return }
-    if (known.size === 0) return
+    const archived = archivedSessionIds()
+    if (known.size === 0 && archived === undefined) return
     reconciledCollabRegistry = true
     for (const entry of registry.list()) {
-      if (entry.sessionId === currentSessionId || known.has(entry.sessionId)) continue
-      try { cleanupArchivedSession(entry.sessionId, 'session.orphaned') } catch { /* best effort */ }
+      if (entry.sessionId === currentSessionId) continue
+      if (archived?.has(entry.sessionId) === true) {
+        try { cleanupArchivedSession(entry.sessionId, 'session.archived') } catch { /* best effort */ }
+        continue
+      }
+      if (known.size > 0 && !known.has(entry.sessionId)) {
+        try { cleanupArchivedSession(entry.sessionId, 'session.orphaned') } catch { /* best effort */ }
+      }
     }
   }
 
