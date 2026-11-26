@@ -14,14 +14,16 @@ jobs:
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 11
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
+          cache-dependency-path: dsh-collab-api/pnpm-lock.yaml
 
       - name: Install workspace dependencies
+        working-directory: dsh-collab-api
         run: pnpm install --frozen-lockfile
 
       - name: Collab plugin tests
