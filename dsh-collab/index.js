@@ -1529,9 +1529,7 @@ export function apply(ctx, config = {}) {
   ctx.on('workspace/session-unarchiving', (request) => {
     const sessionId = request?.sessionId
     if (!isSessionId(sessionId)) return
-    const entry = registry.get(sessionId)
-    if (entry === undefined) return
-    try { registry.upsert({ ...entry, archived: false }) } catch { /* best effort */ }
+    restoreCollabRegistry(sessionId)
   })
 
   ctx.on('api-session/added', (summary) => {
@@ -1560,9 +1558,15 @@ export function apply(ctx, config = {}) {
     return undefined
   }
   const restoreCollabRegistry = (sessionId) => {
-    const entry = registry.get(sessionId)
-    if (entry === undefined || entry.archived !== true) return
-    try { registry.upsert({ ...entry, archived: false }) } catch { /* best effort */ }
+    let entry = registry.get(sessionId)
+    if (entry === undefined) {
+      try { refreshRegistry() } catch { /* best effort */ }
+      entry = registry.get(sessionId)
+    }
+    if (entry === undefined) return
+    if (entry.archived === true) {
+      try { registry.upsert({ ...entry, archived: false }) } catch { /* best effort */ }
+    }
   }
   const syncArchivedFlags = () => {
     const archived = archivedSessionIds()
