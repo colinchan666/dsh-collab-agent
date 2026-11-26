@@ -870,7 +870,7 @@ export function apply(ctx, config = {}) {
       const capability = liveCapability(entry.sessionId)
       return {
         sessionId: entry.sessionId,
-        title: entry.title ?? null,
+        title: entry.title ?? ctx.agents.get(entry.sessionId)?.session?.header?.title ?? null,
         online: ctx.agents.get(entry.sessionId) !== undefined,
         authorized: auth.isAuthorized(supervisor, entry.sessionId),
         basePrompt: capability?.description ?? '',
@@ -989,6 +989,28 @@ export function apply(ctx, config = {}) {
         return { kind: 'success', text: statePayload() }
       }
       return { kind: 'error', text: usage }
+    },
+  })
+
+  ctx.commands.register({
+    name: 'collab-debug',
+    description: 'Read-only collaboration candidate diagnostics for the current supervisor.',
+    recordInput: false,
+    handler: (invocation) => {
+      const sessionId = invocation.agent?.id
+      if (!isSupervisorSession(sessionId)) return { kind: 'error', text: 'not a supervisor session' }
+      return {
+        kind: 'success',
+        text: JSON.stringify({
+          sessionId,
+          candidates: workerCandidates(sessionId).map(entry => ({
+            sessionId: entry.sessionId,
+            title: entry.title,
+            archived: registry.get(entry.sessionId)?.archived,
+          })),
+          relationships: relationships.listForSupervisor(sessionId),
+        }, null, 2),
+      }
     },
   })
 
