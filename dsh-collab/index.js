@@ -1553,6 +1553,8 @@ export function apply(ctx, config = {}) {
     if (archived !== undefined && !archived.has(sessionId)) restoreCollabRegistry(sessionId)
   })
 
+  ctx.on('api-session/added', () => { void sessionDirectory.hydrate() })
+
   ctx.on('api-session/removed', (sessionId) => {
     const workspaces = ctx.get('workspaceRegistry')
     if (workspaces === undefined) return
@@ -1620,6 +1622,7 @@ export function apply(ctx, config = {}) {
   ctx.on('agent/created', async ({ agent }) => {
     await setupAgent(agent)
     reconcileCollabRegistry(agent.id)
+    void sessionDirectory.hydrate()
   })
   ctx.on('agent/disposed', ({ agent }) => {
     sandboxDeliveryRoots.delete(agent.id)
