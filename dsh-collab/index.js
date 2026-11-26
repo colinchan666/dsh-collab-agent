@@ -1643,6 +1643,7 @@ export function apply(ctx, config = {}) {
       if (agent !== undefined) await setupAgent(agent, { force: true, preset: selected })
       return
     }
+    cleanupArchivedSession(sessionId, 'session.preset.changed')
     collabSessions.delete(sessionId)
     sessionPresets.delete(sessionId)
     disposePrompt(sessionId)

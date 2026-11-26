@@ -1139,3 +1139,20 @@ test('the authorization snapshot exposes the complete collaboration directory', 
     fs.rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('changing a session away from a collaboration preset removes its registry entry', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-collab-preset-change-'))
+  const workspace = path.join(root, 'workspace')
+  fs.mkdirSync(workspace, { recursive: true })
+  try {
+    const harness = fakeHarness(workspace)
+    apply(harness.ctx, { registryPath: path.join(root, 'registry.json') })
+    const supervisor = harness.makeAgent(A, 'supervisor')
+    await harness.emit('agent/created', { agent: supervisor, source: 'startup' })
+    assert.ok(JSON.parse(fs.readFileSync(path.join(root, 'registry.json'), 'utf8')).sessions[A])
+    await harness.emit('agent-preset/selected', A, 'standard')
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'registry.json'), 'utf8')).sessions[A], undefined)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
