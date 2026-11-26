@@ -1880,6 +1880,16 @@ window.__ModuleLoader__.load({
         tab?.kind === WORKERS_TAB_KIND ? t('board.workersTitle') : t('board.tasksTitle'))
     }
 
+    function boardCounts(data) {
+      const relationships = Array.isArray(data?.relationships) ? data.relationships : []
+      const tasks = Array.isArray(data?.tasks) ? data.tasks : []
+      return {
+        registered: relationships.filter(relationship => relationship.offer === true).length,
+        activeTasks: tasks.filter(task => task.status === 'open').length,
+        totalTasks: tasks.length,
+      }
+    }
+
     function CollabGuideCard(props) {
       const t = typeof props.t === 'function' ? props.t : fallbackT
       const { tab } = props.useTabInfo()
@@ -1890,13 +1900,11 @@ window.__ModuleLoader__.load({
         Promise.resolve(props.loadSummary()).then(raw => {
           if (!alive) return
           const data = typeof raw === 'string' ? JSON.parse(raw) : raw
+          const counts = boardCounts(data)
           if (props.entryId === 'tasks') {
-            const tasks = Array.isArray(data?.tasks) ? data.tasks : []
-            const active = tasks.filter(task => task.status === 'open').length
-            setSummary(t('board.tasksGuideCount', { active, total: tasks.length }))
+            setSummary(t('board.tasksGuideCount', { active: counts.activeTasks, total: counts.totalTasks }))
           } else {
-            const workers = Array.isArray(data?.workers) ? data.workers : []
-            setSummary(t('board.workersGuideCount', { total: workers.length }))
+            setSummary(t('board.workersGuideCount', { total: counts.registered }))
           }
         }).catch(() => {})
         return () => { alive = false }
@@ -1988,7 +1996,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT },
+      __test: { isCollabSummary, isSupervisorSessionSummary, parseBasePromptCommand, COMPAT, boardCounts },
       inject: ['slots', 'locale', 'uiWorkspace', 'sessions', 'remote', 'remote.commands', 'remote.collabAuth', 'uiConversation', 'layout', 'sidebarRight', 'sidebarRightTabs'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'collab-sessions: dictionaries')
