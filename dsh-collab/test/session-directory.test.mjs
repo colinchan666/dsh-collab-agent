@@ -24,3 +24,19 @@ test('the session directory is the single metadata projection', () => {
   assert.equal(directory.getMany(['session-a', 'session-missing']).size, 1)
   assert.equal(directory.list().length, 2)
 })
+
+test('the session directory hydrates titles from persisted session queries', async () => {
+  const registry = new Map([
+    ['session-a', { sessionId: 'session-a', preset: 'collab', title: null, archived: true }],
+  ])
+  const directory = createSessionDirectory({
+    registry: { get: id => registry.get(id), list: () => [...registry.values()] },
+    sessions: { get: () => undefined },
+    sessionTitle: { get: () => undefined },
+    sessionQuery: { readTitle: async id => ({ title: `persisted-${id}` }) },
+    agents: { get: () => undefined },
+  })
+  await directory.hydrate()
+  assert.equal(directory.get('session-a').title, 'persisted-session-a')
+  assert.equal(directory.get('session-a').archived, true)
+})
