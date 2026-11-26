@@ -1571,6 +1571,8 @@ window.__ModuleLoader__.load({
       const [requestPage, setRequestPage] = React.useState(0)
       const [selectedRequestId, setSelectedRequestId] = React.useState(null)
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
+      const sessions = typeof props.useSessions === 'function' ? props.useSessions(selectSnapshot) : undefined
+      const titleOf = id => sessions?.byId?.[id]?.displayTitle ?? undefined
 
       const load = async (showLoading = true) => {
         if (showLoading) setLoading(true)
@@ -1786,7 +1788,7 @@ window.__ModuleLoader__.load({
                   ? h('p', { className: 'dsh-collab-board-muted' }, t('board.emptyAvailable'))
                   : available.map(entry => h('div', { key: entry.sessionId, className: 'dsh-collab-board-row' },
                       h('span', { className: 'dsh-collab-board-row-main' },
-                        entry.capability?.name ?? entry.title ?? shortId(entry.sessionId),
+                        entry.capability?.name ?? entry.title ?? titleOf(entry.sessionId) ?? shortId(entry.sessionId),
                         typeof entry.capability?.description === 'string' && entry.capability.description.trim().length > 0
                           ? h('span', { className: 'dsh-collab-board-muted' }, ` · ${entry.capability.description.trim().slice(0, 120)}`)
                           : null),
