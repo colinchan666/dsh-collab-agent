@@ -1007,6 +1007,7 @@ export function apply(ctx, config = {}) {
             archived: registry.get(entry.sessionId)?.archived,
           })),
           relationships: relationships.listForSupervisor(sessionId),
+          authSessions: collabAdmin.listAuth().sessions,
         }, null, 2),
       }
     },
