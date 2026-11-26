@@ -640,6 +640,7 @@ window.__ModuleLoader__.load({
       const roots = directorySessions.map(entry => ({
         id: entry.sessionId,
         displayTitle: entry.title ?? titleOf(entry.sessionId),
+        preset: entry.preset,
       }))
       const sorted = [...roots].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
       const [activeTab, setActiveTab] = React.useState('pairs')
@@ -851,7 +852,7 @@ window.__ModuleLoader__.load({
         : sorted.map(summary => h('label', {
             key: summary.id,
             className: 'dsh-collab-auth-row',
-            'data-collab-preset': presetOf(summary.id) ?? '',
+            'data-collab-preset': summary.preset ?? '',
           },
           h('input', {
             type: 'checkbox',
@@ -860,8 +861,8 @@ window.__ModuleLoader__.load({
           }),
           h('span', { className: 'dsh-collab-auth-title-cell' }, summary.displayTitle),
           h('code', { className: 'dsh-collab-auth-id' }, shortId(summary.id)),
-          typeof presetOf(summary.id) === 'string' && presetOf(summary.id).length > 0
-            ? h('span', { className: 'dsh-collab-auth-badge' }, presetOf(summary.id))
+          typeof summary.preset === 'string' && summary.preset.length > 0
+            ? h('span', { className: 'dsh-collab-auth-badge' }, summary.preset)
             : null,
           summary.running ? h('span', { className: 'dsh-collab-auth-dot', title: t('panel.running') }) : null))
 
