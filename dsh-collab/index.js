@@ -139,9 +139,11 @@ export function apply(ctx, config = {}) {
   const deliveryInFlight = new Set()
   let noticeFlushInFlight = false
   /** Human-facing authorization operations shared by the UI Remote and commands. */
-  const isKnownCollab = (id) => collabSessions.has(id)
-    || registry.get(id)?.preset === PRESET
-    || registry.get(id)?.preset === SUPERVISOR
+  const isKnownCollab = (id) => {
+    if (collabSessions.has(id)) return true
+    const entry = registry.get(id)
+    return entry !== undefined && entry.archived !== true && (entry.preset === PRESET || entry.preset === SUPERVISOR)
+  }
   const collabAdmin = {
     isKnownCollab,
     audit: (limit = 100) => audit.tail(limit),
@@ -863,7 +865,7 @@ export function apply(ctx, config = {}) {
   const isFunctionalWorker = (sessionId) => registry.get(sessionId)?.preset === PRESET
 
   const workerCandidates = (supervisor) => registry.list()
-    .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET)
+    .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET && entry.archived !== true)
     .map(entry => {
       const capability = liveCapability(entry.sessionId)
       return {
@@ -1504,13 +1506,28 @@ export function apply(ctx, config = {}) {
       if (task.status !== 'open') continue
       try { cancelBoundTask(tasks, task.id, worker => releaseDeliverySandbox(worker, deliveryRoot(task.id))) } catch { /* best effort */ }
     }
-    try { registry.remove(sessionId) } catch { /* best effort */ }
+    if (eventName === 'session.archived') {
+      const entry = registry.get(sessionId)
+      if (entry !== undefined) {
+        try { registry.upsert({ ...entry, archived: true }) } catch { /* best effort */ }
+      }
+    } else {
+      try { registry.remove(sessionId) } catch { /* best effort */ }
+    }
     collabSessions.delete(sessionId)
     try { audit.append(eventName, { sessionId }) } catch { /* best effort */ }
   }
 
   ctx.on('workspace/session-archived', (request) => {
     try { cleanupArchivedSession(request?.sessionId) } catch (error) { warn(`could not clean archived session ${String(request?.sessionId)}: ${describeError(error)}`) }
+  })
+
+  ctx.on('workspace/session-unarchiving', (request) => {
+    const sessionId = request?.sessionId
+    if (!isSessionId(sessionId)) return
+    const entry = registry.get(sessionId)
+    if (entry === undefined) return
+    try { registry.upsert({ ...entry, archived: false }) } catch { /* best effort */ }
   })
 
   ctx.on('api-session/removed', (sessionId) => {
