@@ -1180,6 +1180,17 @@ export function apply(ctx, config = {}) {
     const op = String(operation ?? '')
     const supervisor = isSupervisorSession(sessionId) || registry.get(sessionId)?.preset === SUPERVISOR
     if (op === 'directory') return sessionDirectory.list()
+    if (op === 'backfillPreset') {
+      const preset = String(args?.preset ?? '')
+      if (!COLLAB_PRESETS.has(preset)) {
+        cleanupArchivedSession(sessionId, 'session.preset.changed')
+        return { sessionId, preset, removed: true }
+      }
+      const entry = registry.get(sessionId)
+      if (entry === undefined) throw new Error('unknown collaboration session')
+      registry.upsert({ ...entry, preset })
+      return { sessionId, preset, removed: false }
+    }
     if (op === 'backfillTitle') {
       const title = String(args?.title ?? '').trim()
       if (title.length === 0 || title.length > 200) throw new Error('invalid title')

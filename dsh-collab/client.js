@@ -680,7 +680,14 @@ window.__ModuleLoader__.load({
               try { await props.auth.backfillTitle(entry.sessionId, title) } catch { /* best effort */ }
             }
           }
-          if (missingTitles.length > 0) void loadSnapshot(false)
+          const presetMismatches = (next.sessions ?? []).filter(entry => {
+            const actual = presetOf(entry.sessionId)
+            return actual !== undefined && actual !== entry.preset
+          })
+          for (const entry of presetMismatches) {
+            try { await props.auth.backfillPreset(entry.sessionId, presetOf(entry.sessionId)) } catch { /* best effort */ }
+          }
+          if (missingTitles.length > 0 || presetMismatches.length > 0) void loadSnapshot(false)
         } catch (failure) {
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
@@ -2101,6 +2108,9 @@ window.__ModuleLoader__.load({
           backfillTitle: async (sessionId, title) => ctx.remote.collabAuth === undefined
             ? authUnavailable
             : ctx.remote.collabAuth.panel(sessionId, 'backfillTitle', JSON.stringify({ title })),
+          backfillPreset: async (sessionId, preset) => ctx.remote.collabAuth === undefined
+            ? authUnavailable
+            : ctx.remote.collabAuth.panel(sessionId, 'backfillPreset', JSON.stringify({ preset })),
         }
         const callPanel = (sessionId, operation, args) => {
           const auth = ctx.remote.collabAuth
