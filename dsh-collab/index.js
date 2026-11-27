@@ -998,36 +998,6 @@ export function apply(ctx, config = {}) {
   })
 
   ctx.commands.register({
-    name: 'collab-debug',
-    description: 'Read-only collaboration candidate diagnostics for the current supervisor.',
-    recordInput: false,
-    handler: async (invocation) => {
-      const sessionId = invocation.agent?.id
-      if (!isSupervisorSession(sessionId)) return { kind: 'error', text: 'not a supervisor session' }
-      const inspected = invocation.rawInput.trim()
-      if (isSessionId(inspected)) {
-        const query = ctx.get('sessionQuery')
-        const presets = ctx.get('agentPresets')
-        const persistedPreset = await query.inspectSession(inspected, session => presets.presetForSession(session)).catch(() => null)
-        return { kind: 'success', text: JSON.stringify({ inspected, persistedPreset, registryPreset: registry.get(inspected)?.preset ?? null }, null, 2) }
-      }
-      return {
-        kind: 'success',
-        text: JSON.stringify({
-          sessionId,
-          candidates: workerCandidates(sessionId).map(entry => ({
-            sessionId: entry.sessionId,
-            title: entry.title,
-            archived: registry.get(entry.sessionId)?.archived,
-          })),
-          relationships: relationships.listForSupervisor(sessionId),
-          authSessions: collabAdmin.listAuth().sessions,
-        }, null, 2),
-      }
-    },
-  })
-
-  ctx.commands.register({
     name: 'collab-base',
     description: 'Read or set the current collaboration session base prompt.',
     recordInput: false,
