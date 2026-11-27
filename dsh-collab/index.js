@@ -166,6 +166,7 @@ export function apply(ctx, config = {}) {
         pairs: auth.listPairs().filter(pair => isKnownCollab(pair.a) && isKnownCollab(pair.b)),
         pending: auth.listPending().filter(grant => isKnownCollab(grant.from) && isKnownCollab(grant.to)),
         sessions: sessionDirectory.list().filter(entry => (entry.preset === PRESET || entry.preset === SUPERVISOR) && entry.archived !== true),
+        ready: sessionDirectory.isReady(),
       }
     },
     authorize: (a, b) => {
@@ -1173,6 +1174,7 @@ export function apply(ctx, config = {}) {
           capability: effectiveCapability(relationship),
         })),
         workers: workerCandidates(sessionId),
+        ready: sessionDirectory.isReady(),
         tasks: tasks.listTasks(sessionId).map(task => TaskStore.taskSummary(task)),
         subtasks: tasks.listForSupervisor(sessionId).map(subtask => TaskStore.summary(subtask)),
         requests: requests.listForSupervisor(sessionId).map(request => RequestStore.summary(request)),

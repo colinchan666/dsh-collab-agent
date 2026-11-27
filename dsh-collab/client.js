@@ -637,6 +637,7 @@ window.__ModuleLoader__.load({
       const [pairs, setPairs] = React.useState([])
       const [pendingGrants, setPendingGrants] = React.useState([])
       const [directorySessions, setDirectorySessions] = React.useState([])
+      const [directoryReady, setDirectoryReady] = React.useState(false)
       const roots = directorySessions.map(entry => ({
         id: entry.sessionId,
         displayTitle: entry.title ?? shortId(entry.sessionId),
@@ -672,6 +673,7 @@ window.__ModuleLoader__.load({
           setPairs(next.pairs)
           setPendingGrants(next.pending)
           setDirectorySessions(next.sessions ?? [])
+          setDirectoryReady(next.ready === true)
           collabDirectoryStore.applySnapshot(next.sessions)
         } catch (failure) {
           if (!mountedRef.current || seq !== requestSeqRef.current) return
@@ -836,7 +838,9 @@ window.__ModuleLoader__.load({
         },
       }, confirmRevoke === `pending:${grant.from}|${grant.to}` ? t('panel.confirmRevoke') : t('panel.revoke'))))
 
-      const sessionRows = sorted.length === 0
+      const sessionRows = directoryReady === false
+        ? [h('p', { key: 'loading', className: 'dsh-collab-auth-muted' }, t('panel.loading'))]
+        : sorted.length === 0
         ? [h('p', { key: 'empty', className: 'dsh-collab-auth-muted' }, t('panel.emptySessions'))]
         : sorted.map(summary => h('label', {
             key: summary.id,

@@ -37,6 +37,8 @@ export interface AuthSnapshot {
     readonly pending: readonly PendingGrant[];
     /** Canonical collaboration session directory. */
     readonly sessions: readonly SessionDirectoryEntry[];
+    /** Whether the Host directory finished its initial metadata hydration. */
+    readonly ready: boolean;
 }
 /** Host operations the collaboration plugin provides to the Remote. */
 export interface CollabAdminFace {

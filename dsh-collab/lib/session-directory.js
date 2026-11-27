@@ -10,6 +10,7 @@ export function createSessionDirectory({
 }) {
   const metadata = new Map()
   let hydrateInFlight = null
+  let ready = false
 
   const cached = sessionId => metadata.get(sessionId)
   const titleFor = (sessionId, stored, originalCwd) => {
@@ -48,6 +49,7 @@ export function createSessionDirectory({
         .map(([sessionId, entry]) => [sessionId, view(entry)]),
     ),
     list: () => registry.list().map(view),
+    isReady: () => ready,
     updateTitle: (sessionId, title, seq) => {
       if (typeof title !== 'string' || title.length === 0) return
       const current = cached(sessionId) ?? {}
@@ -62,6 +64,7 @@ export function createSessionDirectory({
       if (hydrateInFlight !== null) return hydrateInFlight
       hydrateInFlight = (async () => {
         const pending = registry.list().filter(entry => cached(entry.sessionId)?.presetLoaded !== true)
+        if (pending.length === 0) { ready = true; return }
         for (let index = 0; index < pending.length; index += 8) {
           await Promise.all(pending.slice(index, index + 8).map(async entry => {
             const previous = cached(entry.sessionId) ?? {}
@@ -89,6 +92,7 @@ export function createSessionDirectory({
             metadata.set(entry.sessionId, previous)
           }))
         }
+        ready = registry.list().every(entry => cached(entry.sessionId)?.presetLoaded === true)
       })().finally(() => { hydrateInFlight = null })
       return hydrateInFlight
     },
