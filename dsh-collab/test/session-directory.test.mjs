@@ -73,3 +73,16 @@ test('the session directory hydrates presets from session queries', async () => 
   await directory.hydrate()
   assert.equal(directory.get('session-a').preset, 'supervisor')
 })
+
+test('an untitled session falls back to its workspace name', () => {
+  const registry = new Map([
+    ['session-a', { sessionId: 'session-a', originalCwd: '/Users/cc/dsh/collab', workdir: '/tmp/a' }],
+  ])
+  const directory = createSessionDirectory({
+    registry: { get: id => registry.get(id), list: () => [...registry.values()] },
+    sessions: { get: () => undefined },
+    sessionTitle: { get: () => undefined },
+    agents: { get: () => undefined },
+  })
+  assert.equal(directory.get('session-a').title, 'collab')
+})

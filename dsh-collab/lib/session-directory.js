@@ -11,13 +11,18 @@ export function createSessionDirectory({
   const metadata = new Map()
 
   const cached = sessionId => metadata.get(sessionId)
-  const titleFor = (sessionId, stored) => {
+  const titleFor = (sessionId, stored, originalCwd) => {
     const entry = cached(sessionId)
     if (entry !== undefined && entry.title !== undefined) return entry.title
     if (typeof stored === 'string' && stored.length > 0) return stored
     const live = sessions?.get?.(sessionId)
-    if (live === undefined) return null
-    return sessionTitle?.get?.(live)?.title ?? null
+    const liveTitle = live === undefined ? undefined : sessionTitle?.get?.(live)?.title
+    if (typeof liveTitle === 'string' && liveTitle.length > 0) return liveTitle
+    // DSH's summary fallback names an untitled session after its workspace.
+    const workspaceName = typeof originalCwd === 'string'
+      ? originalCwd.split(/[\\/]/u).filter(Boolean).pop()
+      : undefined
+    return typeof workspaceName === 'string' && workspaceName.length > 0 ? workspaceName : null
   }
   const presetFor = (sessionId, stored) => {
     const entry = cached(sessionId)
@@ -27,7 +32,7 @@ export function createSessionDirectory({
 
   const view = entry => ({
     sessionId: entry.sessionId,
-    title: titleFor(entry.sessionId, entry.title),
+    title: titleFor(entry.sessionId, entry.title, entry.originalCwd),
     preset: presetFor(entry.sessionId, entry.preset),
     archived: entry.archived === true || archivedSessionIds?.()?.has(entry.sessionId) === true,
     online: agents?.get?.(entry.sessionId) !== undefined,
