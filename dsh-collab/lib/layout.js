@@ -260,14 +260,14 @@ export class SessionRegistry {
     const sessions = raw !== null && typeof raw === 'object' && raw.sessions !== null && typeof raw.sessions === 'object'
       ? raw.sessions
       : {}
-    this.state = { version: 1, sessions }
+    this.state = { version: 1, sessions, ignored: Array.isArray(raw?.ignored) ? raw.ignored : [] }
     this.stamp = stamp
     return this.state
   }
 
   write(state) {
     this.state = state
-    writeJson(this.file, { version: 1, sessions: state.sessions })
+    writeJson(this.file, { version: 1, sessions: state.sessions, ignored: state.ignored ?? [] })
     this.stamp = fileStamp(this.file)
   }
 
@@ -287,6 +287,7 @@ export class SessionRegistry {
       this.state = undefined
       const state = this.read()
       state.sessions[entry.sessionId] = { ...state.sessions[entry.sessionId], ...entry }
+      state.ignored = (state.ignored ?? []).filter(id => id !== entry.sessionId)
       this.write(state)
     })
   }
@@ -315,6 +316,7 @@ export class SessionRegistry {
       const discoveredIds = new Set()
       for (const entry of entries) {
         if (!entry.isDirectory() || !isSessionId(entry.name)) continue
+        if ((state.ignored ?? []).includes(entry.name)) continue
         const workdir = path.join(sessionsDir, entry.name)
         const meta = readJson(path.join(workdir, 'session.json'))
         if (meta === undefined || meta.sessionId !== entry.name) continue
