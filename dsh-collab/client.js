@@ -639,7 +639,7 @@ window.__ModuleLoader__.load({
       const [directorySessions, setDirectorySessions] = React.useState([])
       const roots = directorySessions.map(entry => ({
         id: entry.sessionId,
-        displayTitle: entry.title ?? titleOf(entry.sessionId),
+        displayTitle: entry.title ?? shortId(entry.sessionId),
         preset: entry.preset,
       }))
       const sorted = [...roots].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0))
@@ -1622,7 +1622,7 @@ window.__ModuleLoader__.load({
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
       const sessions = typeof props.useSessions === 'function' ? props.useSessions(selectSnapshot) : undefined
       React.useSyncExternalStore(collabDirectoryStore.subscribe, collabDirectoryStore.getVersion)
-      const titleOf = id => collabDirectoryStore.get(id)?.title ?? sessions?.byId?.[id]?.displayTitle ?? undefined
+      const titleOf = id => collabDirectoryStore.get(id)?.title ?? undefined
 
       const load = async (showLoading = true) => {
         if (showLoading) setLoading(true)
