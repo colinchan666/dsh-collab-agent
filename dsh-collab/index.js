@@ -119,7 +119,16 @@ export function apply(ctx, config = {}) {
     archivedSessionIds: () => archivedSessionIds(),
     agents: ctx.agents,
   })
-  const hydrateDirectory = () => sessionDirectory.hydrate().then(() => sessionDirectory.prune()).catch(() => {})
+  const hydrateDirectory = () => {
+    const started = Date.now()
+    return sessionDirectory.hydrate()
+      .then(() => {
+        const removed = sessionDirectory.prune()
+        const elapsed = Date.now() - started
+        if (elapsed > 1000) warn(`directory hydrate took ${elapsed}ms (${sessionDirectory.list().length} entries, ${removed} pruned)`)
+      })
+      .catch(() => {})
+  }
   void hydrateDirectory()
   const audit = new AuditLog(path.join(path.dirname(registryPath), 'audit.jsonl'))
   const auth = new AuthorizationStore(
@@ -210,7 +219,10 @@ export function apply(ctx, config = {}) {
   }
 
   const refreshRegistry = () => {
+    const started = Date.now()
     try { registry.scanWorkspaces(workspacePaths()) } catch (error) { warn(`registry scan failed: ${describeError(error)}`) }
+    const elapsed = Date.now() - started
+    if (elapsed > 250) warn(`registry scan took ${elapsed}ms`)
     void hydrateDirectory()
   }
 
