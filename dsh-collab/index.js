@@ -1158,22 +1158,29 @@ export function apply(ctx, config = {}) {
     const supervisor = isSupervisorSession(sessionId) || registry.get(sessionId)?.preset === SUPERVISOR
     if (op === 'directory') return sessionDirectory.list()
     if (op === 'backfillPreset') {
+      if (config.repairSessionMetadata === false) throw new Error('session metadata repair is disabled')
       const preset = String(args?.preset ?? '')
+      const previous = registry.get(sessionId)?.preset ?? null
       if (!COLLAB_PRESETS.has(preset)) {
         cleanupArchivedSession(sessionId, 'session.preset.changed')
+        audit.append('session.preset.backfill', { sessionId, previous, preset, removed: true })
         return { sessionId, preset, removed: true }
       }
       const entry = registry.get(sessionId)
       if (entry === undefined) throw new Error('unknown collaboration session')
       registry.upsert({ ...entry, preset })
+      audit.append('session.preset.backfill', { sessionId, previous, preset, removed: false })
       return { sessionId, preset, removed: false }
     }
     if (op === 'backfillTitle') {
+      if (config.repairSessionMetadata === false) throw new Error('session metadata repair is disabled')
       const title = String(args?.title ?? '').trim()
       if (title.length === 0 || title.length > 200) throw new Error('invalid title')
       const entry = registry.get(sessionId)
       if (entry === undefined) throw new Error('unknown collaboration session')
+      const previous = entry.title ?? null
       registry.upsert({ ...entry, title })
+      audit.append('session.title.backfill', { sessionId, previous, title })
       return { sessionId, title }
     }
     if (op === 'board') {
@@ -1647,7 +1654,7 @@ export function apply(ctx, config = {}) {
   ctx.on('agent/created', async ({ agent }) => {
     await setupAgent(agent)
     reconcileCollabRegistry(agent.id)
-    void reconcilePersistedPresets()
+    if (config.reconcilePersistedPresets === true) void reconcilePersistedPresets()
     void sessionDirectory.hydrate()
   })
   ctx.on('agent/disposed', ({ agent }) => {
