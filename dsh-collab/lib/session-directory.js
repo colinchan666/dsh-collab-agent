@@ -78,7 +78,7 @@ export function createSessionDirectory({
               try {
                 const preset = await sessionQuery.inspectSession(
                   entry.sessionId,
-                  session => agentPresets?.presetForSession?.(session),
+                  session => agentPresets?.presetForSession?.(session) ?? session?.header?.agentPreset,
                 )
                 if (preset !== undefined) {
                   previous.preset = preset

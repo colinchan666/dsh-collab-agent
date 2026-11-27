@@ -279,6 +279,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   assert.ok(authButtons.some(text => text.startsWith('已授权会话对')))
   assert.ok(authButtons.some(text => text.startsWith('协同会话')))
   assert.ok(authButtons.includes('刷新'))
+  await waitFor(browser.evaluate, "document.querySelectorAll('[data-collab-preset]').length > 0", 20_000)
   const authPresets = await browser.evaluate(`Array.from(document.querySelectorAll('[data-collab-preset]'))
     .map(element => element.getAttribute('data-collab-preset'))`)
   assert.ok(authPresets.length > 0, 'authorization page has no collaboration rows')
