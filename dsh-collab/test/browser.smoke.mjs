@@ -281,6 +281,7 @@ test('real browser: collab entry, menu, and authorization page', async t => {
   assert.ok(authButtons.includes('刷新'))
   const authPresets = await browser.evaluate(`Array.from(document.querySelectorAll('[data-collab-preset]'))
     .map(element => element.getAttribute('data-collab-preset'))`)
+  assert.ok(authPresets.length > 0, 'authorization page has no collaboration rows')
   assert.equal(authPresets.every(preset => preset === 'collab' || preset === 'supervisor'), true)
 
   const clickedTab = await browser.evaluate(`(() => {

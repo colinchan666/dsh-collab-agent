@@ -651,7 +651,6 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState(null)
       const [confirmRevoke, setConfirmRevoke] = React.useState(null)
 
-      const presetOf = id => (sessions?.byId?.[id]?.projectionValues ?? sessions?.projectionsBySession?.[id]?.values)?.agentPreset
 
       const run = async (operation) => {
         const result = await operation()
@@ -674,21 +673,6 @@ window.__ModuleLoader__.load({
           setPendingGrants(next.pending)
           setDirectorySessions(next.sessions ?? [])
           collabDirectoryStore.applySnapshot(next.sessions)
-          const missingTitles = (next.sessions ?? []).filter(entry => (entry.title === null || entry.title === undefined || entry.title.length === 0))
-          for (const entry of missingTitles) {
-            const title = sessions?.byId?.[entry.sessionId]?.displayTitle
-            if (typeof title === 'string' && title.length > 0) {
-              try { await props.auth.backfillTitle(entry.sessionId, title) } catch { /* best effort */ }
-            }
-          }
-          const presetMismatches = (next.sessions ?? []).filter(entry => {
-            const actual = presetOf(entry.sessionId)
-            return actual !== undefined && actual !== entry.preset
-          })
-          for (const entry of presetMismatches) {
-            try { await props.auth.backfillPreset(entry.sessionId, presetOf(entry.sessionId)) } catch { /* best effort */ }
-          }
-          if (missingTitles.length > 0 || presetMismatches.length > 0) void loadSnapshot(false)
         } catch (failure) {
           if (!mountedRef.current || seq !== requestSeqRef.current) return
           setError(`${t('panel.error')}: ${failure instanceof Error ? failure.message : String(failure)}`)
@@ -702,6 +686,11 @@ window.__ModuleLoader__.load({
         const onChanged = () => { void loadSnapshot(false) }
         window.addEventListener('dsh-collab-auth-changed', onChanged)
         return () => { window.removeEventListener('dsh-collab-auth-changed', onChanged) }
+      }, [])
+
+      React.useEffect(() => {
+        const timer = window.setInterval(() => { void loadSnapshot(false) }, 3000)
+        return () => window.clearInterval(timer)
       }, [])
 
       const rootIds = sorted.map(summary => summary.id).join('|')
@@ -2106,12 +2095,6 @@ window.__ModuleLoader__.load({
           list: async () => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.list(),
           authorize: async (a, b) => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.authorize(a, b),
           revoke: async (a, b) => ctx.remote.collabAuth === undefined ? authUnavailable : ctx.remote.collabAuth.revoke(a, b),
-          backfillTitle: async (sessionId, title) => ctx.remote.collabAuth === undefined
-            ? authUnavailable
-            : ctx.remote.collabAuth.panel(sessionId, 'backfillTitle', JSON.stringify({ title })),
-          backfillPreset: async (sessionId, preset) => ctx.remote.collabAuth === undefined
-            ? authUnavailable
-            : ctx.remote.collabAuth.panel(sessionId, 'backfillPreset', JSON.stringify({ preset })),
         }
         const callPanel = (sessionId, operation, args) => {
           const auth = ctx.remote.collabAuth

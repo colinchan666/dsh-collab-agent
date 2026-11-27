@@ -240,7 +240,7 @@ export function createTaskTools({
       when: ({ agent }) => collabSessions.has(agent.id) && !isSupervisorSession(agent.id),
       execute: async (args, exec) => {
         const self = requireSelf(exec)
-        const eligible = registry.list()
+        const eligible = sessionDirectory.list()
           .filter(entry => entry.preset === SUPERVISOR && auth.isAuthorized(self.sessionId, entry.sessionId))
         if (eligible.length === 0) {
           throw new Error('no authorized supervisor; authorize a supervisor pair in the authorization page first')

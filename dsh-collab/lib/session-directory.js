@@ -5,23 +5,30 @@ export function createSessionDirectory({
   sessionTitle,
   sessionQuery,
   archivedSessionIds,
+  agentPresets,
   agents,
 }) {
-  const persistedTitles = new Map()
+  const metadata = new Map()
 
+  const cached = sessionId => metadata.get(sessionId)
   const titleFor = (sessionId, stored) => {
+    const entry = cached(sessionId)
+    if (entry !== undefined && entry.title !== undefined) return entry.title
     if (typeof stored === 'string' && stored.length > 0) return stored
-    const persisted = persistedTitles.get(sessionId)
-    if (typeof persisted === 'string' && persisted.length > 0) return persisted
     const live = sessions?.get?.(sessionId)
     if (live === undefined) return null
     return sessionTitle?.get?.(live)?.title ?? null
+  }
+  const presetFor = (sessionId, stored) => {
+    const entry = cached(sessionId)
+    if (entry !== undefined && entry.preset !== undefined && entry.preset !== null) return entry.preset
+    return stored ?? null
   }
 
   const view = entry => ({
     sessionId: entry.sessionId,
     title: titleFor(entry.sessionId, entry.title),
-    preset: entry.preset,
+    preset: presetFor(entry.sessionId, entry.preset),
     archived: entry.archived === true || archivedSessionIds?.()?.has(entry.sessionId) === true,
     online: agents?.get?.(entry.sessionId) !== undefined,
     workspace: entry.originalCwd ?? null,
@@ -39,19 +46,36 @@ export function createSessionDirectory({
         .map(([sessionId, entry]) => [sessionId, view(entry)]),
     ),
     list: () => registry.list().map(view),
+    updateTitle: (sessionId, title, seq) => {
+      if (typeof title !== 'string' || title.length === 0) return
+      const current = cached(sessionId) ?? {}
+      if (typeof seq === 'number' && typeof current.titleSeq === 'number' && seq < current.titleSeq) return
+      metadata.set(sessionId, { ...current, title, titleSeq: typeof seq === 'number' ? seq : current.titleSeq })
+    },
+    updatePreset: (sessionId, preset) => {
+      if (typeof preset !== 'string' || preset.length === 0) return
+      metadata.set(sessionId, { ...(cached(sessionId) ?? {}), preset })
+    },
     async hydrate() {
-      if (sessionQuery?.readTitle === undefined) return
+      const query = sessionQuery
+      if (query === undefined) return
       await Promise.all(registry.list().map(async entry => {
-        if (typeof entry.title === 'string' && entry.title.length > 0) return
-        if (persistedTitles.has(entry.sessionId)) return
+        const previous = cached(entry.sessionId) ?? {}
         try {
-          const title = await sessionQuery.readTitle(entry.sessionId)
-          if (typeof title?.title === 'string' && title.title.length > 0) {
-            persistedTitles.set(entry.sessionId, title.title)
+          const title = await query.readTitle?.(entry.sessionId)
+          if (title?.title !== undefined) {
+            previous.title = title.title
+            if (typeof title.eventSeq === 'number') previous.titleSeq = title.eventSeq
           }
-        } catch {
-          /* best effort */
-        }
+        } catch { /* best effort */ }
+        try {
+          const preset = await query.inspectSession?.(
+            entry.sessionId,
+            session => agentPresets?.presetForSession?.(session),
+          )
+          if (preset !== undefined) previous.preset = preset
+        } catch { /* best effort */ }
+        metadata.set(entry.sessionId, previous)
       }))
     },
   }

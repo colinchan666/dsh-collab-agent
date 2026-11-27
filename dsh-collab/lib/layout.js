@@ -322,7 +322,13 @@ export class SessionRegistry {
         discoveredIds.add(entry.name)
         const existing = state.sessions[entry.name]
         if (existing === undefined) {
-          state.sessions[entry.name] = { ...meta, workdir }
+          state.sessions[entry.name] = {
+            sessionId: entry.name,
+            workdir,
+            originalCwd: meta.originalCwd,
+            createdAt: meta.createdAt,
+            updatedAt: meta.updatedAt,
+          }
           discovered += 1
           changed = true
           continue
@@ -331,12 +337,11 @@ export class SessionRegistry {
         // while preserving the live title maintained by session events.
         const next = {
           ...existing,
-          preset: meta.preset,
           originalCwd: typeof meta.originalCwd === 'string' ? meta.originalCwd : existing.originalCwd,
           workdir,
           updatedAt: typeof meta.updatedAt === 'number' ? meta.updatedAt : existing.updatedAt,
         }
-        if (next.preset !== existing.preset || next.originalCwd !== existing.originalCwd || next.workdir !== existing.workdir) {
+        if (next.originalCwd !== existing.originalCwd || next.workdir !== existing.workdir) {
           state.sessions[entry.name] = next
           changed = true
         }

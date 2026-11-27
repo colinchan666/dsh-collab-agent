@@ -54,3 +54,22 @@ test('the session directory merges the workspace archive set', () => {
   })
   assert.equal(directory.get('session-a').archived, true)
 })
+
+test('the session directory hydrates presets from session queries', async () => {
+  const registry = new Map([
+    ['session-a', { sessionId: 'session-a', workdir: '/tmp/a' }],
+  ])
+  const directory = createSessionDirectory({
+    registry: { get: id => registry.get(id), list: () => [...registry.values()] },
+    sessions: { get: () => undefined },
+    sessionTitle: { get: () => undefined },
+    sessionQuery: {
+      readTitle: async () => undefined,
+      inspectSession: async (id, read) => read({ id }),
+    },
+    agentPresets: { presetForSession: () => 'supervisor' },
+    agents: { get: () => undefined },
+  })
+  await directory.hydrate()
+  assert.equal(directory.get('session-a').preset, 'supervisor')
+})

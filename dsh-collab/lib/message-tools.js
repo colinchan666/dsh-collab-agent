@@ -6,7 +6,7 @@ export function createMessageTools({
   requireSelf, infoText, peersText, refreshRegistry, registry, auth, isSessionId,
   collabSessions, MAX_MESSAGE_BYTES, sendMessage, wakePeer, credentialPath,
   inboxText, isDirectory, collectHealth, tasks, requests, relationships, audit,
-  collabAdmin, isSupervisorSession,
+  collabAdmin, isSupervisorSession, sessionDirectory,
 }) {
   return [
     {
@@ -63,7 +63,7 @@ export function createMessageTools({
         const text = String(args?.message ?? '')
         if (!isSessionId(targetId)) throw new Error('target must be an exact session id such as session-<uuid>')
         if (targetId === self.sessionId) throw new Error('a collaboration session cannot send a message to itself')
-        const targetEntry = registry.get(targetId)
+        const targetEntry = sessionDirectory.get(targetId)
         if (targetEntry === undefined || !COLLAB_PRESETS.has(targetEntry.preset)) {
           throw new Error('target must be a collaboration session')
         }

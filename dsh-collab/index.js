@@ -111,10 +111,15 @@ export function apply(ctx, config = {}) {
     registry,
     sessions: ctx.get('sessions'),
     sessionTitle: ctx.get('sessionTitle'),
-    sessionQuery: { readTitle: (sessionId, signal) => ctx.get('sessionQuery')?.readTitle(sessionId, signal) },
+    sessionQuery: {
+      readTitle: (sessionId, signal) => ctx.get('sessionQuery')?.readTitle(sessionId, signal),
+      inspectSession: (sessionId, read) => ctx.get('sessionQuery')?.inspectSession(sessionId, read),
+    },
+    agentPresets: { presetForSession: session => ctx.get('agentPresets')?.presetForSession(session) },
     archivedSessionIds: () => archivedSessionIds(),
     agents: ctx.agents,
   })
+  void sessionDirectory.hydrate()
   const audit = new AuditLog(path.join(path.dirname(registryPath), 'audit.jsonl'))
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -355,12 +360,12 @@ export function apply(ctx, config = {}) {
       try {
         registry.upsert({
           sessionId: agent.id,
-          preset: effectivePreset,
           originalCwd,
           workdir: layout.workdir,
           createdAt: layout.meta.createdAt,
           updatedAt: Date.now(),
         })
+        sessionDirectory.updatePreset(agent.id, effectivePreset)
       } catch (error) {
         warn(`could not update the collaboration registry: ${describeError(error)}`)
       }
@@ -820,7 +825,8 @@ export function apply(ctx, config = {}) {
       if (typeof meta?.basePrompt === 'string') description = meta.basePrompt
       if (typeof meta?.updatedAt === 'number') updatedAt = meta.updatedAt
     } catch { /* the worker may not have a readable session yet */ }
-    const name = typeof entry.title === 'string' && entry.title.trim().length > 0 ? entry.title.trim() : worker
+    const directoryTitle = sessionDirectory.get(worker)?.title
+    const name = typeof directoryTitle === 'string' && directoryTitle.trim().length > 0 ? directoryTitle.trim() : worker
     return {
       name,
       description,
@@ -867,7 +873,7 @@ export function apply(ctx, config = {}) {
     return `- ${relationship.worker} capability=${JSON.stringify(name)} source=${source} version=${version}${capability?.changed === true ? ' changed=yes' : ''}${description.length === 0 ? '' : ` description=${JSON.stringify(description.slice(0, 500))}`}`
   })
 
-  const isFunctionalWorker = (sessionId) => registry.get(sessionId)?.preset === PRESET
+  const isFunctionalWorker = (sessionId) => sessionDirectory.get(sessionId)?.preset === PRESET
 
   const workerCandidates = (supervisor) => sessionDirectory.list()
     .filter(entry => entry.sessionId !== supervisor && entry.preset === PRESET && entry.archived !== true)
@@ -947,7 +953,7 @@ export function apply(ctx, config = {}) {
     requireSelf, infoText, peersText, refreshRegistry, registry, auth, isSessionId,
     collabSessions, MAX_MESSAGE_BYTES, sendMessage, wakePeer, credentialPath,
     inboxText, isDirectory, collectHealth, tasks, requests, relationships, audit,
-    collabAdmin, isSupervisorSession,
+    collabAdmin, isSupervisorSession, sessionDirectory,
   })
 
   const requestTools = createRequestTools({
@@ -1067,8 +1073,8 @@ export function apply(ctx, config = {}) {
       if (action === 'link' || action === 'unlink' || action === 'pin' || action === 'live') {
         const worker = parts[1]
         if (!isSessionId(worker) || worker === supervisor) return { kind: 'error', text: usage }
-        const entry = registry.get(worker)
-        if (entry === undefined || entry.preset !== PRESET) return { kind: 'error', text: 'worker must be a collaboration session' }
+        const candidate = sessionDirectory.get(worker)
+        if (candidate === undefined || candidate.preset !== PRESET) return { kind: 'error', text: 'worker must be a collaboration session' }
         if (action === 'unlink') {
           relationships.remove(supervisor, worker)
           auth.revoke(supervisor, worker)
@@ -1155,34 +1161,8 @@ export function apply(ctx, config = {}) {
     const known = collabSessions.has(sessionId) || registry.get(sessionId) !== undefined
     if (!known) throw new Error('not an initialized collaboration session')
     const op = String(operation ?? '')
-    const supervisor = isSupervisorSession(sessionId) || registry.get(sessionId)?.preset === SUPERVISOR
+    const supervisor = isSupervisorSession(sessionId) || sessionDirectory.get(sessionId)?.preset === SUPERVISOR
     if (op === 'directory') return sessionDirectory.list()
-    if (op === 'backfillPreset') {
-      if (config.repairSessionMetadata === false) throw new Error('session metadata repair is disabled')
-      const preset = String(args?.preset ?? '')
-      const previous = registry.get(sessionId)?.preset ?? null
-      if (!COLLAB_PRESETS.has(preset)) {
-        cleanupArchivedSession(sessionId, 'session.preset.changed')
-        audit.append('session.preset.backfill', { sessionId, previous, preset, removed: true })
-        return { sessionId, preset, removed: true }
-      }
-      const entry = registry.get(sessionId)
-      if (entry === undefined) throw new Error('unknown collaboration session')
-      registry.upsert({ ...entry, preset })
-      audit.append('session.preset.backfill', { sessionId, previous, preset, removed: false })
-      return { sessionId, preset, removed: false }
-    }
-    if (op === 'backfillTitle') {
-      if (config.repairSessionMetadata === false) throw new Error('session metadata repair is disabled')
-      const title = String(args?.title ?? '').trim()
-      if (title.length === 0 || title.length > 200) throw new Error('invalid title')
-      const entry = registry.get(sessionId)
-      if (entry === undefined) throw new Error('unknown collaboration session')
-      const previous = entry.title ?? null
-      registry.upsert({ ...entry, title })
-      audit.append('session.title.backfill', { sessionId, previous, title })
-      return { sessionId, title }
-    }
     if (op === 'board') {
       if (!supervisor) throw new Error('not a supervisor session')
       return {
@@ -1217,8 +1197,8 @@ export function apply(ctx, config = {}) {
     if (!supervisor) throw new Error('not a supervisor session')
     const worker = typeof args?.worker === 'string' ? args.worker : ''
     if (!isSessionId(worker) || worker === sessionId) throw new Error('invalid worker id')
-    const entry = registry.get(worker)
-    if (entry === undefined || entry.preset !== PRESET) throw new Error('worker must be a collaboration session')
+    const candidate = sessionDirectory.get(worker)
+    if (candidate === undefined || candidate.preset !== PRESET) throw new Error('worker must be a collaboration session')
     const view = relationship => relationship === undefined
       ? undefined
       : { ...relationship, capability: effectiveCapability(relationship) }
@@ -1633,28 +1613,9 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  let reconciledPresets = false
-  const reconcilePersistedPresets = async () => {
-    if (reconciledPresets) return
-    const query = ctx.get('sessionQuery')
-    const presets = ctx.get('agentPresets')
-    if (typeof query?.inspectSession !== 'function' || typeof presets?.presetForSession !== 'function') return
-    reconciledPresets = true
-    for (const entry of registry.list()) {
-      if (ctx.get('sessions')?.get?.(entry.sessionId) !== undefined) continue
-      try {
-        const preset = await query.inspectSession(entry.sessionId, session => presets.presetForSession(session))
-        if (preset !== undefined && preset !== null && !COLLAB_PRESETS.has(preset)) {
-          cleanupArchivedSession(entry.sessionId, 'session.preset.changed')
-        }
-      } catch { /* missing or unreadable history */ }
-    }
-  }
-
   ctx.on('agent/created', async ({ agent }) => {
     await setupAgent(agent)
     reconcileCollabRegistry(agent.id)
-    if (config.reconcilePersistedPresets === true) void reconcilePersistedPresets()
     void sessionDirectory.hydrate()
   })
   ctx.on('agent/disposed', ({ agent }) => {
@@ -1665,6 +1626,7 @@ export function apply(ctx, config = {}) {
     disposePrompt(agent.id)
   })
   ctx.on('agent-preset/selected', async (sessionId, selected) => {
+    sessionDirectory.updatePreset(sessionId, selected)
     if (COLLAB_PRESETS.has(selected)) {
       const agent = ctx.agents.get(sessionId)
       if (agent !== undefined) await setupAgent(agent, { force: true, preset: selected })
@@ -1693,7 +1655,7 @@ export function apply(ctx, config = {}) {
     if (entry === undefined) return
     const title = event.data?.title
     if (typeof title === 'string' && title.length > 0) {
-      registry.upsert({ ...entry, title, updatedAt: Date.now() })
+      sessionDirectory.updateTitle(session.id, title, event.seq)
     }
   })
 
