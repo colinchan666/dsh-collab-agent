@@ -9,6 +9,7 @@ export function createSessionDirectory({
   agents,
 }) {
   const metadata = new Map()
+  let hydrateInFlight = null
 
   const cached = sessionId => metadata.get(sessionId)
   const titleFor = (sessionId, stored, originalCwd) => {
@@ -21,6 +22,7 @@ export function createSessionDirectory({
   }
   const presetFor = (sessionId, stored) => {
     const entry = cached(sessionId)
+    if (entry !== undefined && entry.presetLoaded === true) return entry.preset ?? null
     if (entry !== undefined && entry.preset !== undefined && entry.preset !== null) return entry.preset
     return stored ?? null
   }
@@ -57,26 +59,38 @@ export function createSessionDirectory({
       metadata.set(sessionId, { ...(cached(sessionId) ?? {}), preset })
     },
     async hydrate() {
-      const query = sessionQuery
-      if (query === undefined) return
-      await Promise.all(registry.list().map(async entry => {
-        const previous = cached(entry.sessionId) ?? {}
-        try {
-          const title = await query.readTitle?.(entry.sessionId)
-          if (title?.title !== undefined) {
-            previous.title = title.title
-            if (typeof title.eventSeq === 'number') previous.titleSeq = title.eventSeq
-          }
-        } catch { /* best effort */ }
-        try {
-          const preset = await query.inspectSession?.(
-            entry.sessionId,
-            session => agentPresets?.presetForSession?.(session),
-          )
-          if (preset !== undefined) previous.preset = preset
-        } catch { /* best effort */ }
-        metadata.set(entry.sessionId, previous)
-      }))
+      if (hydrateInFlight !== null) return hydrateInFlight
+      hydrateInFlight = (async () => {
+        const pending = registry.list().filter(entry => cached(entry.sessionId)?.presetLoaded !== true)
+        for (let index = 0; index < pending.length; index += 8) {
+          await Promise.all(pending.slice(index, index + 8).map(async entry => {
+            const previous = cached(entry.sessionId) ?? {}
+            try {
+              const title = await sessionQuery?.readTitle?.(entry.sessionId)
+              if (title?.title !== undefined) {
+                previous.title = title.title
+                if (typeof title.eventSeq === 'number') previous.titleSeq = title.eventSeq
+              } else if (previous.title === undefined) {
+                previous.title = null
+              }
+            } catch { /* best effort */ }
+            if (typeof sessionQuery?.inspectSession === 'function') {
+              try {
+                const preset = await sessionQuery.inspectSession(
+                  entry.sessionId,
+                  session => agentPresets?.presetForSession?.(session),
+                )
+                if (preset !== undefined) {
+                  previous.preset = preset
+                  previous.presetLoaded = true
+                }
+              } catch { /* best effort */ }
+            }
+            metadata.set(entry.sessionId, previous)
+          }))
+        }
+      })().finally(() => { hydrateInFlight = null })
+      return hydrateInFlight
     },
   }
 }
