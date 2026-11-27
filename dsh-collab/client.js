@@ -1622,7 +1622,7 @@ window.__ModuleLoader__.load({
       const chat = typeof props.useChat === 'function' ? props.useChat(snapshot => snapshot) : undefined
       const sessions = typeof props.useSessions === 'function' ? props.useSessions(selectSnapshot) : undefined
       React.useSyncExternalStore(collabDirectoryStore.subscribe, collabDirectoryStore.getVersion)
-      const titleOf = id => collabDirectoryStore.get(id)?.title ?? undefined
+      const titleOf = id => collabDirectoryStore.get(id)?.title ?? sessions?.byId?.[id]?.displayTitle ?? undefined
 
       const load = async (showLoading = true) => {
         if (showLoading) setLoading(true)
