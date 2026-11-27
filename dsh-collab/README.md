@@ -399,21 +399,27 @@ timestamps, and hashes; keep the field names and JSON types.
   "sessions": {
     "session-11111111-1111-4111-8111-111111111111": {
       "sessionId": "session-11111111-1111-4111-8111-111111111111",
-      "preset": "collab",
       "originalCwd": "/Users/me/project",
       "workdir": "/Users/me/project/.dsh-collab/sessions/session-11111111-1111-4111-8111-111111111111",
-      "title": "Worker A",
       "createdAt": 1760000000000,
       "updatedAt": 1760000000000
     }
-  }
+  },
+  "ignored": []
 }
 ```
 
-- `preset` is `collab` or `supervisor`.
+- `title` and `preset` are **not** stored here. `SessionDirectory` resolves
+  them from `sessionQuery` / the session log. `preset` in the log is the
+  committed selection; `SessionHeader.agentPreset` is only a creation
+  fallback.
 - `sessionId` must be a real `session-<uuid>` id.
+- `ignored` is a tombstone list for historical sessions pruned from the
+  registry so `scanWorkspaces` does not re-add them. Opening such a session
+  removes its tombstone and registers it again.
 - This file is a derived index. Resetting it is usually safe; sessions are
-  rediscovered from `<workspace>/.dsh-collab/sessions/`.
+  rediscovered from `<workspace>/.dsh-collab/sessions/`, except ids in
+  `ignored`.
 
 #### authorization.json
 
