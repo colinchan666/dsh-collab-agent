@@ -119,7 +119,8 @@ export function apply(ctx, config = {}) {
     archivedSessionIds: () => archivedSessionIds(),
     agents: ctx.agents,
   })
-  void sessionDirectory.hydrate()
+  const hydrateDirectory = () => sessionDirectory.hydrate().then(() => sessionDirectory.prune()).catch(() => {})
+  void hydrateDirectory()
   const audit = new AuditLog(path.join(path.dirname(registryPath), 'audit.jsonl'))
   const auth = new AuthorizationStore(
     typeof config.authorizationPath === 'string' && config.authorizationPath.length > 0
@@ -210,6 +211,7 @@ export function apply(ctx, config = {}) {
 
   const refreshRegistry = () => {
     try { registry.scanWorkspaces(workspacePaths()) } catch (error) { warn(`registry scan failed: ${describeError(error)}`) }
+    void hydrateDirectory()
   }
 
   const disposePrompt = (sessionId) => {
@@ -1543,7 +1545,7 @@ export function apply(ctx, config = {}) {
     if (archived !== undefined && !archived.has(sessionId)) restoreCollabRegistry(sessionId)
   })
 
-  ctx.on('api-session/added', () => { void sessionDirectory.hydrate() })
+  ctx.on('api-session/added', () => { void hydrateDirectory() })
 
   ctx.on('api-session/removed', (sessionId) => {
     const workspaces = ctx.get('workspaceRegistry')
@@ -1618,7 +1620,7 @@ export function apply(ctx, config = {}) {
   ctx.on('agent/created', async ({ agent }) => {
     await setupAgent(agent)
     reconcileCollabRegistry(agent.id)
-    void sessionDirectory.hydrate()
+    void hydrateDirectory()
   })
   ctx.on('agent/disposed', ({ agent }) => {
     sandboxDeliveryRoots.delete(agent.id)

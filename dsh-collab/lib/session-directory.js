@@ -7,6 +7,7 @@ export function createSessionDirectory({
   archivedSessionIds,
   agentPresets,
   agents,
+  isCollabPreset = preset => preset === 'collab' || preset === 'supervisor',
 }) {
   const metadata = new Map()
   let hydrateInFlight = null
@@ -50,6 +51,18 @@ export function createSessionDirectory({
     ),
     list: () => registry.list().map(view),
     isReady: () => ready,
+    prune: () => {
+      let removed = 0
+      for (const entry of registry.list()) {
+        const meta = cached(entry.sessionId)
+        if (meta?.presetLoaded !== true || meta.preset === null) continue
+        if (isCollabPreset(meta.preset)) continue
+        registry.remove(entry.sessionId)
+        metadata.delete(entry.sessionId)
+        removed += 1
+      }
+      return removed
+    },
     updateTitle: (sessionId, title, seq) => {
       if (typeof title !== 'string' || title.length === 0) return
       const current = cached(sessionId) ?? {}
