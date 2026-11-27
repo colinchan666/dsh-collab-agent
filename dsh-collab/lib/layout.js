@@ -292,6 +292,16 @@ export class SessionRegistry {
     })
   }
 
+  ignore(sessionIds) {
+    if (!Array.isArray(sessionIds) || sessionIds.length === 0) return
+    withFileLock(this.file, () => {
+      this.state = undefined
+      const state = this.read()
+      state.ignored = [...new Set([...(state.ignored ?? []), ...sessionIds])]
+      this.write(state)
+    })
+  }
+
   remove(sessionId) {
     withFileLock(this.file, () => {
       this.state = undefined

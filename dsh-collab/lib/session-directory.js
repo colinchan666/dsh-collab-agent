@@ -57,6 +57,7 @@ export function createSessionDirectory({
         const meta = cached(entry.sessionId)
         if (meta?.presetLoaded !== true || meta.preset === null) continue
         if (isCollabPreset(meta.preset)) continue
+        registry.ignore?.([entry.sessionId])
         registry.remove(entry.sessionId)
         metadata.delete(entry.sessionId)
         removed += 1
